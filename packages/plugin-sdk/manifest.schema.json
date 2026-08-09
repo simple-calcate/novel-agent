@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://novel-agent.local/schemas/plugin-manifest.json",
+  "title": "Novel Agent Plugin Manifest",
+  "type": "object",
+  "required": ["id", "name", "version", "apiVersion", "platforms", "operations"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$" },
+    "name": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "apiVersion": { "type": "integer", "minimum": 1, "maximum": 1 },
+    "platforms": {
+      "type": "array",
+      "items": { "enum": ["linux", "windows", "android"] },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "inputSchema", "outputSchema"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "inputSchema": { "type": "object" },
+          "outputSchema": { "type": "object" },
+          "triggers": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "requestedCapabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind"],
+        "properties": {
+          "kind": {
+            "enum": [
+              "readSelection",
+              "readChapter",
+              "readStoryModel",
+              "proposePatch",
+              "log",
+              "network",
+              "model",
+              "privateStorage"
+            ]
+          }
+        }
+      },
+      "uniqueItems": true
+    },
+    "settingsSchema": { "type": "object" }
+  }
+}

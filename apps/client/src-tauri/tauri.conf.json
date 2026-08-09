@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "墨枢 Novel Agent",
+  "version": "0.1.0",
+  "identifier": "com.novelagent.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "pnpm --filter @novel-agent/client dev",
+    "beforeBuildCommand": "pnpm --filter @novel-agent/client build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "墨枢 Novel Agent",
+        "width": 1440,
+        "height": 960,
+        "minWidth": 960,
+        "minHeight": 640,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": []
+  }
+}

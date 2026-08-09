@@ -1,0 +1,54 @@
+use novel_domain::{Capability, PluginPlatform};
+use novel_plugin_host::{evaluate, parse_manifest, grant_intersection};
+use std::collections::BTreeSet;
+
+const MANIFEST: &str = r#"{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "测试插件",
+  "version": "0.1.0",
+  "apiVersion": 1,
+  "platforms": ["linux"],
+  "operations": [
+    {
+      "name": "test-op",
+      "inputSchema": {"type": "object"},
+      "outputSchema": {"type": "object"},
+      "triggers": ["editor.idle"]
+    }
+  ],
+  "requestedCapabilities": [
+    {"kind": "readSelection"},
+    {"kind": "log"}
+  ]
+}"#;
+
+#[test]
+fn parse_valid_manifest() {
+    let manifest = parse_manifest(MANIFEST, PluginPlatform::Linux).unwrap();
+    assert_eq!(manifest.name, "测试插件");
+    assert_eq!(manifest.operations.len(), 1);
+}
+
+#[test]
+fn reject_unsupported_platform() {
+    let result = parse_manifest(MANIFEST, PluginPlatform::Android);
+    assert!(result.is_err());
+}
+
+#[test]
+fn capability_grant_intersection() {
+    let manifest = parse_manifest(MANIFEST, PluginPlatform::Linux).unwrap();
+    let approved: BTreeSet<Capability> = [Capability::Log].into_iter().collect();
+    let grant = grant_intersection(&manifest, &approved);
+    assert!(grant.capabilities.contains(&Capability::Log));
+    assert!(!grant.capabilities.contains(&Capability::ReadSelection));
+}
+
+#[test]
+fn evaluate_denies_unapproved() {
+    let manifest = parse_manifest(MANIFEST, PluginPlatform::Linux).unwrap();
+    let approved: BTreeSet<Capability> = [Capability::Log].into_iter().collect();
+    let decision = evaluate(&manifest, &approved);
+    assert!(decision.granted.contains(&Capability::Log));
+    assert!(decision.denied.contains(&Capability::ReadSelection));
+}

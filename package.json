@@ -1,0 +1,19 @@
+{
+  "name": "novel-agent",
+  "private": true,
+  "version": "0.1.0",
+  "description": "本地优先、插件化的跨平台网文写作 Agent",
+  "packageManager": "pnpm@10.14.0",
+  "scripts": {
+    "dev": "pnpm --filter @novel-agent/client dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3"
+  }
+}

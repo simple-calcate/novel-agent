@@ -1,0 +1,31 @@
+[package]
+name = "novel-agent-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "novel_agent_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+novel-domain = { path = "../../../crates/domain" }
+novel-storage = { path = "../../../crates/storage" }
+novel-automation = { path = "../../../crates/automation" }
+novel-story-model = { path = "../../../crates/story-model" }
+novel-context-engine = { path = "../../../crates/context-engine" }
+novel-context-hints = { path = "../../../crates/context-hints" }
+novel-feedback-memory = { path = "../../../crates/feedback-memory" }
+novel-agent-runtime = { path = "../../../crates/agent-runtime" }
+novel-plugin-host = { path = "../../../crates/plugin-host" }
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

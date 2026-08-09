@@ -1,0 +1,15 @@
+node_modules/
+dist/
+target/
+src-tauri/target/
+*.local
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+coverage/
+.tauri/
+android/.gradle/
+android/app/build/
+gen/

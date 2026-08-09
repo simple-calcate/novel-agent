@@ -1,0 +1,39 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/domain",
+  "crates/storage",
+  "crates/automation",
+  "crates/story-model",
+  "crates/context-engine",
+  "crates/context-hints",
+  "crates/feedback-memory",
+  "crates/agent-runtime",
+  "crates/plugin-host",
+  "apps/client/src-tauri",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://example.invalid/novel-agent"
+
+[workspace.dependencies]
+anyhow = "1"
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+futures = "0.3"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+tracing = "0.1"
+uuid = { version = "1", features = ["serde", "v4"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
