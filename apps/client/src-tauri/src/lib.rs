@@ -963,6 +963,7 @@ fn emit_domain_event<R: tauri::Runtime>(
 /// `block.mode.changed` 并 dispatch——工作流规则可监听该事件，
 /// 匹配后自动入队对应的任务序列（插件扩展点）。
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 fn emit_block_mode_changed<R: tauri::Runtime>(
     app: AppHandle<R>,
     state: State<'_, AppState>,

@@ -71,11 +71,7 @@ async fn block_mode_changed_queues_workflow_sequence() {
         priority: 0,
         cooldown_ms: 0,
     };
-    repository
-        .lock()
-        .unwrap()
-        .save_workflow(&rule)
-        .unwrap();
+    repository.lock().unwrap().save_workflow(&rule).unwrap();
 
     let kernel = build_kernel(repository.clone());
 

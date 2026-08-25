@@ -185,10 +185,7 @@ enum BlockOp {
     },
 }
 
-fn apply_block_ops(
-    blocks: &mut Vec<ContentBlock>,
-    ops: &[BlockOp],
-) -> Result<(), KernelError> {
+fn apply_block_ops(blocks: &mut Vec<ContentBlock>, ops: &[BlockOp]) -> Result<(), KernelError> {
     for op in ops {
         match op {
             BlockOp::Create {
@@ -388,10 +385,7 @@ pub fn build_training_examples(
     }
 
     if !content.is_empty() {
-        examples.push(TrainingExample {
-            thinking,
-            content,
-        });
+        examples.push(TrainingExample { thinking, content });
     }
 
     examples
@@ -655,7 +649,9 @@ mod tests {
         )
         .unwrap();
         assert_eq!(blocks.len(), 2);
-        assert!(blocks.iter().all(|block| block.id.to_string() != tag_uuid("b")));
+        assert!(blocks
+            .iter()
+            .all(|block| block.id.to_string() != tag_uuid("b")));
     }
 
     #[test]
