@@ -24,6 +24,7 @@ impl<'a> JobQueue<'a> {
         Self { repository }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn enqueue(
         &self,
         project_id: ProjectId,
@@ -66,11 +67,14 @@ impl<'a> JobQueue<'a> {
     }
 
     pub fn next_due(&self) -> Result<Option<Job>, QueueError> {
-        Ok(self.repository.next_runnable_job(&Utc::now().to_rfc3339())?)
+        Ok(self
+            .repository
+            .next_runnable_job(&Utc::now().to_rfc3339())?)
     }
 }
 
-fn operation_name(action: &WorkflowAction) -> &'static str {
+/// 工作流动作对应的队列操作名（内核工具注册表使用同一名字分发）。
+pub fn operation_name(action: &WorkflowAction) -> &'static str {
     match action {
         WorkflowAction::SaveDocument => "document.save",
         WorkflowAction::RebuildIndex => "index.rebuild",

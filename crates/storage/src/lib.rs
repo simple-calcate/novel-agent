@@ -1,3 +1,8 @@
+//! SQLite 持久化：迁移、单写者仓库、导出。
+//!
+//! 宿主把 `Arc<Mutex<Repository>>` 注入内核服务表；扩展按类型取回。
+//! 公开方法即存储层接口，见 `docs/interfaces.md` 的 Storage 一节。
+
 pub mod export;
 pub mod migrations;
 pub mod repository;

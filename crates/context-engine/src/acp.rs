@@ -75,12 +75,13 @@ impl ContextEngine {
         };
 
         for block in state.blocks.iter().filter(|block| block.active) {
-            let start = messages
-                .iter()
-                .position(|message| message.id == block.direct_message_ids[0]);
-            let end = messages
-                .iter()
-                .position(|message| message.id == block.direct_message_ids[block.direct_message_ids.len() - 1]);
+            let Some(first) = block.direct_message_ids.first() else {
+                // 空块（无覆盖消息）直接跳过，避免越界
+                continue;
+            };
+            let last = &block.direct_message_ids[block.direct_message_ids.len() - 1];
+            let start = messages.iter().position(|message| &message.id == first);
+            let end = messages.iter().position(|message| &message.id == last);
             if let (Some(start), Some(end)) = (start, end) {
                 let summary = CoreMessage {
                     id: format!("block:{}", block.id),

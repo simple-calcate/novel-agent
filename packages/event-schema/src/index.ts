@@ -54,6 +54,15 @@ export interface ChapterCreatedPayload {
   source: "user" | "import" | "agent";
 }
 
+export interface ProjectCreatedPayload {
+  title: string;
+}
+
+export interface BookCreatedPayload {
+  title: string;
+  position: number;
+}
+
 export interface ContentChangedPayload {
   affectedBlockIds: string[];
   insertedChars: number;
@@ -69,6 +78,12 @@ export type ParagraphCreatedEvent = EventEnvelope<ParagraphCreatedPayload> & {
 };
 export type ChapterCreatedEvent = EventEnvelope<ChapterCreatedPayload> & {
   eventType: "chapter.created";
+};
+export type ProjectCreatedEvent = EventEnvelope<ProjectCreatedPayload> & {
+  eventType: "project.created";
+};
+export type BookCreatedEvent = EventEnvelope<BookCreatedPayload> & {
+  eventType: "book.created";
 };
 export type ContentChangedEvent = EventEnvelope<ContentChangedPayload> & {
   eventType: "content.changed";

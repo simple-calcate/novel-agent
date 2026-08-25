@@ -1,3 +1,5 @@
+//! 人类纠正记录与可晋升的偏好规则。
+
 use chrono::Utc;
 use novel_domain::{CorrectionRecord, PreferenceRuleId, ProposalId, RejectionReason};
 use serde::{Deserialize, Serialize};

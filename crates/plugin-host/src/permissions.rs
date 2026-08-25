@@ -23,10 +23,7 @@ pub fn grant_intersection(
     }
 }
 
-pub fn evaluate(
-    manifest: &PluginManifest,
-    approved: &BTreeSet<Capability>,
-) -> CapabilityDecision {
+pub fn evaluate(manifest: &PluginManifest, approved: &BTreeSet<Capability>) -> CapabilityDecision {
     let granted = manifest
         .requested_capabilities
         .intersection(approved)

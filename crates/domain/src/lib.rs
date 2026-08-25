@@ -1,3 +1,9 @@
+//! 领域模型：作品层级、正史、事件、任务与补丁的共享类型。
+//!
+//! 这一层没有 IO。仓储、内核和 UI 都通过这里的类型交换数据。
+//! 层级约定：`Project`（作品）→ `Book`（书）→ 可选 `Volume`（卷）→ `Chapter`（章）。
+//! 接口说明见仓库根目录 `docs/interfaces.md`。
+
 pub mod actor;
 pub mod content;
 pub mod events;

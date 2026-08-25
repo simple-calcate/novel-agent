@@ -31,12 +31,11 @@ impl PluginInstance {
             .ok_or_else(|| PluginRuntimeError::OperationNotFound(operation.into()))?;
 
         if !declaration.triggers.is_empty()
-            && !self
-                .grant
-                .capabilities
-                .contains(&Capability::ReadSelection)
+            && !self.grant.capabilities.contains(&Capability::ReadSelection)
         {
-            return Err(PluginRuntimeError::CapabilityDenied(Capability::ReadSelection));
+            return Err(PluginRuntimeError::CapabilityDenied(
+                Capability::ReadSelection,
+            ));
         }
 
         Ok(PluginResult {

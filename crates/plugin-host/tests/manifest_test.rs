@@ -1,9 +1,9 @@
 use novel_domain::{Capability, PluginPlatform};
-use novel_plugin_host::{evaluate, parse_manifest, grant_intersection};
+use novel_plugin_host::{evaluate, grant_intersection, parse_manifest};
 use std::collections::BTreeSet;
 
 const MANIFEST: &str = r#"{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "id": "test-plugin",
   "name": "测试插件",
   "version": "0.1.0",
   "apiVersion": 1,

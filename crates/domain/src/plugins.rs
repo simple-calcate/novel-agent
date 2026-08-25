@@ -1,12 +1,12 @@
-use crate::PluginId;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// 插件 id：与插件生态（清单 JSON、TS SDK）一致的字符串 slug。
 pub struct PluginManifest {
-    pub id: PluginId,
+    pub id: String,
     pub name: String,
     pub version: String,
     pub api_version: u32,
@@ -38,19 +38,26 @@ pub struct PluginOperation {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Capability {
     ReadSelection,
-    ReadChapter { scope: String },
+    ReadChapter {
+        scope: String,
+    },
     ReadStoryModel,
     ProposePatch,
     Log,
-    Network { allowlist: Vec<String> },
-    Model { provider: String, max_cost_micros: u64 },
+    Network {
+        allowlist: Vec<String>,
+    },
+    Model {
+        provider: String,
+        max_cost_micros: u64,
+    },
     PrivateStorage,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginGrant {
-    pub plugin_id: PluginId,
+    pub plugin_id: String,
     pub capabilities: BTreeSet<Capability>,
     pub enabled: bool,
 }

@@ -67,6 +67,83 @@ pub enum ContentFormat {
     StructuredAst,
 }
 
+/// 块类型：正文块 vs 思考块（模拟 AI reasoning + output 的写作模型）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BlockKind {
+    Body,
+    Thinking,
+}
+
+/// 思考块内的标记引用：调用系统中的任务、设定或自定义功能。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum MarkupRef {
+    Task {
+        id: String,
+        label: String,
+        status: String,
+    },
+    Setting {
+        entity_path: String,
+        field: String,
+        value: String,
+    },
+    Custom {
+        tag: String,
+        body: String,
+    },
+}
+
+impl MarkupRef {
+    /// 标记的纯文本摘要（导出训练数据时嵌入思考过程）。
+    pub fn summary(&self) -> String {
+        match self {
+            MarkupRef::Task { label, status, .. } => format!("任务[{status}]: {label}"),
+            MarkupRef::Setting {
+                entity_path,
+                field,
+                value,
+            } => format!("设定 {entity_path}.{field} = {value}"),
+            MarkupRef::Custom { tag, body } => format!("标记 {tag}: {body}"),
+        }
+    }
+}
+
+/// 结构化内容块：块级写作模型的最小单位。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContentBlock {
+    pub id: BlockId,
+    pub kind: BlockKind,
+    pub text: String,
+    pub position: u32,
+    #[serde(default)]
+    pub markup: Vec<MarkupRef>,
+}
+
+/// 块序列快照：替代纯文本快照的结构化内容（对应 ContentFormat::StructuredAst）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockSequence {
+    pub chapter_id: ChapterId,
+    pub revision: Revision,
+    pub blocks: Vec<ContentBlock>,
+    pub created_at: DateTime<Utc>,
+}
+
+impl BlockSequence {
+    /// 导出用的正文纯文本（忽略思考块与标记）。
+    pub fn body_text(&self) -> String {
+        self.blocks
+            .iter()
+            .filter(|block| block.kind == BlockKind::Body)
+            .map(|block| block.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentSnapshot {
@@ -130,4 +207,5 @@ pub enum AnnotationKind {
     BlockNote,
     SceneCard,
     AgentSuggestion,
+    ThinkingMarkup,
 }

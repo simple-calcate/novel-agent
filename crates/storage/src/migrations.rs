@@ -4,6 +4,9 @@ use rusqlite::Connection;
 const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0001_init.sql"),
     include_str!("../migrations/0002_app_settings.sql"),
+    include_str!("../migrations/0003_queue_results_and_cooldown.sql"),
+    include_str!("../migrations/0004_blocks.sql"),
+    include_str!("../migrations/0005_block_identity.sql"),
 ];
 
 pub fn run_migrations(connection: &mut Connection) -> Result<(), StorageError> {

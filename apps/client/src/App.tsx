@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BookOpen,
   Brain,
   CheckCircle2,
-  ChevronRight,
   CircleDot,
   FileText,
   Layers,
@@ -16,30 +15,34 @@ import {
   Terminal,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { CommandResult, ContextHint, Project } from "./types";
+import { listen } from "@tauri-apps/api/event";
+import { libraryApi } from "./api";
+import { Book, Chapter, CommandResult, ContentBlock, ContextHint, JobView, Project } from "./types";
 import { Editor, AIPreview } from "./components/Editor";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ContextRail } from "./components/ContextRail";
 import { WorkflowPanel } from "./components/WorkflowPanel";
 import { SettingsModal, ModelConfig } from "./components/SettingsModal";
 import { LogPanel } from "./components/LogPanel";
+import { CreateDialog } from "./components/CreateDialog";
+import { ConfirmDialog, TreeItemActions } from "./components/LibraryActions";
 import { logger } from "./logger";
 
-const demoProject: Project = {
-  id: "00000000-0000-0000-0000-000000000001",
-  title: "夜航星图",
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-};
-
-const demoChapters = [
-  { id: "c1", title: "第一章 雾港来客", position: 1, status: "draft" },
-  { id: "c2", title: "第二章 旧王玺", position: 2, status: "draft" },
-  { id: "c3", title: "第三章 潮下之城", position: 3, status: "draft" },
-];
+type PromptKind =
+  | { mode: "create" | "rename"; target: "project" | "book" | "chapter"; id?: string; title?: string }
+  | null;
+type DeleteKind = { target: "project" | "book" | "chapter"; id: string; title: string } | null;
 
 export function App() {
-  const [project] = useState<Project>(demoProject);
-  const [activeChapter, setActiveChapter] = useState("c1");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [project, setProject] = useState<Project | null>(null);
+  const [books, setBooks] = useState<Book[]>([]);
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [activeChapter, setActiveChapter] = useState<string | null>(null);
+  const [activeBookId, setActiveBookId] = useState<string | null>(null);
+  const [chapterText, setChapterText] = useState("");
+  const [chapterBlocks, setChapterBlocks] = useState<ContentBlock[]>([]);
+  const [chapterReady, setChapterReady] = useState(false);
   const [hints, setHints] = useState<ContextHint[]>([]);
   const [aiPreview, setAiPreview] = useState("");
   const [sidebarTab, setSidebarTab] = useState<"context" | "workflow" | "agent">("context");
@@ -48,8 +51,63 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [logPanelOpen, setLogPanelOpen] = useState(false);
   const [_modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
+  const [queueReady, setQueueReady] = useState(false);
+  const [prompt, setPrompt] = useState<PromptKind>(null);
+  const [pendingDelete, setPendingDelete] = useState<DeleteKind>(null);
+  const [libraryError, setLibraryError] = useState<string | null>(null);
 
-  // 启动时加载配置
+  const draftText = useRef("");
+  const draftBlocks = useRef<ContentBlock[]>([]);
+
+  const applyLibrary = useCallback(
+    (snapshot: {
+      projects: Project[];
+      activeProjectId?: string | null;
+      books: Book[];
+      chapters: Chapter[];
+    }) => {
+      setProjects(snapshot.projects);
+      const current =
+        snapshot.projects.find((item) => item.id === snapshot.activeProjectId) ??
+        snapshot.projects[0] ??
+        null;
+      setProject(current);
+      setBooks(snapshot.books);
+      setChapters(snapshot.chapters);
+      setActiveChapter((previous) => {
+        if (previous && snapshot.chapters.some((chapter) => chapter.id === previous)) {
+          return previous;
+        }
+        return snapshot.chapters[0]?.id ?? null;
+      });
+      setActiveBookId((previous) => {
+        if (previous && snapshot.books.some((book) => book.id === previous)) {
+          return previous;
+        }
+        return snapshot.books[0]?.id ?? snapshot.chapters[0]?.bookId ?? null;
+      });
+    },
+    [],
+  );
+
+  const refreshLibrary = useCallback(
+    async (projectId?: string) => {
+      try {
+        const snapshot = await libraryApi.loadLibrary(projectId);
+        applyLibrary(snapshot);
+        setLibraryError(null);
+      } catch (error) {
+        logger.error("加载作品库失败", { error: String(error) });
+        setLibraryError(String(error));
+      }
+    },
+    [applyLibrary],
+  );
+
+  useEffect(() => {
+    void refreshLibrary();
+  }, [refreshLibrary]);
+
   useEffect(() => {
     invoke<ModelConfig | null>("load_model_config")
       .then((config) => {
@@ -61,8 +119,143 @@ export function App() {
       .catch((e) => logger.error("加载配置失败", { error: String(e) }));
   }, []);
 
+  useEffect(() => {
+    if (!activeChapter) {
+      setChapterText("");
+      setChapterReady(false);
+      setRevision(0);
+      draftText.current = "";
+      return;
+    }
+    let cancelled = false;
+    setChapterReady(false);
+    libraryApi
+      .loadChapter(activeChapter)
+      .then((body) => {
+        if (cancelled) return;
+        setChapterText(body.text);
+        setChapterBlocks(body.blocks ?? []);
+        draftText.current = body.text;
+        draftBlocks.current = body.blocks ?? [];
+        setRevision(body.revision);
+        setChapterReady(true);
+        const chapter = chapters.find((item) => item.id === activeChapter);
+        if (chapter) setActiveBookId(chapter.bookId);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        logger.error("加载章节失败", { error: String(error) });
+        setChapterText("");
+        setChapterReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeChapter]);
+
+  const jobsRef = useRef(jobs);
+  jobsRef.current = jobs;
+  const drainingRef = useRef(false);
+
+  const refreshJobs = useCallback(async () => {
+    try {
+      const result = await invoke<CommandResult<JobView[]>>("list_jobs");
+      if (result?.ok && result.data) {
+        setJobs(
+          result.data.map((job) => ({
+            id: job.id,
+            label: operationLabel(job.operation),
+            status: job.status,
+          })),
+        );
+        setQueueReady(true);
+      }
+    } catch (e) {
+      logger.warn("任务列表拉取失败（可能在纯浏览器预览中）", { error: String(e) });
+    }
+  }, []);
+
+  const drainQueue = useCallback(async () => {
+    if (drainingRef.current) return;
+    drainingRef.current = true;
+    try {
+      for (let i = 0; i < 50; i++) {
+        const step = await invoke<CommandResult<{ executed: boolean }>>("run_queue_step");
+        if (!step?.ok || !step.data?.executed) break;
+        await refreshJobs();
+      }
+    } catch (e) {
+      logger.warn("队列驱动失败（可能在纯浏览器预览中）", { error: String(e) });
+    } finally {
+      drainingRef.current = false;
+    }
+  }, [refreshJobs]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen("queue:changed", () => {
+      void drainQueue();
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch((e) => logger.warn("队列事件监听不可用（纯浏览器预览）", { error: String(e) }));
+
+    void drainQueue();
+
+    const timer = setInterval(() => {
+      const hasWork = jobsRef.current.some(
+        (j) => j.status === "pending" || j.status === "running",
+      );
+      if (hasWork) void drainQueue();
+    }, 30_000);
+    return () => {
+      unlisten?.();
+      clearInterval(timer);
+    };
+  }, [drainQueue]);
+
+  const enqueue = useCallback(
+    async (operation: string, extraPayload?: Record<string, unknown>) => {
+      if (!project) {
+        logger.warn("未选择作品，跳过入队", { operation });
+        return;
+      }
+      logger.info("入队任务", { operation });
+      const payload = { projectId: project.id, ...extraPayload };
+      try {
+        const result = await invoke<CommandResult<{ jobId: string }>>("enqueue_job", {
+          input: { projectId: project.id, operation, payload, priority: 0 },
+        });
+        if (!result.ok) {
+          logger.error("入队失败", { operation, error: result.error });
+        } else {
+          void drainQueue();
+        }
+      } catch (e) {
+        logger.error("入队异常", { operation, error: String(e) });
+      }
+    },
+    [project, drainQueue],
+  );
+
+  const persistChapter = useCallback(async () => {
+    if (!activeChapter) return;
+    try {
+      const saved = await libraryApi.saveChapter(
+        activeChapter,
+        draftText.current,
+        draftBlocks.current,
+      );
+      setRevision(saved.revision);
+    } catch (error) {
+      logger.warn("保存章节失败", { error: String(error) });
+    }
+  }, [activeChapter]);
+
   const refreshHints = useCallback(
     async (nearbyText: string) => {
+      if (!project || !activeChapter) return;
       logger.debug("刷新上下文提示", { revision, textLength: nearbyText.length });
       try {
         const result = await invoke<CommandResult<ContextHint[]>>("context_hints", {
@@ -83,20 +276,12 @@ export function App() {
         setHints(buildLocalHints(nearbyText, revision));
       }
     },
-    [project.id, activeChapter, revision],
+    [project, activeChapter, revision],
   );
 
   useEffect(() => {
     setHints(buildLocalHints("", revision));
   }, [revision]);
-
-  const addJob = useCallback((label: string) => {
-    logger.info("添加任务", { label });
-    setJobs((current) => [
-      { id: `${Date.now()}`, label, status: "pending" },
-      ...current.slice(0, 7),
-    ]);
-  }, []);
 
   const handleGenerate = useCallback(async () => {
     if (!_modelConfig) {
@@ -104,8 +289,11 @@ export function App() {
       setAiPreview("请先点击左下角「设置」配置 AI 模型");
       return;
     }
+    if (!activeChapter) {
+      setAiPreview("请先创建并打开一个章节");
+      return;
+    }
     logger.info("开始 AI 续写", { provider: _modelConfig.provider, model: _modelConfig.model });
-    addJob("AI 续写");
     try {
       const result = await invoke<{ operations: Array<{ text: string }> }>(
         "generate_continuation",
@@ -113,7 +301,7 @@ export function App() {
           chapterId: activeChapter,
           revision,
           prompt: "继续当前剧情",
-          contextText: "雾港、旧王玺、失忆的航海师",
+          contextText: draftText.current.slice(-800),
           config: _modelConfig,
         },
       );
@@ -125,7 +313,7 @@ export function App() {
       logger.error("AI 续写失败", { error: String(e) });
       setAiPreview(`调用失败: ${e}`);
     }
-  }, [_modelConfig, activeChapter, revision, addJob]);
+  }, [_modelConfig, activeChapter, revision]);
 
   const handleAccept = useCallback(() => {
     if (aiPreview && (window as any).__editorInsert) {
@@ -140,9 +328,104 @@ export function App() {
     setAiPreview("");
   }, []);
 
+  const handlePrompt = useCallback(
+    async (title: string) => {
+      if (!prompt) return;
+      if (prompt.mode === "create") {
+        if (prompt.target === "project") {
+          const created = await libraryApi.createProject(title);
+          await refreshLibrary(created.id);
+          return;
+        }
+        if (prompt.target === "book") {
+          let owner = project;
+          if (!owner) {
+            owner = await libraryApi.createProject(title);
+          }
+          const book = await libraryApi.createBook(owner.id, title);
+          await refreshLibrary(owner.id);
+          setActiveBookId(book.id);
+          return;
+        }
+        if (!project) {
+          throw new Error("请先创建作品或书籍");
+        }
+        const bookId = activeBookId ?? books[0]?.id;
+        if (!bookId) {
+          throw new Error("请先创建一本书");
+        }
+        const chapter = await libraryApi.createChapter(project.id, bookId, title);
+        await refreshLibrary(project.id);
+        setActiveChapter(chapter.id);
+        setActiveBookId(bookId);
+        return;
+      }
+      if (!project && prompt.target !== "project") {
+        throw new Error("未选择作品");
+      }
+      if (prompt.target === "project" && prompt.id) {
+        applyLibrary(await libraryApi.renameProject(prompt.id, title));
+        return;
+      }
+      if (!project || !prompt.id) return;
+      if (prompt.target === "book") {
+        applyLibrary(await libraryApi.renameBook(project.id, prompt.id, title));
+        return;
+      }
+      applyLibrary(await libraryApi.renameChapter(project.id, prompt.id, title));
+    },
+    [prompt, project, activeBookId, books, refreshLibrary, applyLibrary],
+  );
+
+  const handleDelete = useCallback(async () => {
+    if (!pendingDelete) return;
+    if (pendingDelete.target === "project") {
+      applyLibrary(await libraryApi.deleteProject(pendingDelete.id));
+      return;
+    }
+    if (!project) return;
+    if (pendingDelete.target === "book") {
+      applyLibrary(await libraryApi.deleteBook(project.id, pendingDelete.id));
+      return;
+    }
+    applyLibrary(await libraryApi.deleteChapter(project.id, pendingDelete.id));
+  }, [pendingDelete, project, applyLibrary]);
+
+  const mutateBook = useCallback(
+    async (bookId: string, delta: number) => {
+      if (!project) return;
+      applyLibrary(await libraryApi.moveBook(project.id, bookId, delta));
+    },
+    [project, applyLibrary],
+  );
+
+  const mutateChapter = useCallback(
+    async (chapterId: string, delta: number) => {
+      if (!project) return;
+      applyLibrary(await libraryApi.moveChapter(project.id, chapterId, delta));
+    },
+    [project, applyLibrary],
+  );
+
+  const activeChapterRecord = chapters.find((chapter) => chapter.id === activeChapter);
+  const promptCopy = prompt
+    ? prompt.mode === "rename"
+      ? {
+          title:
+            prompt.target === "project" ? "重命名作品" : prompt.target === "book" ? "重命名书" : "重命名章节",
+          label: "名称",
+          placeholder: prompt.title ?? "",
+          confirm: "保存",
+        }
+      : prompt.target === "project"
+        ? { title: "新作品", label: "作品名称", placeholder: "例如：夜航星图", confirm: "创建" }
+        : prompt.target === "book"
+          ? { title: "新书", label: "书名 / 卷名", placeholder: "例如：卷一 · 雾与海", confirm: "创建" }
+          : { title: "新章节", label: "章节标题", placeholder: "例如：第一章 雾港来客", confirm: "创建" }
+    : { title: "", label: "", placeholder: "", confirm: "创建" };
+
   return (
     <div className="app-shell">
-      {/* 左侧边栏 */}
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">
@@ -156,31 +439,119 @@ export function App() {
 
         <div className="project-card">
           <div className="project-label">当前作品</div>
-          <div className="project-title">{project.title}</div>
+          {projects.length > 0 ? (
+            <select
+              className="project-select"
+              value={project?.id ?? ""}
+              onChange={(event) => {
+                const id = event.target.value;
+                void libraryApi.setActiveProject(id).then(applyLibrary);
+              }}
+            >
+              {projects.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.title}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="project-title">尚未创建作品</div>
+          )}
           <div className="project-meta">
             <span>本地优先</span>
             <span>·</span>
-            <span>自动保存</span>
+            <span>{books.length} 本书</span>
+          </div>
+          <div className="project-actions">
+            <button className="text-button" onClick={() => setPrompt({ mode: "create", target: "project" })}>
+              新作品
+            </button>
+            <button className="text-button" onClick={() => setPrompt({ mode: "create", target: "book" })}>
+              新书
+            </button>
+            {project && (
+              <>
+                <button
+                  className="text-button"
+                  onClick={() =>
+                    setPrompt({ mode: "rename", target: "project", id: project.id, title: project.title })
+                  }
+                >
+                  重命名
+                </button>
+                <button
+                  className="text-button"
+                  onClick={() => setPendingDelete({ target: "project", id: project.id, title: project.title })}
+                >
+                  删除
+                </button>
+              </>
+            )}
           </div>
         </div>
 
         <nav className="tree">
-          <div className="tree-section">
-            <Layers size={14} />
-            <span>卷一 · 雾与海</span>
-          </div>
-          {demoChapters.map((chapter) => (
-            <button
-              key={chapter.id}
-              className={`tree-item ${activeChapter === chapter.id ? "active" : ""}`}
-              onClick={() => setActiveChapter(chapter.id)}
-            >
-              <FileText size={14} />
-              <span>{chapter.title}</span>
-              <ChevronRight size={12} className="tree-arrow" />
-            </button>
-          ))}
-          <button className="tree-item add">
+          {libraryError && <div className="tree-empty">{libraryError}</div>}
+          {books.length === 0 && (
+            <div className="tree-empty">还没有书。点上方「新书」创建第一本。</div>
+          )}
+          {books.map((book, bookIndex) => {
+            const bookChapters = chapters.filter((chapter) => chapter.bookId === book.id);
+            return (
+              <div key={book.id} className="tree-book">
+                <div className="tree-section">
+                  <Layers size={14} />
+                  <span>{book.title}</span>
+                  <TreeItemActions
+                    disableUp={bookIndex === 0}
+                    disableDown={bookIndex === books.length - 1}
+                    onRename={() =>
+                      setPrompt({ mode: "rename", target: "book", id: book.id, title: book.title })
+                    }
+                    onDelete={() => setPendingDelete({ target: "book", id: book.id, title: book.title })}
+                    onMoveUp={() => void mutateBook(book.id, -1)}
+                    onMoveDown={() => void mutateBook(book.id, 1)}
+                  />
+                </div>
+                {bookChapters.map((chapter, chapterIndex) => (
+                  <div
+                    key={chapter.id}
+                    className={`tree-item ${activeChapter === chapter.id ? "active" : ""}`}
+                    onClick={() => {
+                      void persistChapter();
+                      setActiveChapter(chapter.id);
+                      setActiveBookId(book.id);
+                    }}
+                  >
+                    <FileText size={14} />
+                    <span>{chapter.title}</span>
+                    <TreeItemActions
+                      disableUp={chapterIndex === 0}
+                      disableDown={chapterIndex === bookChapters.length - 1}
+                      onRename={() =>
+                        setPrompt({
+                          mode: "rename",
+                          target: "chapter",
+                          id: chapter.id,
+                          title: chapter.title,
+                        })
+                      }
+                      onDelete={() =>
+                        setPendingDelete({ target: "chapter", id: chapter.id, title: chapter.title })
+                      }
+                      onMoveUp={() => void mutateChapter(chapter.id, -1)}
+                      onMoveDown={() => void mutateChapter(chapter.id, 1)}
+                    />
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          <button
+            className="tree-item add"
+            onClick={() => setPrompt({ mode: "create", target: "chapter" })}
+            disabled={!project || books.length === 0}
+          >
             <Plus size={14} />
             <span>新章节</span>
           </button>
@@ -206,16 +577,19 @@ export function App() {
         </div>
       </aside>
 
-      {/* 中间编辑区 */}
       <main className="workspace">
         <header className="topbar">
           <div className="chapter-title">
             <BookOpen size={16} />
-            <span>{demoChapters.find((c) => c.id === activeChapter)?.title}</span>
+            <span>{activeChapterRecord?.title ?? "未选择章节"}</span>
             <span className="revision-badge">R{revision}</span>
           </div>
           <div className="topbar-actions">
-            <button className="action-button ghost" onClick={() => addJob("章节一致性检查")}>
+            <button
+              className="action-button ghost"
+              disabled={!project}
+              onClick={() => enqueue("continuity.check")}
+            >
               <CheckCircle2 size={14} />
               检查
             </button>
@@ -227,16 +601,43 @@ export function App() {
         </header>
 
         <div className="editor-area">
-          <Editor
-            onTextChange={(text) => {
-              setRevision((v) => v + 1);
-              refreshHints(text.slice(-300));
-            }}
-            onIdle={() => addJob("停笔触发：索引与提示刷新")}
-          />
+          {!activeChapter && (
+            <div className="workspace-empty">
+              <p>从左侧创建作品、书和章节，即可开始写作。</p>
+              <div className="workspace-empty-actions">
+                <button className="btn primary" onClick={() => setPrompt({ mode: "create", target: "book" })}>
+                  创建书籍
+                </button>
+                <button className="btn" onClick={() => setPrompt({ mode: "create", target: "project" })}>
+                  仅创建作品
+                </button>
+              </div>
+            </div>
+          )}
+          {activeChapter && chapterReady && (
+            <ErrorBoundary label="编辑器">
+              <Editor
+                key={activeChapter}
+                initialText={chapterText}
+                initialBlocks={chapterBlocks}
+                projectId={project?.id}
+                chapterId={activeChapter}
+                onTextChange={(text) => {
+                  draftText.current = text;
+                  refreshHints(text.slice(-300));
+                }}
+                onBlocksChange={(blocks) => {
+                  draftBlocks.current = blocks;
+                }}
+                onIdle={() => {
+                  void persistChapter();
+                  enqueue("index.rebuild");
+                }}
+              />
+            </ErrorBoundary>
+          )}
           <ContextRail hints={hints} />
 
-          {/* AI 预览卡片 - 浮动在编辑器上方 */}
           {aiPreview && (
             <AIPreview
               text={aiPreview}
@@ -248,7 +649,6 @@ export function App() {
         </div>
       </main>
 
-      {/* 右侧面板 */}
       <aside className="right-panel">
         <div className="panel-tabs">
           <button
@@ -282,27 +682,27 @@ export function App() {
                 <CircleDot size={12} />
                 POV 边界
               </div>
-              <p>当前视角：沈雾。她不知道旧王玺已在船长手中。</p>
+              <p>打开章节后，浮带会根据附近正文匹配正史与伏笔。</p>
             </div>
             <div className="context-card">
               <div className="context-card-title">
                 <CircleDot size={12} />
-                未兑现伏笔
+                作品结构
               </div>
-              <p>雾中灯塔的信号 · 第二章前需要呼应</p>
-            </div>
-            <div className="context-card">
-              <div className="context-card-title">
-                <CircleDot size={12} />
-                世界规则
-              </div>
-              <p>潮下之城禁止明火，违者会失去名字。</p>
+              <p>作品 → 书 → 章。每本书可以独立增删，章节挂在当前选中的书下。</p>
             </div>
           </div>
         )}
 
         {sidebarTab === "workflow" && (
-          <WorkflowPanel jobs={jobs} onRun={(label) => addJob(label)} />
+          <WorkflowPanel
+            jobs={jobs}
+            queueReady={queueReady}
+            onRun={(operation, label) => {
+              logger.info("手动运行工作流", { operation, label });
+              enqueue(operation);
+            }}
+          />
         )}
 
         {sidebarTab === "agent" && (
@@ -310,21 +710,16 @@ export function App() {
             <h3>Agent 会话</h3>
             <div className="agent-message">
               <strong>系统</strong>
-              <p>上下文已固定到 Revision {revision}，包含 12 条正史与 3 条伏笔。</p>
-            </div>
-            <div className="agent-message user">
-              <strong>你</strong>
-              <p>检查这一章的视角泄漏。</p>
-            </div>
-            <div className="agent-message">
-              <strong>Agent</strong>
-              <p>未发现 POV 违规。沈雾在第 4 段只感知到"玺印反光"，未读取其归属。</p>
+              <p>
+                {project
+                  ? `当前作品「${project.title}」，上下文固定到 Revision ${revision}。`
+                  : "创建作品后即可把 Agent 会话钉在该书的修订历史上。"}
+              </p>
             </div>
           </div>
         )}
       </aside>
 
-      {/* 模态框 */}
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -342,52 +737,55 @@ export function App() {
       />
 
       <LogPanel open={logPanelOpen} onClose={() => setLogPanelOpen(false)} />
+
+      <CreateDialog
+        open={prompt !== null}
+        title={promptCopy.title}
+        label={promptCopy.label}
+        placeholder={promptCopy.placeholder}
+        confirmLabel={promptCopy.confirm}
+        initialValue={prompt?.mode === "rename" ? (prompt.title ?? "") : ""}
+        onClose={() => setPrompt(null)}
+        onSubmit={handlePrompt}
+      />
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={
+          pendingDelete?.target === "project"
+            ? "删除作品"
+            : pendingDelete?.target === "book"
+              ? "删除书"
+              : "删除章节"
+        }
+        body={`确定删除「${pendingDelete?.title ?? ""}」？此操作不可撤销。`}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }
 
-function buildLocalHints(nearby: string, revision: number): ContextHint[] {
-  const base: ContextHint[] = [
-    {
-      id: "h1",
-      kind: "characterState",
-      title: "沈雾",
-      summary: "左手有盐渍伤，见到旧王玺会触发记忆闪回",
-      sourceLabel: "人物卡",
-      matchReason: "当前章节主角",
-      confidence: 0.95,
-      score: 0.95,
-      generation: revision,
-      revision,
-    },
-    {
-      id: "h2",
-      kind: "openForeshadowing",
-      title: "雾中灯塔",
-      summary: "灯塔在每晚第三次潮响时亮起，第二章前需要呼应",
-      sourceLabel: "伏笔看板",
-      matchReason: "本章尚未提及",
-      confidence: 0.8,
-      score: 0.82,
-      generation: revision,
-      revision,
-    },
-    {
-      id: "h3",
-      kind: "worldRule",
-      title: "潮下城禁令",
-      summary: "禁止明火，违者会失去名字",
-      sourceLabel: "世界规则",
-      matchReason: "场景包含潮下城",
-      confidence: 1,
-      score: 0.9,
-      generation: revision,
-      revision,
-    },
-  ];
+const OPERATION_LABELS: Record<string, string> = {
+  "document.save": "保存文档",
+  "index.rebuild": "刷新索引",
+  "continuity.check": "连续性检查",
+  "backup.create": "创建备份",
+  "agent.continuation": "AI 续写",
+  "agent.run": "运行 Agent",
+  "plugin.operation": "插件操作",
+  "block.save": "保存块",
+  "block.edit": "编辑块",
+  "training.export": "导出训练数据",
+};
 
+function operationLabel(operation: string): string {
+  return OPERATION_LABELS[operation] ?? operation;
+}
+
+function buildLocalHints(nearby: string, revision: number): ContextHint[] {
+  const base: ContextHint[] = [];
   if (nearby.includes("玺")) {
-    base.unshift({
+    base.push({
       id: "h0",
       kind: "plotHook",
       title: "旧王玺",
@@ -400,6 +798,5 @@ function buildLocalHints(nearby: string, revision: number): ContextHint[] {
       revision,
     });
   }
-
   return base.slice(0, 5);
 }

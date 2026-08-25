@@ -1,11 +1,15 @@
-use novel_context_engine::{CompressionBlock, ContextEngine, ContextState, CoreMessage, MessageRole};
+use novel_context_engine::{ContextEngine, ContextState, CoreMessage, MessageRole};
 use novel_domain::SessionId;
 
 fn make_messages(count: usize) -> Vec<CoreMessage> {
     (0..count)
         .map(|i| CoreMessage {
             id: format!("msg-{i}"),
-            role: if i % 2 == 0 { MessageRole::User } else { MessageRole::Assistant },
+            role: if i % 2 == 0 {
+                MessageRole::User
+            } else {
+                MessageRole::Assistant
+            },
             text: format!("这是第 {} 条消息，包含足够多的内容来模拟 token 消耗。", i),
             tokens: 20,
             protected: false,

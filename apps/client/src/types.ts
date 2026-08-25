@@ -11,13 +11,51 @@ export interface Project {
   updatedAt: string;
 }
 
+export interface Book {
+  id: string;
+  projectId: string;
+  title: string;
+  synopsis: string;
+  position: number;
+}
+
 export interface Chapter {
   id: string;
   bookId: string;
+  volumeId?: string | null;
   title: string;
   position: number;
   currentRevision: number;
   status: "draft" | "completed" | "archived";
+}
+
+export interface LibrarySnapshot {
+  projects: Project[];
+  activeProjectId?: string | null;
+  books: Book[];
+  chapters: Chapter[];
+}
+
+export interface ChapterBody {
+  chapterId: string;
+  revision: number;
+  text: string;
+  blocks: ContentBlock[];
+}
+
+export type BlockKind = "body" | "thinking";
+
+export type MarkupRef =
+  | { type: "task"; id: string; label: string; status: string }
+  | { type: "setting"; entityPath: string; field: string; value: string }
+  | { type: "custom"; tag: string; body: string };
+
+export interface ContentBlock {
+  id: string;
+  kind: BlockKind;
+  text: string;
+  position: number;
+  markup: MarkupRef[];
 }
 
 export interface ContextHint {
@@ -43,7 +81,15 @@ export interface ContextHint {
 export interface JobView {
   id: string;
   operation: string;
-  status: string;
-  priority: number;
+  status:
+    | "pending"
+    | "blocked"
+    | "running"
+    | "succeeded"
+    | "failed"
+    | "cancelled"
+    | "deadLetter";
   attempts: number;
+  createdAt: string;
+  updatedAt: string;
 }

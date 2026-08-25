@@ -72,8 +72,14 @@ fn open_plot_thread_appears() {
         branch_id: "main".into(),
         title: "雾中灯塔".into(),
         status: PlotThreadStatus::Open,
-        introduced_at: StoryInstant { sequence: 1, label: None },
-        due_by: Some(StoryInstant { sequence: 100, label: None }),
+        introduced_at: StoryInstant {
+            sequence: 1,
+            label: None,
+        },
+        due_by: Some(StoryInstant {
+            sequence: 100,
+            label: None,
+        }),
         milestones: vec![],
     };
     let query = HintQuery {

@@ -19,10 +19,18 @@ fn condition_matches(condition: &WorkflowCondition, event: &DomainEvent) -> bool
     match condition.operator {
         ConditionOperator::Eq => value == &condition.value,
         ConditionOperator::NotEq => value != &condition.value,
-        ConditionOperator::Gt => compare_numbers(value, &condition.value, |left, right| left > right),
-        ConditionOperator::Gte => compare_numbers(value, &condition.value, |left, right| left >= right),
-        ConditionOperator::Lt => compare_numbers(value, &condition.value, |left, right| left < right),
-        ConditionOperator::Lte => compare_numbers(value, &condition.value, |left, right| left <= right),
+        ConditionOperator::Gt => {
+            compare_numbers(value, &condition.value, |left, right| left > right)
+        }
+        ConditionOperator::Gte => {
+            compare_numbers(value, &condition.value, |left, right| left >= right)
+        }
+        ConditionOperator::Lt => {
+            compare_numbers(value, &condition.value, |left, right| left < right)
+        }
+        ConditionOperator::Lte => {
+            compare_numbers(value, &condition.value, |left, right| left <= right)
+        }
         ConditionOperator::Contains => match (value, &condition.value) {
             (Value::String(left), Value::String(right)) => left.contains(right),
             (Value::Array(left), right) => left.contains(right),
@@ -40,11 +48,7 @@ fn lookup_path<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
     Some(current)
 }
 
-fn compare_numbers(
-    left: &Value,
-    right: &Value,
-    predicate: impl FnOnce(f64, f64) -> bool,
-) -> bool {
+fn compare_numbers(left: &Value, right: &Value, predicate: impl FnOnce(f64, f64) -> bool) -> bool {
     match (left.as_f64(), right.as_f64()) {
         (Some(left), Some(right)) => predicate(left, right),
         _ => false,

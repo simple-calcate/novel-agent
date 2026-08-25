@@ -23,12 +23,7 @@ impl TypingSession {
         }
     }
 
-    pub fn should_emit_idle(
-        &self,
-        now: DateTime<Utc>,
-        debounce: Duration,
-        min_chars: u32,
-    ) -> bool {
+    pub fn should_emit_idle(&self, now: DateTime<Utc>, debounce: Duration, min_chars: u32) -> bool {
         self.focused
             && !self.composing
             && self.chars_since_commit >= min_chars
@@ -57,7 +52,9 @@ impl ChangeSummary {
                     inserted += text.chars().count() as u32;
                     affected.push(block_id.to_string());
                 }
-                TextOperation::Delete { block_id, length, .. } => {
+                TextOperation::Delete {
+                    block_id, length, ..
+                } => {
                     deleted += *length;
                     affected.push(block_id.to_string());
                 }

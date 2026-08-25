@@ -2,13 +2,14 @@
 resolver = "2"
 members = [
   "crates/domain",
+  "crates/kernel",
+  "crates/extensions",
   "crates/storage",
   "crates/automation",
   "crates/story-model",
   "crates/context-engine",
   "crates/context-hints",
   "crates/feedback-memory",
-  "crates/agent-runtime",
   "crates/plugin-host",
   "apps/client/src-tauri",
 ]

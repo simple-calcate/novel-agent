@@ -49,7 +49,10 @@ pub fn export_book_markdown(book: &ExportedBook) -> String {
         out.push_str(&format!("> {}\n\n", book.synopsis));
     }
     for chapter in &book.chapters {
-        out.push_str(&format!("## 第{}章 {}\n\n", chapter.position, chapter.title));
+        out.push_str(&format!(
+            "## 第{}章 {}\n\n",
+            chapter.position, chapter.title
+        ));
         out.push_str(&chapter.content);
         out.push_str("\n\n");
     }

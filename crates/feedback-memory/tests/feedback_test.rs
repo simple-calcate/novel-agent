@@ -1,14 +1,11 @@
 use novel_domain::{ProposalId, RejectionReason};
-use novel_feedback_memory::{correction_from_edit, rejection_rule, PreferenceScope, PreferenceStatus};
+use novel_feedback_memory::{
+    correction_from_edit, rejection_rule, PreferenceScope, PreferenceStatus,
+};
 
 #[test]
 fn no_correction_when_text_unchanged() {
-    let result = correction_from_edit(
-        ProposalId::new(),
-        "原文",
-        "原文",
-        "上下文",
-    );
+    let result = correction_from_edit(ProposalId::new(), "原文", "原文", "上下文");
     assert!(result.is_none());
 }
 

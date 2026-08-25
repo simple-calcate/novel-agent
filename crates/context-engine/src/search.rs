@@ -36,7 +36,9 @@ pub fn lexical_search(documents: &[SearchDocument], query: &str) -> Vec<SearchRe
         .filter_map(|document| {
             let matched: Vec<String> = terms
                 .iter()
-                .filter(|term| document.title.contains(term.as_str()) || document.body.contains(term.as_str()))
+                .filter(|term| {
+                    document.title.contains(term.as_str()) || document.body.contains(term.as_str())
+                })
                 .cloned()
                 .collect();
             if matched.is_empty() {

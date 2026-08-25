@@ -1,6 +1,6 @@
 use novel_domain::{
-    CanonFact, CharacterKnowledge, EntityId, FactId, FactStatus, Revision, SourceRef, StoryEvent,
-    StoryEventId, StoryInstant, StateTransition,
+    CanonFact, EntityId, FactId, FactStatus, Revision, SourceRef, StateTransition, StoryEvent,
+    StoryEventId, StoryInstant,
 };
 use novel_story_model::{build_snapshot, validate_at, IssueSeverity};
 use serde_json::json;
@@ -34,7 +34,10 @@ fn snapshot_applies_state_transitions() {
     let events = vec![StoryEvent {
         id: StoryEventId::new(),
         branch_id: "main".into(),
-        story_time: Some(StoryInstant { sequence: 10, label: None }),
+        story_time: Some(StoryInstant {
+            sequence: 10,
+            label: None,
+        }),
         narrative_order: 1,
         location_id: None,
         participants: vec![entity.clone()],
@@ -56,15 +59,37 @@ fn snapshot_applies_state_transitions() {
         created_at: chrono::Utc::now(),
     }];
 
-    let snapshot = build_snapshot(&facts, &events, &[], Some(&StoryInstant { sequence: 5, label: None }));
+    let snapshot = build_snapshot(
+        &facts,
+        &events,
+        &[],
+        Some(&StoryInstant {
+            sequence: 5,
+            label: None,
+        }),
+    );
     assert_eq!(
-        snapshot.entity_state.get(&entity).and_then(|s| s.get("alive")),
+        snapshot
+            .entity_state
+            .get(&entity)
+            .and_then(|s| s.get("alive")),
         Some(&json!(true))
     );
 
-    let snapshot = build_snapshot(&facts, &events, &[], Some(&StoryInstant { sequence: 15, label: None }));
+    let snapshot = build_snapshot(
+        &facts,
+        &events,
+        &[],
+        Some(&StoryInstant {
+            sequence: 15,
+            label: None,
+        }),
+    );
     assert_eq!(
-        snapshot.entity_state.get(&entity).and_then(|s| s.get("alive")),
+        snapshot
+            .entity_state
+            .get(&entity)
+            .and_then(|s| s.get("alive")),
         Some(&json!(false))
     );
 }
@@ -77,7 +102,10 @@ fn validate_dead_character_appears_later() {
         StoryEvent {
             id: StoryEventId::new(),
             branch_id: "main".into(),
-            story_time: Some(StoryInstant { sequence: 10, label: None }),
+            story_time: Some(StoryInstant {
+                sequence: 10,
+                label: None,
+            }),
             narrative_order: 1,
             location_id: None,
             participants: vec![entity.clone()],
@@ -101,7 +129,10 @@ fn validate_dead_character_appears_later() {
         StoryEvent {
             id: StoryEventId::new(),
             branch_id: "main".into(),
-            story_time: Some(StoryInstant { sequence: 20, label: None }),
+            story_time: Some(StoryInstant {
+                sequence: 20,
+                label: None,
+            }),
             narrative_order: 2,
             location_id: None,
             participants: vec![entity.clone()],
@@ -123,7 +154,10 @@ fn validate_dead_character_appears_later() {
         &facts,
         &events,
         &[],
-        &StoryInstant { sequence: 15, label: None },
+        &StoryInstant {
+            sequence: 15,
+            label: None,
+        },
     );
     assert!(!issues.is_empty());
     assert!(issues.iter().any(|i| i.code == "dead-character-active"));

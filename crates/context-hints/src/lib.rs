@@ -1,3 +1,5 @@
+//! 写作时的上下文浮带：按附近文本匹配人物状态、世界规则与未兑现伏笔。
+
 use novel_domain::{
     CanonEntity, CanonFact, ContextHint, HintAction, HintKind, PlotThread, PlotThreadStatus,
     Revision, WorkContextRef,

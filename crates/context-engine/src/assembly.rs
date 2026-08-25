@@ -1,6 +1,4 @@
-use novel_domain::{
-    ContextPackage, ContextSection, ContextSource, Revision, WorkContextRef,
-};
+use novel_domain::{ContextPackage, ContextSection, ContextSource, Revision, WorkContextRef};
 
 pub struct AssemblyOptions {
     pub token_budget: u32,
@@ -77,7 +75,10 @@ pub fn assemble_context(
     ContextPackage {
         id: format!("ctx-{}", work_ref.revision.0),
         token_budget: options.token_budget,
-        sources: sections.iter().map(|section| section.source.clone()).collect(),
+        sources: sections
+            .iter()
+            .map(|section| section.source.clone())
+            .collect(),
         sections,
         work_ref,
     }

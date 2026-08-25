@@ -45,10 +45,7 @@ fn validate_dead_entities(
         }
         let active_again = events.iter().any(|event| {
             event.participants.contains(entity_id)
-                && event
-                    .story_time
-                    .as_ref()
-                    .is_some_and(|time| time > at)
+                && event.story_time.as_ref().is_some_and(|time| time > at)
         });
         if active_again {
             issues.push(ContinuityIssue {

@@ -84,8 +84,16 @@ pub enum WorkflowAction {
     SaveDocument,
     RebuildIndex,
     CheckContinuity,
-    GenerateContinuation { max_tokens: u32 },
+    GenerateContinuation {
+        max_tokens: u32,
+    },
     CreateBackup,
-    RunAgent { prompt: String },
-    RunPluginOperation { plugin_id: String, operation: String, input: Value },
+    RunAgent {
+        prompt: String,
+    },
+    RunPluginOperation {
+        plugin_id: String,
+        operation: String,
+        input: Value,
+    },
 }
