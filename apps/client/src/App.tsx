@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Bookmark,
   BookOpen,
   Brain,
   CheckCircle2,
@@ -42,10 +43,13 @@ export function App() {
     projects,
     project,
     books,
+    volumes,
     chapters,
     activeChapter,
     setActiveChapter,
     setActiveBookId,
+    activeVolumeId,
+    setActiveVolumeId,
     libraryError,
     prompt,
     setPrompt,
@@ -55,6 +59,7 @@ export function App() {
     handlePrompt,
     handleDelete,
     mutateBook,
+    mutateVolume,
     mutateChapter,
   } = library;
   const { jobs, queueReady, enqueue } = useQueue(project);
@@ -90,7 +95,13 @@ export function App() {
     ? prompt.mode === "rename"
       ? {
           title:
-            prompt.target === "project" ? "重命名作品" : prompt.target === "book" ? "重命名书" : "重命名章节",
+            prompt.target === "project"
+              ? "重命名作品"
+              : prompt.target === "book"
+                ? "重命名书"
+                : prompt.target === "volume"
+                  ? "重命名卷"
+                  : "重命名章节",
           label: "名称",
           placeholder: prompt.title ?? "",
           confirm: "保存",
@@ -98,8 +109,10 @@ export function App() {
       : prompt.target === "project"
         ? { title: "新作品", label: "作品名称", placeholder: "例如：夜航星图", confirm: "创建" }
         : prompt.target === "book"
-          ? { title: "新书", label: "书名 / 卷名", placeholder: "例如：卷一 · 雾与海", confirm: "创建" }
-          : { title: "新章节", label: "章节标题", placeholder: "例如：第一章 雾港来客", confirm: "创建" }
+          ? { title: "新书", label: "书名", placeholder: "例如：雾港纪事", confirm: "创建" }
+          : prompt.target === "volume"
+            ? { title: "新卷", label: "卷名", placeholder: "例如：卷一 · 雾与海", confirm: "创建" }
+            : { title: "新章节", label: "章节标题", placeholder: "例如：第一章 雾港来客", confirm: "创建" }
     : { title: "", label: "", placeholder: "", confirm: "创建" };
 
   return (
@@ -147,6 +160,13 @@ export function App() {
             <button className="text-button" onClick={() => setPrompt({ mode: "create", target: "book" })}>
               新书
             </button>
+            <button
+              className="text-button"
+              onClick={() => setPrompt({ mode: "create", target: "volume" })}
+              disabled={!project || books.length === 0}
+            >
+              新卷
+            </button>
             {project && (
               <>
                 <button
@@ -174,10 +194,52 @@ export function App() {
             <div className="tree-empty">还没有书。点上方「新书」创建第一本。</div>
           )}
           {books.map((book, bookIndex) => {
-            const bookChapters = chapters.filter((chapter) => chapter.bookId === book.id);
+            const bookVolumes = volumes.filter((volume) => volume.bookId === book.id);
+            const ungrouped = chapters.filter(
+              (chapter) => chapter.bookId === book.id && !chapter.volumeId,
+            );
+            const renderChapters = (list: typeof chapters, nested: boolean) =>
+              list.map((chapter, chapterIndex) => (
+                <div
+                  key={chapter.id}
+                  className={`tree-item ${nested ? "nested" : ""} ${activeChapter === chapter.id ? "active" : ""}`}
+                  onClick={() => {
+                    void persistChapter();
+                    setActiveChapter(chapter.id);
+                    setActiveBookId(book.id);
+                    setActiveVolumeId(chapter.volumeId ?? null);
+                  }}
+                >
+                  <FileText size={14} />
+                  <span>{chapter.title}</span>
+                  <TreeItemActions
+                    disableUp={chapterIndex === 0}
+                    disableDown={chapterIndex === list.length - 1}
+                    onRename={() =>
+                      setPrompt({
+                        mode: "rename",
+                        target: "chapter",
+                        id: chapter.id,
+                        title: chapter.title,
+                      })
+                    }
+                    onDelete={() =>
+                      setPendingDelete({ target: "chapter", id: chapter.id, title: chapter.title })
+                    }
+                    onMoveUp={() => void mutateChapter(chapter.id, -1)}
+                    onMoveDown={() => void mutateChapter(chapter.id, 1)}
+                  />
+                </div>
+              ));
             return (
               <div key={book.id} className="tree-book">
-                <div className="tree-section">
+                <div
+                  className={`tree-section ${activeVolumeId === null && activeChapterRecord?.bookId === book.id ? "current" : ""}`}
+                  onClick={() => {
+                    setActiveBookId(book.id);
+                    setActiveVolumeId(null);
+                  }}
+                >
                   <Layers size={14} />
                   <span>{book.title}</span>
                   <TreeItemActions
@@ -191,37 +253,42 @@ export function App() {
                     onMoveDown={() => void mutateBook(book.id, 1)}
                   />
                 </div>
-                {bookChapters.map((chapter, chapterIndex) => (
-                  <div
-                    key={chapter.id}
-                    className={`tree-item ${activeChapter === chapter.id ? "active" : ""}`}
-                    onClick={() => {
-                      void persistChapter();
-                      setActiveChapter(chapter.id);
-                      setActiveBookId(book.id);
-                    }}
-                  >
-                    <FileText size={14} />
-                    <span>{chapter.title}</span>
-                    <TreeItemActions
-                      disableUp={chapterIndex === 0}
-                      disableDown={chapterIndex === bookChapters.length - 1}
-                      onRename={() =>
-                        setPrompt({
-                          mode: "rename",
-                          target: "chapter",
-                          id: chapter.id,
-                          title: chapter.title,
-                        })
-                      }
-                      onDelete={() =>
-                        setPendingDelete({ target: "chapter", id: chapter.id, title: chapter.title })
-                      }
-                      onMoveUp={() => void mutateChapter(chapter.id, -1)}
-                      onMoveDown={() => void mutateChapter(chapter.id, 1)}
-                    />
-                  </div>
-                ))}
+                {bookVolumes.map((volume, volumeIndex) => {
+                  const volumeChapters = chapters.filter((chapter) => chapter.volumeId === volume.id);
+                  return (
+                    <div key={volume.id}>
+                      <div
+                        className={`tree-section volume ${activeVolumeId === volume.id ? "current" : ""}`}
+                        onClick={() => {
+                          setActiveBookId(book.id);
+                          setActiveVolumeId(volume.id);
+                        }}
+                      >
+                        <Bookmark size={14} />
+                        <span>{volume.title}</span>
+                        <TreeItemActions
+                          disableUp={volumeIndex === 0}
+                          disableDown={volumeIndex === bookVolumes.length - 1}
+                          onRename={() =>
+                            setPrompt({
+                              mode: "rename",
+                              target: "volume",
+                              id: volume.id,
+                              title: volume.title,
+                            })
+                          }
+                          onDelete={() =>
+                            setPendingDelete({ target: "volume", id: volume.id, title: volume.title })
+                          }
+                          onMoveUp={() => void mutateVolume(volume.id, -1)}
+                          onMoveDown={() => void mutateVolume(volume.id, 1)}
+                        />
+                      </div>
+                      {renderChapters(volumeChapters, true)}
+                    </div>
+                  );
+                })}
+                {renderChapters(ungrouped, false)}
               </div>
             );
           })}
@@ -378,7 +445,7 @@ export function App() {
                 <CircleDot size={12} />
                 作品结构
               </div>
-              <p>作品 → 书 → 章。每本书可以独立增删，章节挂在当前选中的书下。</p>
+              <p>作品 → 书 → 可选卷 → 章。卷只用来分组；删卷不会删章节。</p>
             </div>
           </div>
         )}
@@ -462,9 +529,15 @@ export function App() {
             ? "删除作品"
             : pendingDelete?.target === "book"
               ? "删除书"
-              : "删除章节"
+              : pendingDelete?.target === "volume"
+                ? "删除卷"
+                : "删除章节"
         }
-        body={`确定删除「${pendingDelete?.title ?? ""}」？此操作不可撤销。`}
+        body={
+          pendingDelete?.target === "volume"
+            ? `确定删除「${pendingDelete.title}」？卷下的章节会留在书里，只是不再分卷。`
+            : `确定删除「${pendingDelete?.title ?? ""}」？此操作不可撤销。`
+        }
         onClose={() => setPendingDelete(null)}
         onConfirm={handleDelete}
       />

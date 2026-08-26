@@ -19,6 +19,13 @@ export interface Book {
   position: number;
 }
 
+export interface Volume {
+  id: string;
+  bookId: string;
+  title: string;
+  position: number;
+}
+
 export interface Chapter {
   id: string;
   bookId: string;
@@ -33,6 +40,7 @@ export interface LibrarySnapshot {
   projects: Project[];
   activeProjectId?: string | null;
   books: Book[];
+  volumes?: Volume[];
   chapters: Chapter[];
 }
 

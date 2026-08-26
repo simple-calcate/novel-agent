@@ -17,6 +17,7 @@ import {
   Project,
   StoryEntry,
   StoryEntryKind,
+  Volume,
 } from "./types";
 import { extractMentions } from "./canon/extract";
 import { splitTitleAndAliases } from "./structure/match";
@@ -41,6 +42,7 @@ interface MemoryState {
   activeProjectId: string | undefined;
   canon: CanonProposal[];
   story: StoryEntry[];
+  volumes: Volume[];
 }
 
 const memory: MemoryState = {
@@ -51,6 +53,7 @@ const memory: MemoryState = {
   activeProjectId: undefined,
   canon: [],
   story: [],
+  volumes: [],
 };
 
 function nowIso(): string {
@@ -69,6 +72,9 @@ function snapshot(projectId?: string): LibrarySnapshot {
     projects: memory.projects,
     activeProjectId: active ?? null,
     books: memory.books.filter((book) => book.projectId === active),
+    volumes: memory.volumes.filter((volume) =>
+      memory.books.some((book) => book.id === volume.bookId && book.projectId === active),
+    ),
     chapters: memory.chapters.filter((chapter) =>
       memory.books.some((book) => book.id === chapter.bookId && book.projectId === active),
     ),
@@ -84,6 +90,7 @@ export function resetMemoryLibrary(): void {
   memory.activeProjectId = undefined;
   memory.canon = [];
   memory.story = [];
+  memory.volumes = [];
 }
 
 export const libraryApi = {
@@ -135,16 +142,25 @@ export const libraryApi = {
     return book;
   },
 
-  async createChapter(projectId: string, bookId: string, title: string): Promise<Chapter> {
+  async createChapter(
+    projectId: string,
+    bookId: string,
+    title: string,
+    volumeId?: string | null,
+  ): Promise<Chapter> {
     if (isTauriRuntime()) {
       return command<Chapter>("create_chapter", {
-        input: { projectId, bookId, title, position: 0 },
+        input: { projectId, bookId, title, position: 0, volumeId: volumeId ?? null },
       });
     }
-    const siblings = memory.chapters.filter((chapter) => chapter.bookId === bookId);
+    const siblings = memory.chapters.filter(
+      (chapter) =>
+        chapter.bookId === bookId && (chapter.volumeId ?? null) === (volumeId ?? null),
+    );
     const chapter: Chapter = {
       id: newId(),
       bookId,
+      volumeId: volumeId ?? null,
       title,
       position: siblings.reduce((max, item) => Math.max(max, item.position), 0) + 1,
       currentRevision: 0,
@@ -153,6 +169,26 @@ export const libraryApi = {
     memory.chapters.push(chapter);
     memory.texts[chapter.id] = { chapterId: chapter.id, revision: 0, text: "", blocks: [] };
     return chapter;
+  },
+
+  async createVolume(projectId: string, bookId: string, title: string): Promise<Volume> {
+    if (isTauriRuntime()) {
+      return command<Volume>("create_volume", {
+        input: { projectId, bookId, title, position: 0 },
+      });
+    }
+    if (!memory.books.some((book) => book.id === bookId && book.projectId === projectId)) {
+      throw new Error("书不存在");
+    }
+    const siblings = memory.volumes.filter((volume) => volume.bookId === bookId);
+    const volume: Volume = {
+      id: newId(),
+      bookId,
+      title,
+      position: siblings.reduce((max, item) => Math.max(max, item.position), 0) + 1,
+    };
+    memory.volumes.push(volume);
+    return volume;
   },
 
   async loadChapter(chapterId: string): Promise<ChapterBody> {
@@ -202,6 +238,9 @@ export const libraryApi = {
       return command<LibrarySnapshot>("delete_project", { projectId });
     }
     memory.books = memory.books.filter((book) => book.projectId !== projectId);
+    memory.volumes = memory.volumes.filter((volume) =>
+      memory.books.some((book) => book.id === volume.bookId),
+    );
     memory.chapters = memory.chapters.filter((chapter) =>
       memory.books.some((book) => book.id === chapter.bookId),
     );
@@ -229,6 +268,7 @@ export const libraryApi = {
       return command<LibrarySnapshot>("delete_book", { projectId, bookId });
     }
     memory.chapters = memory.chapters.filter((chapter) => chapter.bookId !== bookId);
+    memory.volumes = memory.volumes.filter((volume) => volume.bookId !== bookId);
     memory.books = memory.books.filter((book) => book.id !== bookId);
     return snapshot(projectId);
   },
@@ -280,12 +320,65 @@ export const libraryApi = {
     if (!chapter) throw new Error("章节不存在");
     const bookId = chapter.bookId;
     const siblings = moveById(
-      memory.chapters.filter((item) => item.bookId === bookId),
+      memory.chapters.filter(
+        (item) => item.bookId === bookId && (item.volumeId ?? null) === (chapter.volumeId ?? null),
+      ),
       chapterId,
       delta,
     );
     memory.chapters = [
-      ...memory.chapters.filter((item) => item.bookId !== bookId),
+      ...memory.chapters.filter(
+        (item) =>
+          !(item.bookId === bookId && (item.volumeId ?? null) === (chapter.volumeId ?? null)),
+      ),
+      ...siblings,
+    ];
+    return snapshot(projectId);
+  },
+
+  async renameVolume(
+    projectId: string,
+    volumeId: string,
+    title: string,
+  ): Promise<LibrarySnapshot> {
+    if (isTauriRuntime()) {
+      return command<LibrarySnapshot>("rename_volume", { projectId, volumeId, title });
+    }
+    const volume = memory.volumes.find((item) => item.id === volumeId);
+    if (!volume) throw new Error("卷不存在");
+    volume.title = title;
+    return snapshot(projectId);
+  },
+
+  async deleteVolume(projectId: string, volumeId: string): Promise<LibrarySnapshot> {
+    if (isTauriRuntime()) {
+      return command<LibrarySnapshot>("delete_volume", { projectId, volumeId });
+    }
+    memory.chapters.forEach((chapter) => {
+      if (chapter.volumeId === volumeId) chapter.volumeId = null;
+    });
+    memory.volumes = memory.volumes.filter((item) => item.id !== volumeId);
+    return snapshot(projectId);
+  },
+
+  async moveVolume(
+    projectId: string,
+    volumeId: string,
+    delta: number,
+  ): Promise<LibrarySnapshot> {
+    if (isTauriRuntime()) {
+      return command<LibrarySnapshot>("move_volume", { projectId, volumeId, delta });
+    }
+    const volume = memory.volumes.find((item) => item.id === volumeId);
+    if (!volume) throw new Error("卷不存在");
+    const bookId = volume.bookId;
+    const siblings = moveById(
+      memory.volumes.filter((item) => item.bookId === bookId),
+      volumeId,
+      delta,
+    );
+    memory.volumes = [
+      ...memory.volumes.filter((item) => item.bookId !== bookId),
       ...siblings,
     ];
     return snapshot(projectId);

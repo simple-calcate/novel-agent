@@ -34,6 +34,27 @@ describe("memory library", () => {
     expect(after.books).toHaveLength(1);
   });
 
+  it("groups chapters under a volume and ungroups on delete", async () => {
+    const project = await libraryApi.createProject("夜航星图");
+    const book = await libraryApi.createBook(project.id, "雾港纪事");
+    const volume = await libraryApi.createVolume(project.id, book.id, "卷一");
+    await libraryApi.createChapter(project.id, book.id, "第一章", volume.id);
+    const library = await libraryApi.loadLibrary(project.id);
+    expect(library.volumes?.map((item) => item.title)).toEqual(["卷一"]);
+    expect(library.chapters[0].volumeId).toBe(volume.id);
+
+    await libraryApi.renameVolume(project.id, volume.id, "上卷");
+    await libraryApi.createVolume(project.id, book.id, "卷二");
+    await libraryApi.moveVolume(project.id, volume.id, 1);
+    const ordered = await libraryApi.loadLibrary(project.id);
+    expect(ordered.volumes?.map((item) => item.title)).toEqual(["卷二", "上卷"]);
+
+    await libraryApi.deleteVolume(project.id, volume.id);
+    const after = await libraryApi.loadLibrary(project.id);
+    expect(after.volumes).toHaveLength(1);
+    expect(after.chapters[0].volumeId).toBeNull();
+  });
+
   it("extracts canon candidates and accepts them", async () => {
     const project = await libraryApi.createProject("夜航星图");
     const book = await libraryApi.createBook(project.id, "卷一");

@@ -5,14 +5,15 @@
 ## 1. 领域：作品层级
 
 ```
-Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
+Project（作品） 1—n Book（书） 1—n 可选 Volume（卷） 1—n Chapter（章）
 ```
 
 | 类型 | 含义 | 关键字段 |
 |---|---|---|
 | `Project` | 一部作品的工作区 | `id`, `title`, `createdAt`, `updatedAt` |
-| `Book` | 书或分卷 | `id`, `projectId`, `title`, `synopsis`, `position` |
-| `Chapter` | 可修订的正文单位 | `id`, `bookId`, `title`, `position`, `currentRevision`, `status` |
+| `Book` | 一本书 | `id`, `projectId`, `title`, `synopsis`, `position` |
+| `Volume` | 书下的可选卷 | `id`, `bookId`, `title`, `position` |
+| `Chapter` | 可修订的正文单位 | `id`, `bookId`, `volumeId?`, `title`, `position`, `currentRevision`, `status` |
 
 创建书时 `position = 0` 表示自动排到该作品末尾；章节同理。书必须属于已存在的作品，章必须属于该作品下的书，否则仓储返回 `NotFound`。
 
@@ -22,6 +23,7 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 |---|---|
 | `project.created` / `project.renamed` / `project.deleted` | 作品增删改 |
 | `book.created` / `book.renamed` / `book.deleted` / `book.reordered` | 书 |
+| `volume.created` / `volume.renamed` / `volume.deleted` / `volume.reordered` | 卷 |
 | `chapter.created` / `chapter.renamed` / `chapter.deleted` / `chapter.reordered` | 章 |
 | `canon.proposed` / `canon.accepted` / `canon.rejected` | 正史候选生成与作者审核 |
 | `block.mode.changed` | 编辑器思考/正文切换 |
@@ -69,10 +71,11 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 
 - `create_project(title)`
 - `create_book(project_id, title, synopsis, position)`
-- `create_chapter(project_id, book_id, title, position)`
-- `list_projects` / `list_books` / `list_chapters`
+- `create_chapter(project_id, book_id, title, position)` / `create_chapter_with_volume(..., volume_id)`
+- `list_projects` / `list_books` / `list_volumes` / `list_chapters`
 - `rename_project` / `delete_project`
 - `rename_book` / `delete_book` / `move_book(delta)`
+- `create_volume` / `rename_volume` / `delete_volume` / `move_volume(delta)`
 - `rename_chapter` / `delete_chapter` / `move_chapter(delta)`
 - `save_chapter_snapshot` / `save_block_sequence` / `block_sequence`
 - `chapter_text` / `current_revision` / `commit_patch`
@@ -97,7 +100,7 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 
 宿主只应通过 `Workspace::new(&kernel)` 做作品库、设置、手动入队和续写配置解析：
 
-- `create_project` / `create_book` / `create_chapter`
+- `create_project` / `create_book` / `create_volume` / `create_chapter`
 - `load_library` / `set_active_project` / `load_chapter` / `save_chapter`
 - `rename_*` / `delete_*` / `move_*`
 - `enqueue_job` / `list_jobs` / `save_setting` / `get_setting`
@@ -119,13 +122,15 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 |---|---|---|
 | `create_project` | `{ title }` | `Project` |
 | `create_book` | `{ projectId, title, synopsis?, position? }` | `Book` |
-| `create_chapter` | `{ projectId, bookId, title, position? }` | `Chapter` |
-| `load_library` | `projectId?: string \| null` | `{ projects, activeProjectId, books, chapters }` |
+| `create_chapter` | `{ projectId, bookId, title, position?, volumeId? }` | `Chapter` |
+| `create_volume` | `{ projectId, bookId, title, position? }` | `Volume` |
+| `load_library` | `projectId?: string \| null` | `{ projects, activeProjectId, books, volumes, chapters }` |
 | `set_active_project` | `projectId` | 同上 |
 | `load_chapter` | `chapterId` | `{ chapterId, revision, text, blocks }` |
 | `save_chapter` | `chapterId`, `text`, `blocks?` | 同上；有 `blocks` 时写入块序列 |
 | `rename_project` / `delete_project` | `projectId`（改名另加 `title`） | `LibrarySnapshot` |
 | `rename_book` / `delete_book` / `move_book` | `projectId`, `bookId`（改名加 `title`，移动加 `delta`） | `LibrarySnapshot` |
+| `rename_volume` / `delete_volume` / `move_volume` | `projectId`, `volumeId`（同上） | `LibrarySnapshot` |
 | `rename_chapter` / `delete_chapter` / `move_chapter` | `projectId`, `chapterId`（同上） | `LibrarySnapshot` |
 | `enqueue_job` | `{ projectId, operation, payload, priority }` | `{ jobId }` |
 | `run_queue_step` | — | `{ executed, ... }` |

@@ -56,7 +56,7 @@ fn book_and_chapter_roundtrip() {
     let project = workspace.create_project("作品").unwrap();
     let book = workspace.create_book(&project.id, "卷一", "", 0).unwrap();
     let chapter = workspace
-        .create_chapter(&project.id, &book.id.to_string(), "第一章", 0)
+        .create_chapter(&project.id, &book.id.to_string(), "第一章", 0, None)
         .unwrap();
     workspace
         .save_chapter(&chapter.id, "雾港来客。", None)
@@ -64,6 +64,41 @@ fn book_and_chapter_roundtrip() {
     let body = workspace.load_chapter(&chapter.id).unwrap();
     assert_eq!(body.text, "雾港来客。");
     assert_eq!(body.revision, 1);
+}
+
+#[test]
+fn volume_groups_chapters_in_snapshot() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let project = workspace.create_project("作品").unwrap();
+    let book = workspace.create_book(&project.id, "卷一", "", 0).unwrap();
+    let volume = workspace
+        .create_volume(&project.id, &book.id.to_string(), "上卷", 0)
+        .unwrap();
+    let chapter = workspace
+        .create_chapter(
+            &project.id,
+            &book.id.to_string(),
+            "第一章",
+            0,
+            Some(&volume.id.to_string()),
+        )
+        .unwrap();
+    assert_eq!(chapter.volume_id.as_ref(), Some(&volume.id));
+    let snapshot = workspace.load_library(Some(project.id.clone())).unwrap();
+    assert_eq!(snapshot.volumes.len(), 1);
+    assert_eq!(snapshot.volumes[0].title, "上卷");
+    assert_eq!(
+        snapshot.chapters[0]
+            .volume_id
+            .as_ref()
+            .map(ToString::to_string),
+        Some(volume.id.to_string())
+    );
+    workspace.delete_volume(&project.id, &volume.id).unwrap();
+    let after = workspace.load_library(Some(project.id.clone())).unwrap();
+    assert!(after.volumes.is_empty());
+    assert!(after.chapters[0].volume_id.is_none());
 }
 
 #[test]
@@ -102,7 +137,7 @@ fn propose_and_review_canon_from_chapter() {
     let project = workspace.create_project("作品").unwrap();
     let book = workspace.create_book(&project.id, "卷一", "", 0).unwrap();
     let chapter = workspace
-        .create_chapter(&project.id, &book.id.to_string(), "第一章", 0)
+        .create_chapter(&project.id, &book.id.to_string(), "第一章", 0, None)
         .unwrap();
     workspace
         .save_chapter(&chapter.id, "林晚说道：「今夜雾很重。」", None)
@@ -131,6 +166,7 @@ fn user_event_kind_matches_library_ops() {
     assert_eq!(EventKind::ChapterCreated.as_str(), "chapter.created");
     assert_eq!(EventKind::CanonProposed.as_str(), "canon.proposed");
     assert_eq!(EventKind::CanonAccepted.as_str(), "canon.accepted");
+    assert_eq!(EventKind::VolumeCreated.as_str(), "volume.created");
 }
 
 #[test]

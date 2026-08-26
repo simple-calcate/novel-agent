@@ -1,6 +1,6 @@
 use crate::{run_migrations, StorageError};
 use chrono::{DateTime, Utc};
-use novel_domain::{BookId, ChapterStatus, DomainError, ProjectId};
+use novel_domain::{BookId, ChapterStatus, DomainError, ProjectId, VolumeId};
 use rusqlite::Connection;
 use std::path::Path;
 
@@ -107,6 +107,12 @@ pub(super) fn parse_book_id(value: &str) -> Result<BookId, StorageError> {
     value
         .parse()
         .map_err(|_| DomainError::Validation("invalid book id".into()).into())
+}
+
+pub(super) fn parse_volume_id(value: &str) -> Result<VolumeId, StorageError> {
+    value
+        .parse()
+        .map_err(|_| DomainError::Validation("invalid volume id".into()).into())
 }
 
 pub(super) fn chapter_status(name: &str) -> ChapterStatus {

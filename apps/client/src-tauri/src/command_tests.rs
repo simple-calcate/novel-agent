@@ -3,12 +3,12 @@
 
 use crate::{
     build_context_package, context_hints, create_book, create_chapter, create_project,
-    create_story_entry, delete_book, delete_chapter, editor_tick, emit_domain_event,
-    generate_continuation, install_plugin_manifest, kernel_tools, list_canon, list_story_entries,
-    load_chapter, load_library, load_model_config, move_book, propose_canon, rename_book,
-    rename_chapter, rename_project, review_canon_fact, run_queue_step, save_chapter,
+    create_story_entry, create_volume, delete_book, delete_chapter, delete_volume, editor_tick,
+    emit_domain_event, generate_continuation, install_plugin_manifest, kernel_tools, list_canon,
+    list_story_entries, load_chapter, load_library, load_model_config, move_book, propose_canon,
+    rename_book, rename_chapter, rename_project, review_canon_fact, run_queue_step, save_chapter,
     save_model_config, AppState, EditorTickInput, HintRequest, ModelConfigInput, NewBookInput,
-    NewChapterInput, NewProjectInput,
+    NewChapterInput, NewProjectInput, NewVolumeInput,
 };
 use novel_domain::{
     Actor, BlockKind, ContentBlock, DomainEvent, EventId, EventSource, Platform, Revision,
@@ -74,6 +74,18 @@ fn create_project_and_chapter_roundtrip() {
     assert!(book.ok, "{book:?}");
     let book = book.data.unwrap();
 
+    let volume = create_volume(
+        state(),
+        NewVolumeInput {
+            project_id: project_id.clone(),
+            book_id: book.id.to_string(),
+            title: "上卷".into(),
+            position: 0,
+        },
+    );
+    assert!(volume.ok, "{volume:?}");
+    let volume = volume.data.unwrap();
+
     let chapter = create_chapter(
         state(),
         NewChapterInput {
@@ -81,6 +93,7 @@ fn create_project_and_chapter_roundtrip() {
             book_id: book.id.to_string(),
             title: "第一章".into(),
             position: 1,
+            volume_id: Some(volume.id.to_string()),
         },
     );
     assert!(chapter.ok, "{chapter:?}");
@@ -93,6 +106,7 @@ fn create_project_and_chapter_roundtrip() {
             book_id: book.id.to_string(),
             title: "x".into(),
             position: 2,
+            volume_id: None,
         },
     );
     assert!(!bad.ok);
@@ -102,7 +116,21 @@ fn create_project_and_chapter_roundtrip() {
     assert!(library.ok, "{library:?}");
     let snapshot = library.data.unwrap();
     assert_eq!(snapshot.books.len(), 1);
+    assert_eq!(snapshot.volumes.len(), 1);
     assert_eq!(snapshot.chapters.len(), 1);
+    assert_eq!(
+        snapshot.chapters[0]
+            .volume_id
+            .as_ref()
+            .map(ToString::to_string),
+        Some(volume.id.to_string())
+    );
+
+    let ungrouped = delete_volume(state(), project_id.clone(), volume.id.to_string());
+    assert!(ungrouped.ok, "{ungrouped:?}");
+    let after_delete = ungrouped.data.unwrap();
+    assert!(after_delete.volumes.is_empty());
+    assert!(after_delete.chapters[0].volume_id.is_none());
 
     let chapter_id = snapshot.chapters[0].id.to_string();
     let saved = save_chapter(state(), chapter_id.clone(), "雾港来客。".into(), None);
@@ -382,6 +410,7 @@ async fn canon_accept_does_not_appear_in_structure_rail() {
             book_id: book.id.to_string(),
             title: "第一章".into(),
             position: 0,
+            volume_id: None,
         },
     )
     .data

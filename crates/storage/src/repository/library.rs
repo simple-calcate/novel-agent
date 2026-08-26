@@ -1,10 +1,12 @@
 use super::{
-    chapter_status, parse_book_id, parse_project_id, parse_rfc3339, SETTING_ACTIVE_PROJECT,
+    chapter_status, parse_book_id, parse_project_id, parse_rfc3339, parse_volume_id,
+    SETTING_ACTIVE_PROJECT,
 };
 use crate::StorageError;
 use chrono::Utc;
 use novel_domain::{
     Book, BookId, Chapter, ChapterId, ChapterStatus, DomainError, Project, ProjectId, Revision,
+    Volume, VolumeId,
 };
 use rusqlite::{params, OptionalExtension};
 use serde_json::json;
@@ -93,11 +95,29 @@ impl super::Repository {
         title: &str,
         position: u32,
     ) -> Result<Chapter, StorageError> {
+        self.create_chapter_with_volume(project_id, book_id, title, position, None)
+    }
+
+    pub fn create_chapter_with_volume(
+        &self,
+        project_id: &ProjectId,
+        book_id: &str,
+        title: &str,
+        position: u32,
+        volume_id: Option<&str>,
+    ) -> Result<Chapter, StorageError> {
+        let volume_id = match volume_id {
+            Some(value) if !value.is_empty() => Some(parse_volume_id(value)?),
+            _ => None,
+        };
         let position = if position == 0 {
-            self.next_position(
-                "SELECT COALESCE(MAX(position), 0) FROM chapters WHERE book_id = ?1",
-                book_id,
-            )?
+            let max: i64 = self.connection.query_row(
+                "SELECT COALESCE(MAX(position), 0) FROM chapters
+                 WHERE book_id = ?1 AND volume_id IS NOT DISTINCT FROM ?2",
+                params![book_id, volume_id.as_ref().map(ToString::to_string)],
+                |row| row.get(0),
+            )?;
+            (max as u32).saturating_add(1)
         } else {
             position
         };
@@ -106,7 +126,7 @@ impl super::Repository {
             book_id: Uuid::parse_str(book_id).map(BookId).map_err(|_| {
                 StorageError::Domain(DomainError::Validation("invalid book id".into()))
             })?,
-            volume_id: None,
+            volume_id: volume_id.clone(),
             title: title.to_owned(),
             position,
             current_revision: Revision::INITIAL,
@@ -119,17 +139,20 @@ impl super::Repository {
             json!({
                 "chapterId": chapter.id.to_string(),
                 "bookId": book_id,
+                "volumeId": volume_id.as_ref().map(ToString::to_string),
                 "title": title,
                 "position": position
             }),
             |tx| {
                 let inserted = tx.execute(
-                    "INSERT INTO chapters(id, book_id, title, position, current_revision, status)
-                     SELECT ?1, ?2, ?3, ?4, 0, 'draft'
-                     WHERE EXISTS(SELECT 1 FROM books WHERE id = ?2 AND project_id = ?5)",
+                    "INSERT INTO chapters(id, book_id, volume_id, title, position, current_revision, status)
+                     SELECT ?1, ?2, ?3, ?4, ?5, 0, 'draft'
+                     WHERE EXISTS(SELECT 1 FROM books WHERE id = ?2 AND project_id = ?6)
+                       AND (?3 IS NULL OR EXISTS(SELECT 1 FROM volumes WHERE id = ?3 AND book_id = ?2))",
                     params![
                         chapter.id.to_string(),
                         book_id,
+                        volume_id.as_ref().map(ToString::to_string),
                         title,
                         position,
                         project_id.to_string()
@@ -205,8 +228,9 @@ impl super::Repository {
             "SELECT c.id, c.book_id, c.volume_id, c.title, c.position, c.current_revision, c.status
              FROM chapters c
              JOIN books b ON b.id = c.book_id
+             LEFT JOIN volumes v ON v.id = c.volume_id
              WHERE b.project_id = ?1
-             ORDER BY b.position, c.position, c.title",
+             ORDER BY b.position, COALESCE(v.position, 2147483647), c.position, c.title",
         )?;
         let rows = stmt.query_map([project_id.to_string()], |row| {
             Ok((
@@ -243,6 +267,181 @@ impl super::Repository {
             });
         }
         Ok(chapters)
+    }
+
+    pub fn list_volumes(&self, project_id: &ProjectId) -> Result<Vec<Volume>, StorageError> {
+        let mut stmt = self.connection.prepare(
+            "SELECT v.id, v.book_id, v.title, v.position
+             FROM volumes v
+             JOIN books b ON b.id = v.book_id
+             WHERE b.project_id = ?1
+             ORDER BY b.position, v.position, v.title",
+        )?;
+        let rows = stmt.query_map([project_id.to_string()], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+            ))
+        })?;
+        let mut volumes = Vec::new();
+        for row in rows {
+            let (id, book_id, title, position) = row?;
+            volumes.push(Volume {
+                id: parse_volume_id(&id)?,
+                book_id: parse_book_id(&book_id)?,
+                title,
+                position: position as u32,
+            });
+        }
+        Ok(volumes)
+    }
+
+    pub fn create_volume(
+        &self,
+        project_id: &ProjectId,
+        book_id: &str,
+        title: &str,
+        position: u32,
+    ) -> Result<Volume, StorageError> {
+        let position = if position == 0 {
+            self.next_position(
+                "SELECT COALESCE(MAX(position), 0) FROM volumes WHERE book_id = ?1",
+                book_id,
+            )?
+        } else {
+            position
+        };
+        let volume = Volume {
+            id: VolumeId::new(),
+            book_id: parse_book_id(book_id)?,
+            title: title.to_owned(),
+            position,
+        };
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "volume.created",
+            json!({
+                "volumeId": volume.id.to_string(),
+                "bookId": book_id,
+                "title": title,
+                "position": position
+            }),
+            |tx| {
+                let inserted = tx.execute(
+                    "INSERT INTO volumes(id, book_id, title, position)
+                     SELECT ?1, ?2, ?3, ?4
+                     WHERE EXISTS(SELECT 1 FROM books WHERE id = ?2 AND project_id = ?5)",
+                    params![
+                        volume.id.to_string(),
+                        book_id,
+                        title,
+                        position,
+                        project_id.to_string()
+                    ],
+                )?;
+                if inserted == 0 {
+                    return Err(DomainError::NotFound(format!(
+                        "book {book_id} in project {project_id}"
+                    ))
+                    .into());
+                }
+                Ok(())
+            },
+        )?;
+        Ok(volume)
+    }
+
+    pub fn rename_volume(
+        &self,
+        project_id: &ProjectId,
+        volume_id: &VolumeId,
+        title: &str,
+    ) -> Result<Volume, StorageError> {
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "volume.renamed",
+            json!({ "volumeId": volume_id.to_string(), "title": title }),
+            |tx| {
+                let updated = tx.execute(
+                    "UPDATE volumes SET title = ?2
+                     WHERE id = ?1 AND book_id IN (SELECT id FROM books WHERE project_id = ?3)",
+                    params![volume_id.to_string(), title, project_id.to_string()],
+                )?;
+                if updated == 0 {
+                    return Err(DomainError::NotFound(format!("volume {volume_id}")).into());
+                }
+                Ok(())
+            },
+        )?;
+        self.list_volumes(project_id)?
+            .into_iter()
+            .find(|volume| &volume.id == volume_id)
+            .ok_or_else(|| DomainError::NotFound(format!("volume {volume_id}")).into())
+    }
+
+    pub fn delete_volume(
+        &self,
+        project_id: &ProjectId,
+        volume_id: &VolumeId,
+    ) -> Result<(), StorageError> {
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "volume.deleted",
+            json!({ "volumeId": volume_id.to_string() }),
+            |tx| {
+                let deleted = tx.execute(
+                    "DELETE FROM volumes
+                     WHERE id = ?1 AND book_id IN (SELECT id FROM books WHERE project_id = ?2)",
+                    params![volume_id.to_string(), project_id.to_string()],
+                )?;
+                if deleted == 0 {
+                    return Err(DomainError::NotFound(format!("volume {volume_id}")).into());
+                }
+                Ok(())
+            },
+        )?;
+        Ok(())
+    }
+
+    pub fn move_volume(
+        &self,
+        project_id: &ProjectId,
+        volume_id: &VolumeId,
+        delta: i32,
+    ) -> Result<Vec<Volume>, StorageError> {
+        let volumes = self.list_volumes(project_id)?;
+        let Some(volume) = volumes.iter().find(|item| &item.id == volume_id) else {
+            return Err(DomainError::NotFound(format!("volume {volume_id}")).into());
+        };
+        let book_id = volume.book_id.clone();
+        let mut siblings: Vec<Volume> = volumes
+            .into_iter()
+            .filter(|item| item.book_id == book_id)
+            .collect();
+        let Some(index) = siblings.iter().position(|item| &item.id == volume_id) else {
+            return Err(DomainError::NotFound(format!("volume {volume_id}")).into());
+        };
+        let target = index as i32 + delta;
+        if target >= 0 && (target as usize) < siblings.len() {
+            siblings.swap(index, target as usize);
+            self.write_with_outbox(
+                &project_id.to_string(),
+                "volume.reordered",
+                json!({ "volumeId": volume_id.to_string(), "delta": delta }),
+                |tx| {
+                    for (position, item) in siblings.iter().enumerate() {
+                        tx.execute(
+                            "UPDATE volumes SET position = ?2 WHERE id = ?1",
+                            params![item.id.to_string(), (position as u32) + 1],
+                        )?;
+                    }
+                    Ok(())
+                },
+            )?;
+        }
+        self.list_volumes(project_id)
     }
 
     pub fn rename_project(
@@ -500,9 +699,10 @@ impl super::Repository {
             return Err(DomainError::NotFound(format!("chapter {chapter_id}")).into());
         };
         let book_id = chapter.book_id.clone();
+        let volume_id = chapter.volume_id.clone();
         let mut siblings: Vec<Chapter> = chapters
             .into_iter()
-            .filter(|item| item.book_id == book_id)
+            .filter(|item| item.book_id == book_id && item.volume_id == volume_id)
             .collect();
         let Some(index) = siblings.iter().position(|item| &item.id == chapter_id) else {
             return Err(DomainError::NotFound(format!("chapter {chapter_id}")).into());

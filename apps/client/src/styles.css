@@ -191,6 +191,21 @@ body {
   color: var(--text-muted);
   font-weight: 500;
   margin-top: 8px;
+  cursor: pointer;
+}
+
+.tree-section.volume {
+  padding-left: 24px;
+  margin-top: 2px;
+  color: var(--text-dim);
+}
+
+.tree-section.current {
+  color: var(--text);
+}
+
+.tree-item.nested {
+  padding-left: 36px;
 }
 
 .tree-section span,

@@ -1,20 +1,29 @@
 import { useCallback, useEffect, useState } from "react";
 import { libraryApi } from "../api";
-import { Book, Chapter, LibrarySnapshot, Project } from "../types";
+import { Book, Chapter, LibrarySnapshot, Project, Volume } from "../types";
 import { logger } from "../logger";
 
 export type PromptKind =
-  | { mode: "create" | "rename"; target: "project" | "book" | "chapter"; id?: string; title?: string }
+  | {
+      mode: "create" | "rename";
+      target: "project" | "book" | "volume" | "chapter";
+      id?: string;
+      title?: string;
+    }
   | null;
-export type DeleteKind = { target: "project" | "book" | "chapter"; id: string; title: string } | null;
+export type DeleteKind =
+  | { target: "project" | "book" | "volume" | "chapter"; id: string; title: string }
+  | null;
 
 export function useLibrary() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<Project | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
+  const [volumes, setVolumes] = useState<Volume[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [activeChapter, setActiveChapter] = useState<string | null>(null);
   const [activeBookId, setActiveBookId] = useState<string | null>(null);
+  const [activeVolumeId, setActiveVolumeId] = useState<string | null>(null);
   const [libraryError, setLibraryError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<PromptKind>(null);
   const [pendingDelete, setPendingDelete] = useState<DeleteKind>(null);
@@ -27,6 +36,7 @@ export function useLibrary() {
       null;
     setProject(current);
     setBooks(snapshot.books);
+    setVolumes(snapshot.volumes ?? []);
     setChapters(snapshot.chapters);
     setActiveChapter((previous) => {
       if (previous && snapshot.chapters.some((chapter) => chapter.id === previous)) {
@@ -39,6 +49,13 @@ export function useLibrary() {
         return previous;
       }
       return snapshot.books[0]?.id ?? snapshot.chapters[0]?.bookId ?? null;
+    });
+    setActiveVolumeId((previous) => {
+      const listed = snapshot.volumes ?? [];
+      if (previous && listed.some((volume) => volume.id === previous)) {
+        return previous;
+      }
+      return null;
     });
   }, []);
 
@@ -77,6 +94,17 @@ export function useLibrary() {
           const book = await libraryApi.createBook(owner.id, title);
           await refreshLibrary(owner.id);
           setActiveBookId(book.id);
+          setActiveVolumeId(null);
+          return;
+        }
+        if (prompt.target === "volume") {
+          if (!project) throw new Error("请先创建作品");
+          const bookId = activeBookId ?? books[0]?.id;
+          if (!bookId) throw new Error("请先创建一本书");
+          const volume = await libraryApi.createVolume(project.id, bookId, title);
+          await refreshLibrary(project.id);
+          setActiveBookId(bookId);
+          setActiveVolumeId(volume.id);
           return;
         }
         if (!project) {
@@ -86,10 +114,15 @@ export function useLibrary() {
         if (!bookId) {
           throw new Error("请先创建一本书");
         }
-        const chapter = await libraryApi.createChapter(project.id, bookId, title);
+        const volumeId =
+          activeVolumeId && volumes.some((volume) => volume.id === activeVolumeId && volume.bookId === bookId)
+            ? activeVolumeId
+            : null;
+        const chapter = await libraryApi.createChapter(project.id, bookId, title, volumeId);
         await refreshLibrary(project.id);
         setActiveChapter(chapter.id);
         setActiveBookId(bookId);
+        if (volumeId) setActiveVolumeId(volumeId);
         return;
       }
       if (!project && prompt.target !== "project") {
@@ -104,9 +137,13 @@ export function useLibrary() {
         applyLibrary(await libraryApi.renameBook(project.id, prompt.id, title));
         return;
       }
+      if (prompt.target === "volume") {
+        applyLibrary(await libraryApi.renameVolume(project.id, prompt.id, title));
+        return;
+      }
       applyLibrary(await libraryApi.renameChapter(project.id, prompt.id, title));
     },
-    [prompt, project, activeBookId, books, refreshLibrary, applyLibrary],
+    [prompt, project, activeBookId, activeVolumeId, books, volumes, refreshLibrary, applyLibrary],
   );
 
   const handleDelete = useCallback(async () => {
@@ -120,6 +157,10 @@ export function useLibrary() {
       applyLibrary(await libraryApi.deleteBook(project.id, pendingDelete.id));
       return;
     }
+    if (pendingDelete.target === "volume") {
+      applyLibrary(await libraryApi.deleteVolume(project.id, pendingDelete.id));
+      return;
+    }
     applyLibrary(await libraryApi.deleteChapter(project.id, pendingDelete.id));
   }, [pendingDelete, project, applyLibrary]);
 
@@ -127,6 +168,14 @@ export function useLibrary() {
     async (bookId: string, delta: number) => {
       if (!project) return;
       applyLibrary(await libraryApi.moveBook(project.id, bookId, delta));
+    },
+    [project, applyLibrary],
+  );
+
+  const mutateVolume = useCallback(
+    async (volumeId: string, delta: number) => {
+      if (!project) return;
+      applyLibrary(await libraryApi.moveVolume(project.id, volumeId, delta));
     },
     [project, applyLibrary],
   );
@@ -143,11 +192,14 @@ export function useLibrary() {
     projects,
     project,
     books,
+    volumes,
     chapters,
     activeChapter,
     setActiveChapter,
     activeBookId,
     setActiveBookId,
+    activeVolumeId,
+    setActiveVolumeId,
     libraryError,
     prompt,
     setPrompt,
@@ -158,6 +210,7 @@ export function useLibrary() {
     handlePrompt,
     handleDelete,
     mutateBook,
+    mutateVolume,
     mutateChapter,
   };
 }

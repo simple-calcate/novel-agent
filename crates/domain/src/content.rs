@@ -18,6 +18,8 @@ pub struct LibrarySnapshot {
     pub projects: Vec<Project>,
     pub active_project_id: Option<String>,
     pub books: Vec<Book>,
+    #[serde(default)]
+    pub volumes: Vec<Volume>,
     pub chapters: Vec<Chapter>,
 }
 

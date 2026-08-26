@@ -10,7 +10,7 @@ use novel_domain::{
     Annotation, Book, BookId, CanonProposal, Chapter, ChapterBody, ChapterId, ContentBlock,
     ContentPatch, DomainEvent, FactId, FactStatus, Job, JobId, JobStatus, JobView, LibrarySnapshot,
     PreferenceRule, PreferenceScope, Project, ProjectId, ProposalId, RejectionReason, Revision,
-    StoryEntry, StoryEntryKind,
+    StoryEntry, StoryEntryKind, Volume, VolumeId,
 };
 use novel_kernel::{AgentSpec, DispatchSummary, Kernel, KernelError, ProviderConfig};
 use novel_storage::{StorageError, SETTING_ACTIVE_PROJECT};
@@ -115,9 +115,10 @@ impl<'a> Workspace<'a> {
         book_id: &str,
         title: &str,
         position: u32,
+        volume_id: Option<&str>,
     ) -> Result<Chapter, WorkspaceError> {
         let chapter = self.handle()?.execute(|repository| {
-            repository.create_chapter(project_id, book_id, title, position)
+            repository.create_chapter_with_volume(project_id, book_id, title, position, volume_id)
         })?;
         self.dispatch_user(
             "chapter.created",
@@ -127,10 +128,35 @@ impl<'a> Workspace<'a> {
             json!({
                 "title": chapter.title,
                 "bookId": chapter.book_id.to_string(),
+                "volumeId": chapter.volume_id.as_ref().map(ToString::to_string),
                 "position": chapter.position,
             }),
         );
         Ok(chapter)
+    }
+
+    pub fn create_volume(
+        &self,
+        project_id: &ProjectId,
+        book_id: &str,
+        title: &str,
+        position: u32,
+    ) -> Result<Volume, WorkspaceError> {
+        let volume = self
+            .handle()?
+            .execute(|repository| repository.create_volume(project_id, book_id, title, position))?;
+        self.dispatch_user(
+            "volume.created",
+            project_id.clone(),
+            Some(volume.book_id.clone()),
+            None,
+            json!({
+                "volumeId": volume.id.to_string(),
+                "title": volume.title,
+                "position": volume.position,
+            }),
+        );
+        Ok(volume)
     }
 
     pub fn load_library(
@@ -150,7 +176,7 @@ impl<'a> Workspace<'a> {
             if let Some(id) = &active {
                 let _ = repository.save_setting(SETTING_ACTIVE_PROJECT, id);
             }
-            let (books, chapters) = if let Some(id) = &active {
+            let (books, volumes, chapters) = if let Some(id) = &active {
                 let pid: ProjectId = id.parse().map_err(|_| {
                     StorageError::Domain(novel_domain::DomainError::Validation(format!(
                         "invalid project id: {id}"
@@ -158,15 +184,17 @@ impl<'a> Workspace<'a> {
                 })?;
                 (
                     repository.list_books(&pid)?,
+                    repository.list_volumes(&pid)?,
                     repository.list_chapters(&pid)?,
                 )
             } else {
-                (Vec::new(), Vec::new())
+                (Vec::new(), Vec::new(), Vec::new())
             };
             Ok(LibrarySnapshot {
                 projects,
                 active_project_id: active,
                 books,
+                volumes,
                 chapters,
             })
         })?)
@@ -277,6 +305,59 @@ impl<'a> Workspace<'a> {
             Some(book_id.clone()),
             None,
             json!({ "delta": delta }),
+        );
+        self.load_library(Some(project_id.clone()))
+    }
+
+    pub fn rename_volume(
+        &self,
+        project_id: &ProjectId,
+        volume_id: &VolumeId,
+        title: &str,
+    ) -> Result<LibrarySnapshot, WorkspaceError> {
+        self.handle()?
+            .execute(|repository| repository.rename_volume(project_id, volume_id, title))?;
+        self.dispatch_user(
+            "volume.renamed",
+            project_id.clone(),
+            None,
+            None,
+            json!({ "volumeId": volume_id.to_string(), "title": title }),
+        );
+        self.load_library(Some(project_id.clone()))
+    }
+
+    pub fn delete_volume(
+        &self,
+        project_id: &ProjectId,
+        volume_id: &VolumeId,
+    ) -> Result<LibrarySnapshot, WorkspaceError> {
+        self.handle()?
+            .execute(|repository| repository.delete_volume(project_id, volume_id))?;
+        self.dispatch_user(
+            "volume.deleted",
+            project_id.clone(),
+            None,
+            None,
+            json!({ "volumeId": volume_id.to_string() }),
+        );
+        self.load_library(Some(project_id.clone()))
+    }
+
+    pub fn move_volume(
+        &self,
+        project_id: &ProjectId,
+        volume_id: &VolumeId,
+        delta: i32,
+    ) -> Result<LibrarySnapshot, WorkspaceError> {
+        self.handle()?
+            .execute(|repository| repository.move_volume(project_id, volume_id, delta))?;
+        self.dispatch_user(
+            "volume.reordered",
+            project_id.clone(),
+            None,
+            None,
+            json!({ "volumeId": volume_id.to_string(), "delta": delta }),
         );
         self.load_library(Some(project_id.clone()))
     }

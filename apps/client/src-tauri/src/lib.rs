@@ -2,7 +2,7 @@ use novel_automation::TypingSession;
 use novel_domain::{
     Annotation, BlockId, Book, BookId, CanonProposal, Chapter, ChapterBody, ChapterId,
     ContentBlock, ContentPatch, DomainEvent, EventId, EventSource, FactId, FactStatus, JobView,
-    LibrarySnapshot, Project, ProjectId, Revision, StoryEntry, StoryEntryKind,
+    LibrarySnapshot, Project, ProjectId, Revision, StoryEntry, StoryEntryKind, Volume, VolumeId,
     EVENT_SCHEMA_VERSION,
 };
 use novel_extensions::{BuiltinsExtension, SecretVault, Workspace};
@@ -109,6 +109,18 @@ pub struct NewChapterInput {
     pub title: String,
     #[serde(default)]
     pub position: u32,
+    #[serde(default)]
+    pub volume_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewVolumeInput {
+    pub project_id: String,
+    pub book_id: String,
+    pub title: String,
+    #[serde(default)]
+    pub position: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -157,6 +169,12 @@ fn parse_book_id(value: &str) -> Result<BookId, String> {
     value
         .parse()
         .map_err(|_| format!("invalid book id: {value}"))
+}
+
+fn parse_volume_id(value: &str) -> Result<VolumeId, String> {
+    value
+        .parse()
+        .map_err(|_| format!("invalid volume id: {value}"))
 }
 
 fn parse_chapter_id(value: &str) -> Result<ChapterId, String> {
@@ -226,6 +244,24 @@ fn create_chapter(state: State<'_, AppState>, input: NewChapterInput) -> Command
         return CommandResult::error("invalid book id");
     }
     CommandResult::from_result(workspace(&state).create_chapter(
+        &project_id,
+        &input.book_id,
+        &input.title,
+        input.position,
+        input.volume_id.as_deref(),
+    ))
+}
+
+#[tauri::command]
+fn create_volume(state: State<'_, AppState>, input: NewVolumeInput) -> CommandResult<Volume> {
+    let project_id = match parse_project_id(&input.project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    if parse_book_id(&input.book_id).is_err() {
+        return CommandResult::error("invalid book id");
+    }
+    CommandResult::from_result(workspace(&state).create_volume(
         &project_id,
         &input.book_id,
         &input.title,
@@ -359,6 +395,59 @@ fn move_book(
         Err(err) => return CommandResult::error(err),
     };
     CommandResult::from_result(workspace(&state).move_book(&pid, &bid, delta))
+}
+
+#[tauri::command]
+fn rename_volume(
+    state: State<'_, AppState>,
+    project_id: String,
+    volume_id: String,
+    title: String,
+) -> CommandResult<LibrarySnapshot> {
+    let pid = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let vid = match parse_volume_id(&volume_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).rename_volume(&pid, &vid, &title))
+}
+
+#[tauri::command]
+fn delete_volume(
+    state: State<'_, AppState>,
+    project_id: String,
+    volume_id: String,
+) -> CommandResult<LibrarySnapshot> {
+    let pid = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let vid = match parse_volume_id(&volume_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).delete_volume(&pid, &vid))
+}
+
+#[tauri::command]
+fn move_volume(
+    state: State<'_, AppState>,
+    project_id: String,
+    volume_id: String,
+    delta: i32,
+) -> CommandResult<LibrarySnapshot> {
+    let pid = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let vid = match parse_volume_id(&volume_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).move_volume(&pid, &vid, delta))
 }
 
 #[tauri::command]
@@ -987,6 +1076,10 @@ pub fn run() {
             rename_book,
             delete_book,
             move_book,
+            create_volume,
+            rename_volume,
+            delete_volume,
+            move_volume,
             rename_chapter,
             delete_chapter,
             move_chapter,

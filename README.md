@@ -31,7 +31,7 @@ docs/architecture/adr/ 架构决策记录
 内核只做四件事：组装模型请求、按预算消费输出流、分发工具调用、派发领域
 事件。其余一切（DeepSeek/OpenAI 兼容提供方、工作流引擎、队列执行、上下文
 浮带、插件宿主）都是注册进内核的扩展，同名注册即可覆盖内置实现。
-作品库是独立的仓储/IPC 接口（`Project` → `Book` → `Chapter`），UI 经
+作品库是独立的仓储/IPC 接口（`Project` → `Book` → 可选 `Volume` → `Chapter`），UI 经
 `libraryApi` 创建与切换，不走工具表。
 
 ```rust
