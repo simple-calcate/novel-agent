@@ -66,8 +66,68 @@ fn book_and_chapter_roundtrip() {
 }
 
 #[test]
+fn create_designed_story_entries() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let project = workspace.create_project("作品").unwrap();
+    workspace
+        .create_story_entry(
+            &project.id,
+            novel_domain::StoryEntryKind::Character,
+            "林晚",
+            "雾港来的刀客",
+        )
+        .unwrap();
+    workspace
+        .create_story_entry(
+            &project.id,
+            novel_domain::StoryEntryKind::Foreshadow,
+            "雾中灯塔",
+            "灯塔里还藏着旧王玺",
+        )
+        .unwrap();
+    let entries = workspace.list_story_entries(&project.id).unwrap();
+    assert_eq!(entries.len(), 2);
+    assert!(entries.iter().any(|entry| entry.title == "林晚"));
+    assert!(entries
+        .iter()
+        .any(|entry| entry.kind == novel_domain::StoryEntryKind::Foreshadow));
+}
+
+#[test]
+fn propose_and_review_canon_from_chapter() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let project = workspace.create_project("作品").unwrap();
+    let book = workspace.create_book(&project.id, "卷一", "", 0).unwrap();
+    let chapter = workspace
+        .create_chapter(&project.id, &book.id.to_string(), "第一章", 0)
+        .unwrap();
+    workspace
+        .save_chapter(&chapter.id, "林晚说道：「今夜雾很重。」", None)
+        .unwrap();
+    let created = workspace.propose_canon_from_chapter(&chapter.id).unwrap();
+    assert!(!created.is_empty());
+    let candidates = workspace
+        .list_canon(&project.id, Some(novel_domain::FactStatus::Candidate))
+        .unwrap();
+    assert_eq!(candidates.len(), created.len());
+    let reviewed = workspace
+        .review_canon_fact(&candidates[0].fact_id, true)
+        .unwrap();
+    assert_eq!(reviewed.status, novel_domain::FactStatus::Accepted);
+    assert!(workspace
+        .list_canon(&project.id, Some(novel_domain::FactStatus::Candidate))
+        .unwrap()
+        .iter()
+        .all(|item| item.fact_id != reviewed.fact_id));
+}
+
+#[test]
 fn user_event_kind_matches_library_ops() {
     assert_eq!(EventKind::ProjectCreated.as_str(), "project.created");
     assert_eq!(EventKind::BookCreated.as_str(), "book.created");
     assert_eq!(EventKind::ChapterCreated.as_str(), "chapter.created");
+    assert_eq!(EventKind::CanonProposed.as_str(), "canon.proposed");
+    assert_eq!(EventKind::CanonAccepted.as_str(), "canon.accepted");
 }

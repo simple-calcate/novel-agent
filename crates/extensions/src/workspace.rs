@@ -6,8 +6,9 @@
 use crate::providers::resolve_provider_name;
 use crate::util::{storage, with_repository};
 use novel_domain::{
-    Annotation, Book, BookId, Chapter, ChapterBody, ChapterId, ContentBlock, ContentPatch,
-    DomainEvent, Job, JobId, JobStatus, JobView, LibrarySnapshot, Project, ProjectId, Revision,
+    Annotation, Book, BookId, CanonProposal, Chapter, ChapterBody, ChapterId, ContentBlock,
+    ContentPatch, DomainEvent, FactId, FactStatus, Job, JobId, JobStatus, JobView, LibrarySnapshot,
+    Project, ProjectId, Revision, StoryEntry, StoryEntryKind,
 };
 use novel_kernel::{AgentSpec, DispatchSummary, Kernel, KernelError, ProviderConfig};
 use novel_storage::{StorageError, SETTING_ACTIVE_PROJECT};
@@ -425,6 +426,131 @@ impl<'a> Workspace<'a> {
         };
         let report = self.kernel.run_continuation(&provider_config, spec).await?;
         Ok(report.patch)
+    }
+
+    pub fn propose_canon_from_chapter(
+        &self,
+        chapter_id: &ChapterId,
+    ) -> Result<Vec<CanonProposal>, WorkspaceError> {
+        let (project_id, created) = self.handle()?.execute(|repository| {
+            let project_id = repository.chapter_project_id(chapter_id)?.ok_or_else(|| {
+                StorageError::Domain(novel_domain::DomainError::NotFound(format!(
+                    "chapter {chapter_id}"
+                )))
+            })?;
+            let revision = repository.current_revision(chapter_id)?;
+            let text = repository
+                .chapter_text(chapter_id, revision)?
+                .unwrap_or_default();
+            let mentions = novel_story_model::extract_mentions(&text);
+            let created =
+                repository.propose_canon_mentions(&project_id, chapter_id, revision, &mentions)?;
+            Ok((project_id, created))
+        })?;
+        if !created.is_empty() {
+            self.dispatch_user(
+                "canon.proposed",
+                project_id,
+                None,
+                Some(chapter_id.clone()),
+                json!({ "count": created.len() }),
+            );
+        }
+        Ok(created)
+    }
+
+    pub fn list_canon(
+        &self,
+        project_id: &ProjectId,
+        status: Option<FactStatus>,
+    ) -> Result<Vec<CanonProposal>, WorkspaceError> {
+        Ok(self
+            .handle()?
+            .execute(|repository| repository.list_canon_proposals(project_id, status))?)
+    }
+
+    pub fn review_canon_fact(
+        &self,
+        fact_id: &FactId,
+        accept: bool,
+    ) -> Result<CanonProposal, WorkspaceError> {
+        let status = if accept {
+            FactStatus::Accepted
+        } else {
+            FactStatus::Rejected
+        };
+        let proposal = self
+            .handle()?
+            .execute(|repository| repository.set_fact_status(fact_id, status))?;
+        self.dispatch_user(
+            if accept {
+                "canon.accepted"
+            } else {
+                "canon.rejected"
+            },
+            proposal.project_id.clone(),
+            None,
+            proposal.chapter_id.clone(),
+            json!({
+                "factId": fact_id.to_string(),
+                "entityName": proposal.entity_name,
+            }),
+        );
+        Ok(proposal)
+    }
+
+    pub fn create_story_entry(
+        &self,
+        project_id: &ProjectId,
+        kind: StoryEntryKind,
+        title: &str,
+        summary: &str,
+    ) -> Result<StoryEntry, WorkspaceError> {
+        let entry = self.handle()?.execute(|repository| {
+            repository.create_story_entry(project_id, kind, title, summary)
+        })?;
+        self.dispatch_user(
+            "story.entry.created",
+            project_id.clone(),
+            None,
+            None,
+            json!({
+                "id": entry.id,
+                "kind": serde_json::to_value(kind).unwrap_or(Value::Null),
+                "title": title
+            }),
+        );
+        Ok(entry)
+    }
+
+    pub fn list_story_entries(
+        &self,
+        project_id: &ProjectId,
+    ) -> Result<Vec<StoryEntry>, WorkspaceError> {
+        Ok(self
+            .handle()?
+            .execute(|repository| repository.list_story_entries(project_id))?)
+    }
+
+    pub fn delete_story_entry(
+        &self,
+        project_id: &ProjectId,
+        id: &str,
+        kind: StoryEntryKind,
+    ) -> Result<(), WorkspaceError> {
+        self.handle()?
+            .execute(|repository| repository.delete_story_entry(project_id, id, kind))?;
+        self.dispatch_user(
+            "story.entry.deleted",
+            project_id.clone(),
+            None,
+            None,
+            json!({
+                "id": id,
+                "kind": serde_json::to_value(kind).unwrap_or(Value::Null)
+            }),
+        );
+        Ok(())
     }
 }
 

@@ -2,11 +2,13 @@
 //! 覆盖配置回退链、事件 → 工作流 → 队列全链路、参数校验与内核自描述。
 
 use crate::{
-    build_context_package, context_hints, create_book, create_chapter, create_project, delete_book,
-    delete_chapter, editor_tick, emit_domain_event, generate_continuation, install_plugin_manifest,
-    kernel_tools, load_chapter, load_library, load_model_config, move_book, rename_book,
-    rename_chapter, rename_project, run_queue_step, save_chapter, save_model_config, AppState,
-    EditorTickInput, HintRequest, ModelConfigInput, NewBookInput, NewChapterInput, NewProjectInput,
+    build_context_package, context_hints, create_book, create_chapter, create_project,
+    create_story_entry, delete_book, delete_chapter, editor_tick, emit_domain_event,
+    generate_continuation, install_plugin_manifest, kernel_tools, list_canon, list_story_entries,
+    load_chapter, load_library, load_model_config, move_book, propose_canon, rename_book,
+    rename_chapter, rename_project, review_canon_fact, run_queue_step, save_chapter,
+    save_model_config, AppState, EditorTickInput, HintRequest, ModelConfigInput, NewBookInput,
+    NewChapterInput, NewProjectInput,
 };
 use novel_domain::{
     Actor, BlockKind, ContentBlock, DomainEvent, EventId, EventSource, Platform, Revision,
@@ -299,6 +301,7 @@ async fn context_hints_rejects_invalid_project() {
             chapter_id: "c1".into(),
             revision: 3,
             nearby_text: "雾港".into(),
+            lookback_text: String::new(),
             generation: 1,
         },
     )
@@ -328,6 +331,7 @@ async fn context_hints_accepts_valid_project() {
             chapter_id: "c1".into(),
             revision: 3,
             nearby_text: "雾港".into(),
+            lookback_text: String::new(),
             generation: 1,
         },
     )
@@ -335,6 +339,198 @@ async fn context_hints_accepts_valid_project() {
     .unwrap();
     assert!(result.ok, "{result:?}");
     assert_eq!(result.data.unwrap(), json!([]));
+}
+
+#[tokio::test]
+async fn canon_accept_does_not_appear_in_structure_rail() {
+    let app = mock_app_with_kernel();
+    let state = || app.state::<AppState>();
+
+    let project = create_project(
+        state(),
+        NewProjectInput {
+            title: "正史测试".into(),
+        },
+    )
+    .data
+    .unwrap();
+    let project_id = project.id.to_string();
+    let book = create_book(
+        state(),
+        NewBookInput {
+            project_id: project_id.clone(),
+            title: "卷一".into(),
+            synopsis: String::new(),
+            position: 0,
+        },
+    )
+    .data
+    .unwrap();
+    let chapter = create_chapter(
+        state(),
+        NewChapterInput {
+            project_id: project_id.clone(),
+            book_id: book.id.to_string(),
+            title: "第一章".into(),
+            position: 0,
+        },
+    )
+    .data
+    .unwrap();
+    let chapter_id = chapter.id.to_string();
+    let saved = save_chapter(
+        state(),
+        chapter_id.clone(),
+        "林晚说道：「今夜雾很重。」".into(),
+        None,
+    );
+    assert!(saved.ok, "{saved:?}");
+
+    let proposed = propose_canon(state(), chapter_id.clone());
+    assert!(proposed.ok, "{proposed:?}");
+    let created = proposed.data.unwrap();
+    assert!(!created.is_empty());
+    let lin = created
+        .iter()
+        .find(|item| item.entity_name == "林晚")
+        .expect("应抽到林晚");
+
+    let before = context_hints(
+        state(),
+        HintRequest {
+            project_id: project_id.clone(),
+            chapter_id: chapter_id.clone(),
+            revision: 1,
+            nearby_text: "林晚走进雾港".into(),
+            lookback_text: String::new(),
+            generation: 1,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(before.ok, "{before:?}");
+    assert_eq!(before.data.unwrap(), json!([]));
+
+    let reviewed = review_canon_fact(state(), lin.fact_id.to_string(), true);
+    assert!(reviewed.ok, "{reviewed:?}");
+    assert_eq!(
+        reviewed.data.unwrap().status,
+        novel_domain::FactStatus::Accepted
+    );
+
+    let accepted = list_canon(state(), project_id.clone(), Some("accepted".into()));
+    assert_eq!(accepted.data.unwrap().len(), 1);
+
+    let after = context_hints(
+        state(),
+        HintRequest {
+            project_id,
+            chapter_id,
+            revision: 1,
+            nearby_text: "林晚走进雾港".into(),
+            lookback_text: String::new(),
+            generation: 2,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(after.ok, "{after:?}");
+    assert_eq!(
+        after.data.unwrap(),
+        json!([]),
+        "抽取确认不应出现在结构预选里"
+    );
+}
+
+#[tokio::test]
+async fn designed_story_entry_matches_nearby_paragraph() {
+    let app = mock_app_with_kernel();
+    let state = || app.state::<AppState>();
+    let project = create_project(
+        state(),
+        NewProjectInput {
+            title: "结构测试".into(),
+        },
+    )
+    .data
+    .unwrap();
+    let project_id = project.id.to_string();
+    let created = create_story_entry(
+        state(),
+        project_id.clone(),
+        "character".into(),
+        "林晚".into(),
+        "雾港来的刀客".into(),
+    );
+    assert!(created.ok, "{created:?}");
+    let listed = list_story_entries(state(), project_id.clone());
+    assert_eq!(listed.data.unwrap().len(), 1);
+
+    let hints = context_hints(
+        state(),
+        HintRequest {
+            project_id: project_id.clone(),
+            chapter_id: "c1".into(),
+            revision: 1,
+            nearby_text: "林晚走进雾港".into(),
+            lookback_text: String::new(),
+            generation: 1,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(hints.ok, "{hints:?}");
+    let payload = hints.data.unwrap();
+    let titles: Vec<String> = payload
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|hint| {
+            hint.get("title")
+                .and_then(|value| value.as_str())
+                .map(str::to_owned)
+        })
+        .collect();
+    assert!(titles.iter().any(|title| title == "林晚"), "{titles:?}");
+    let summary = payload
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|hint| hint.get("title").and_then(|value| value.as_str()) == Some("林晚"))
+        .and_then(|hint| hint.get("summary").and_then(|value| value.as_str()))
+        .unwrap_or_default();
+    assert_eq!(summary, "雾港来的刀客");
+
+    let by_keyword = context_hints(
+        state(),
+        HintRequest {
+            project_id: project_id.clone(),
+            chapter_id: "c1".into(),
+            revision: 1,
+            nearby_text: "那个刀客转过身".into(),
+            lookback_text: String::new(),
+            generation: 3,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(by_keyword.ok, "{by_keyword:?}");
+    let keyword_titles: Vec<String> = by_keyword
+        .data
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|hint| {
+            hint.get("title")
+                .and_then(|value| value.as_str())
+                .map(str::to_owned)
+        })
+        .collect();
+    assert!(
+        keyword_titles.iter().any(|title| title == "林晚"),
+        "{keyword_titles:?}"
+    );
 }
 
 #[tokio::test]

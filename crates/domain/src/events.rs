@@ -106,6 +106,9 @@ pub enum EventKind {
     PluginInstalled,
     SyncConnected,
     BlockModeChanged,
+    CanonProposed,
+    CanonAccepted,
+    CanonRejected,
     Custom(String),
 }
 
@@ -143,6 +146,9 @@ impl EventKind {
             Self::PluginInstalled => "plugin.installed",
             Self::SyncConnected => "sync.connected",
             Self::BlockModeChanged => "block.mode.changed",
+            Self::CanonProposed => "canon.proposed",
+            Self::CanonAccepted => "canon.accepted",
+            Self::CanonRejected => "canon.rejected",
             Self::Custom(value) => value.as_str(),
         }
     }

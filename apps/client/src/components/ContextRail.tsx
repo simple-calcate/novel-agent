@@ -1,28 +1,28 @@
 import { ContextHint } from "../types";
-import { AlertTriangle, BookMarked, Eye, Flame, Pin, X } from "lucide-react";
+import { BookMarked, Flame, User } from "lucide-react";
 
 interface Props {
   hints: ContextHint[];
 }
 
 const kindLabels: Record<ContextHint["kind"], string> = {
-  characterState: "人物状态",
-  worldRule: "世界规则",
-  timelineConstraint: "时间线",
-  openForeshadowing: "未兑现伏笔",
-  plotHook: "剧情钩子",
-  preference: "写作偏好",
-  continuityRisk: "连续性风险",
+  characterState: "人物",
+  worldRule: "设定",
+  timelineConstraint: "设定",
+  openForeshadowing: "伏笔",
+  plotHook: "伏笔",
+  preference: "设定",
+  continuityRisk: "设定",
 };
 
 const kindIcons: Record<ContextHint["kind"], typeof BookMarked> = {
-  characterState: BookMarked,
+  characterState: User,
   worldRule: BookMarked,
   timelineConstraint: BookMarked,
   openForeshadowing: Flame,
-  plotHook: Eye,
+  plotHook: Flame,
   preference: BookMarked,
-  continuityRisk: AlertTriangle,
+  continuityRisk: BookMarked,
 };
 
 export function ContextRail({ hints }: Props) {
@@ -37,21 +37,10 @@ export function ContextRail({ hints }: Props) {
             <div className="hint-header">
               <Icon size={13} />
               <span className="hint-kind">{kindLabels[hint.kind]}</span>
-              <span className="hint-score">{Math.round(hint.confidence * 100)}%</span>
             </div>
             <h4>{hint.title}</h4>
             <p>{hint.summary}</p>
-            <div className="hint-footer">
-              <span>{hint.matchReason}</span>
-              <div className="hint-actions">
-                <button title="钉住">
-                  <Pin size={12} />
-                </button>
-                <button title="忽略">
-                  <X size={12} />
-                </button>
-              </div>
-            </div>
+            {hint.matchReason && <span className="hint-source">{hint.matchReason}</span>}
           </article>
         );
       })}

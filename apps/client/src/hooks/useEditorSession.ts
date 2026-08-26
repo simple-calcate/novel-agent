@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { libraryApi } from "../api";
-import { Chapter, CommandResult, ContentBlock, ContextHint, Project } from "../types";
+import { libraryApi, isTauriRuntime } from "../api";
+import { matchStoryEntries } from "../structure/match";
+import { Chapter, CommandResult, ContentBlock, ContextHint, Project, StoryEntry } from "../types";
 import { logger } from "../logger";
 import { ModelConfig } from "../components/SettingsModal";
 
@@ -10,8 +11,9 @@ export function useEditorSession(options: {
   chapters: Chapter[];
   activeChapter: string | null;
   setActiveBookId: (id: string | null) => void;
+  storyEntries: StoryEntry[];
 }) {
-  const { project, chapters, activeChapter, setActiveBookId } = options;
+  const { project, chapters, activeChapter, setActiveBookId, storyEntries } = options;
   const [chapterText, setChapterText] = useState("");
   const [chapterBlocks, setChapterBlocks] = useState<ContentBlock[]>([]);
   const [chapterReady, setChapterReady] = useState(false);
@@ -21,6 +23,7 @@ export function useEditorSession(options: {
   const [modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
   const draftText = useRef("");
   const draftBlocks = useRef<ContentBlock[]>([]);
+  const nearbyRef = useRef({ current: "", previous: "" });
 
   useEffect(() => {
     invoke<ModelConfig | null>("load_model_config")
@@ -84,8 +87,16 @@ export function useEditorSession(options: {
   }, [activeChapter]);
 
   const refreshHints = useCallback(
-    async (nearbyText: string) => {
-      if (!project || !activeChapter) return;
+    async (nearbyText: string, lookbackText = "") => {
+      nearbyRef.current = { current: nearbyText, previous: lookbackText };
+      if (!activeChapter) {
+        setHints([]);
+        return;
+      }
+      if (!project || !isTauriRuntime()) {
+        setHints(matchStoryEntries(nearbyText, lookbackText, storyEntries, revision));
+        return;
+      }
       logger.debug("刷新上下文提示", { revision, textLength: nearbyText.length });
       try {
         const result = await invoke<CommandResult<ContextHint[]>>("context_hints", {
@@ -94,24 +105,28 @@ export function useEditorSession(options: {
             chapterId: activeChapter,
             revision,
             nearbyText,
+            lookbackText,
             generation: Date.now(),
           },
         });
         if (result.ok && result.data) {
           logger.info("上下文提示更新", { count: result.data.length });
           setHints(result.data);
+          return;
         }
       } catch (e) {
-        logger.error("上下文提示失败", { error: String(e) });
-        setHints(buildLocalHints(nearbyText, revision));
+        logger.warn("上下文提示走本地匹配", { error: String(e) });
       }
+      setHints(matchStoryEntries(nearbyText, lookbackText, storyEntries, revision));
     },
-    [project, activeChapter, revision],
+    [project, activeChapter, revision, storyEntries],
   );
 
   useEffect(() => {
-    setHints(buildLocalHints("", revision));
-  }, [revision]);
+    const nearby = nearbyRef.current.current || nearbyFromText(draftText.current);
+    const lookback = nearbyRef.current.previous;
+    void refreshHints(nearby, lookback);
+  }, [refreshHints, chapterReady]);
 
   const handleGenerate = useCallback(async () => {
     if (!modelConfig) {
@@ -177,21 +192,10 @@ export function useEditorSession(options: {
   };
 }
 
-function buildLocalHints(nearby: string, revision: number): ContextHint[] {
-  const base: ContextHint[] = [];
-  if (nearby.includes("玺")) {
-    base.push({
-      id: "h0",
-      kind: "plotHook",
-      title: "旧王玺",
-      summary: "沈雾不知道它已在船长手中；避免提前揭示",
-      sourceLabel: "正史",
-      matchReason: "当前文字包含「玺」",
-      confidence: 0.98,
-      score: 1,
-      generation: revision,
-      revision,
-    });
-  }
-  return base.slice(0, 5);
+function nearbyFromText(text: string): string {
+  const parts = text
+    .split(/\n+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return parts[0] ?? "";
 }

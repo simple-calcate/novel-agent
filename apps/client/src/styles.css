@@ -383,6 +383,7 @@ body {
 .editor-area {
   flex: 1;
   display: flex;
+  flex-direction: column;
   overflow: hidden;
   position: relative;
 }
@@ -926,55 +927,110 @@ body {
 
 /* ============ Context Rail ============ */
 .context-rail {
-  width: 280px;
+  display: flex;
+  gap: 10px;
+  width: 100%;
   background: var(--bg-panel);
-  border-left: 1px solid var(--border);
-  padding: 16px;
-  overflow-y: auto;
-}
-
-.rail-header {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  overflow-x: auto;
+  flex-shrink: 0;
 }
 
 .hint-card {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 12px;
-  margin-bottom: 10px;
-  cursor: pointer;
-  transition: all 0.2s;
+  padding: 10px 12px;
+  min-width: 180px;
+  max-width: 240px;
+  flex-shrink: 0;
+  cursor: default;
 }
 
 .hint-card:hover {
   border-color: var(--accent);
-  transform: translateX(-2px);
+}
+
+.hint-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
 }
 
 .hint-kind {
   font-size: 10px;
   color: var(--accent);
-  text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 4px;
 }
 
-.hint-title {
+.hint-card h4 {
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 4px;
 }
 
-.hint-summary {
+.hint-card p {
   font-size: 12px;
   color: var(--text-muted);
   line-height: 1.5;
+}
+
+.structure-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.structure-kinds {
+  display: flex;
+  gap: 6px;
+}
+
+.structure-kinds .mini-button,
+.structure-form > .mini-button {
+  width: auto;
+  height: 28px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.structure-group {
+  margin-bottom: 16px;
+}
+
+.structure-group-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.4px;
+  margin-bottom: 8px;
+}
+
+.mini-button.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.structure-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.canon-card .context-card-title .icon-button {
+  margin-left: auto;
 }
 
 .hint-source {
@@ -996,16 +1052,17 @@ body {
 
 .panel-tabs {
   display: flex;
+  flex-wrap: wrap;
   border-bottom: 1px solid var(--border);
 }
 
 .panel-tabs button {
-  flex: 1;
+  flex: 1 1 40%;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 14px;
+  gap: 4px;
+  padding: 10px 6px;
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -1060,6 +1117,36 @@ body {
   font-size: 12px;
   color: var(--text-muted);
   line-height: 1.6;
+}
+
+.canon-lead {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.canon-kind {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.canon-quote {
+  font-family: var(--font-editor);
+  color: var(--text-dim) !important;
+  font-size: 11px !important;
+}
+
+.canon-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 /* Agent Messages */

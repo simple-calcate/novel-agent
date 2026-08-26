@@ -7,6 +7,10 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0003_queue_results_and_cooldown.sql"),
     include_str!("../migrations/0004_blocks.sql"),
     include_str!("../migrations/0005_block_identity.sql"),
+    include_str!("../migrations/0006_canon_project.sql"),
+    include_str!("../migrations/0007_plot_thread_project.sql"),
+    include_str!("../migrations/0008_story_entries.sql"),
+    include_str!("../migrations/0009_story_entry_aliases.sql"),
 ];
 
 pub fn run_migrations(connection: &mut Connection) -> Result<(), StorageError> {
