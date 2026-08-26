@@ -202,7 +202,7 @@ export function App() {
               list.map((chapter, chapterIndex) => (
                 <div
                   key={chapter.id}
-                  className={`tree-item ${nested ? "nested" : ""} ${activeChapter === chapter.id ? "active" : ""}`}
+                  className={`tree-item ${nested ? "nested" : "ungrouped"} ${activeChapter === chapter.id ? "active" : ""}`}
                   onClick={() => {
                     void persistChapter();
                     setActiveChapter(chapter.id);
@@ -291,6 +291,9 @@ export function App() {
                     </div>
                   );
                 })}
+                {ungrouped.length > 0 && bookVolumes.length > 0 && (
+                  <div className="tree-section ungrouped-label">未分卷</div>
+                )}
                 {renderChapters(ungrouped, false)}
               </div>
             );
