@@ -2,6 +2,8 @@
 
 本地优先、插件化的跨平台网文写作 Agent。
 
+**从这里读：** [docs/wiki/README.md](docs/wiki/README.md)（产品、架构、开发、术语、未做）。契约在 [docs/interfaces.md](docs/interfaces.md)，分层禁区在 [docs/architecture/layers.md](docs/architecture/layers.md)。实现以代码为准。
+
 ## 架构
 
 内核 + 扩展（参考 DeepSeek harness 思想，见 [ADR 0007](docs/architecture/adr/0007-kernel-extensions.md)）。
