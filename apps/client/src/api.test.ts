@@ -122,4 +122,11 @@ describe("memory library", () => {
     const disabled = await libraryApi.setPreferenceStatus(project.id, again[0].id, true);
     expect(disabled[0].status).toBe("disabled");
   });
+
+  it("reports empty outbox in the browser preview", async () => {
+    expect(await libraryApi.pendingOutboxCount()).toBe(0);
+    const flushed = await libraryApi.flushOutboxJournal();
+    expect(flushed.written).toBe(0);
+    expect(flushed.note).toContain("不是设备间同步");
+  });
 });

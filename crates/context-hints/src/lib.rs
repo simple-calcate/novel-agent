@@ -2,7 +2,7 @@
 
 mod entry_match;
 
-pub use entry_match::{match_story_entry, EntryMatch};
+pub use entry_match::{match_story_entry, retrieve_story_entry, EntryMatch};
 
 use novel_domain::{
     CanonEntity, CanonFact, ContextHint, EntityKind, HintAction, HintKind, PlotThread,

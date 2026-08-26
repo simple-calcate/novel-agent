@@ -49,6 +49,22 @@ fn designed_story_entries_are_independent_of_canon_extract() {
 }
 
 #[test]
+fn rebuild_search_index_includes_story_entries() {
+    let repository = Repository::open_in_memory().unwrap();
+    let project = repository.create_project("夜航星图").unwrap();
+    repository
+        .create_story_entry(
+            &project.id,
+            StoryEntryKind::Character,
+            "灯塔守夜人",
+            "负责在雾季敲钟",
+        )
+        .unwrap();
+    let indexed = repository.rebuild_search_index(&project.id).unwrap();
+    assert_eq!(indexed, 1);
+}
+
+#[test]
 fn splits_aliases_from_title() {
     let repository = Repository::open_in_memory().unwrap();
     let project = repository.create_project("夜航星图").unwrap();

@@ -26,15 +26,15 @@
 | [0001](../architecture/adr/0001-local-first.md) | 本地优先，云不是可用性前提 |
 | [0002](../architecture/adr/0002-revision-and-outbox.md) | Revision + 同事务 outbox |
 | [0003](../architecture/adr/0003-story-model.md) | 正史模型仍在库内，**不是**写作主路径 |
-| [0004](../architecture/adr/0004-plugin-sandbox.md) | 插件三层；WASM 沙箱未落地 |
-| [0005](../architecture/adr/0005-context-hints.md) | 编辑器上方浮带；现实现是本地多信号匹配 |
-| [0006](../architecture/adr/0006-android-strategy.md) | Android 伴侣；CI 仍是占位 |
+| [0004](../architecture/adr/0004-plugin-sandbox.md) | 插件三层；桌面 wasmi，Android 内置 |
+| [0005](../architecture/adr/0005-context-hints.md) | 编辑器上方浮带；本地匹配 + 词汇检索 |
+| [0006](../architecture/adr/0006-android-strategy.md) | Android 伴侣；CI 检查无 C 依赖 crate |
 | [0007](../architecture/adr/0007-kernel-extensions.md) | 内核极小，业务在扩展 |
 | [0008](../architecture/adr/0008-workspace-storage-handle.md) | Workspace + 单写者 StorageHandle |
 | [0009](../architecture/adr/0009-canon-review-loop.md) | 作者预先写结构，按当前段落匹配 |
 | [0010](../architecture/adr/0010-secret-vault.md) | API Key 不进 SQLite |
 | [0011](../architecture/adr/0011-writing-protocol.md) | 思考 / 正文分层；拍为导出原子 |
 
-同步阶段见 [sync-and-cloud.md](../sync-and-cloud.md)（阶段 1：本机 SQLite）。分层禁区见 [layers.md](../architecture/layers.md)。
+同步阶段见 [sync-and-cloud.md](../sync-and-cloud.md)（阶段 1：本机 SQLite + 可选 JSONL journal）。分层禁区见 [layers.md](../architecture/layers.md)。
 
 旧文若仍写「从正文抽人物再审核」，以 0009 和 [产品](product.md) 为准。

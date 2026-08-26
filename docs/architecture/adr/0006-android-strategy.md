@@ -16,3 +16,4 @@ Android 的 WebView、后台任务和 WASM 运行时支持弱于桌面。
 - 首版功能明确、风险可控。
 - 与桌面端存在能力差异，需在 UI 中明确提示。
 - 架构需允许后续 Android 原生壳替换。
+- CI `android-build` 对无 C 依赖 crate（`novel-domain`、`novel-kernel`、`novel-story-model`、`novel-feedback-memory`、`novel-context-hints`）做 `aarch64-linux-android` 的 `cargo check`。完整 APK/NDK 仍未装。

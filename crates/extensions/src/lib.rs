@@ -30,7 +30,8 @@ pub use queue::{QueueExtension, QueuePolicy, QueueTickTool};
 pub use secrets::{SecretVault, MODEL_API_KEY};
 pub use workflow::{WorkflowEngineExtension, WorkflowEngineSubscriber};
 pub use workspace::{
-    load_provider_config_from_kernel, read_chapter_body, ModelConfigView, Workspace, WorkspaceError,
+    load_provider_config_from_kernel, read_chapter_body, ModelConfigView, OutboxFlushResult,
+    Workspace, WorkspaceError,
 };
 
 use novel_kernel::{Extension, KernelBuilder, KernelError};

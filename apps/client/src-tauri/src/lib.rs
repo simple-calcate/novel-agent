@@ -5,7 +5,7 @@ use novel_domain::{
     LibrarySnapshot, PluginSummary, Project, ProjectId, Revision, Scene, SceneId, StoryEntry,
     StoryEntryKind, Volume, VolumeId, EVENT_SCHEMA_VERSION,
 };
-use novel_extensions::{BuiltinsExtension, SecretVault, Workspace};
+use novel_extensions::{BuiltinsExtension, OutboxFlushResult, SecretVault, Workspace};
 use novel_kernel::{Kernel, ProviderConfig, ToolDescriptor};
 use novel_storage::StorageHandle;
 use serde::{Deserialize, Serialize};
@@ -771,6 +771,24 @@ fn list_plugins(state: State<'_, AppState>) -> CommandResult<Vec<PluginSummary>>
 }
 
 #[tauri::command]
+fn pending_outbox_count(state: State<'_, AppState>) -> CommandResult<u32> {
+    CommandResult::from_result(workspace(&state).pending_outbox_count())
+}
+
+#[tauri::command]
+fn flush_outbox_journal(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CommandResult<OutboxFlushResult> {
+    let data_dir = match app.path().app_data_dir() {
+        Ok(dir) => dir,
+        Err(error) => return CommandResult::error(error),
+    };
+    let path = data_dir.join("sync").join("outbox-journal.jsonl");
+    CommandResult::from_result(workspace(&state).flush_outbox_journal(path))
+}
+
+#[tauri::command]
 async fn generate_continuation(
     state: State<'_, AppState>,
     chapter_id: String,
@@ -1246,6 +1264,8 @@ pub fn run() {
             list_preferences,
             set_preference_status,
             list_plugins,
+            pending_outbox_count,
+            flush_outbox_journal,
         ])
         .run(tauri::generate_context!())
         .expect("error while running novel agent");

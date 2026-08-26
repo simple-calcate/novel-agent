@@ -14,7 +14,7 @@
 | **Workspace** | `novel-extensions` 里的应用层，宿主只应通过它做作品库 / 设置 / 续写编排。 |
 | **StorageHandle** | 单写者仓储入口。持锁时禁止 `dispatch`。 |
 | **Kernel** | 只做组装请求、预算截断、工具分发、事件派发。 |
-| **Outbox** | 与业务写同一事务入队的变更记录。有写入、无同步传输。 |
+| **Outbox** | 与业务写同一事务入队的变更记录。可写成 JSONL；没有设备间传输。 |
 | **SecretVault** | API Key 存放处（密钥链或 0600 文件），不进 SQLite。 |
 | **偏好 / PreferenceRule** | 拒绝续写后记下的规则，下次续写进 system prompt。可在 Agent 页停用。 |
 | **浏览器预览** | Vite 前端，内存库，无 Tauri。 |

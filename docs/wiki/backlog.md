@@ -14,14 +14,14 @@
 ## 仍未做的产品细节
 
 - **正史抽取 UI**：API 仍在，界面不用。顶栏「检查」仍入队连续性工具。
-- **上下文三级预算**：ADR 0005 的后台检索、LLM 重排未做。钉住/忽略已做（本机存储）。
-- **未用的抽取前端**：`apps/client/src/canon/extract.ts` 只给浏览器内存库的 `proposeCanon` 测试用。
+- **上下文三级预算**：钉住/忽略已做。第二级是本机词汇检索（当前段的词去条目标题/说明里找，命中原因写「检索到…」）。**LLM 重排未做**。
+- `apps/client/src/canon/extract.ts` 只给浏览器内存 `proposeCanon` 测试用。
 
 ## 独立大件（不要当小重构）
 
-- **WASM 插件沙箱**（[ADR 0004](../architecture/adr/0004-plugin-sandbox.md) 第三层）：`plugin.operation` 仍是内置执行器。
-- **多设备同步**：outbox 已写，传输、冲突 UI、E2E 见 [sync-and-cloud.md](../sync-and-cloud.md) 阶段 2。
-- **Android 伴侣**（[ADR 0006](../architecture/adr/0006-android-strategy.md)）：CI `android-build` 仍是占位。见 [android-companion.md](../android-companion.md)。
+- **WASM 插件沙箱**（[ADR 0004](../architecture/adr/0004-plugin-sandbox.md) 第三层）：桌面 `plugin.operation` 在清单带 `wasmBase64` 时于 wasmi 运行（无 WASI）。打包插件仍是内置器。Android 走内置。没有插件 SDK 发布流程。
+- **多设备同步**：outbox 可写出本机 JSONL（工作流页「写出 journal」），**没有**传输、冲突 UI、E2E。见 [sync-and-cloud.md](../sync-and-cloud.md) 阶段 2。
+- **Android 伴侣**（[ADR 0006](../architecture/adr/0006-android-strategy.md)）：CI 对无 C 依赖 crate 做 `aarch64-linux-android` 的 `cargo check`。没有 APK / NDK 全套。见 [android-companion.md](../android-companion.md)。
 - **多人实时协作**：阶段更后，Yjs/CRDT。本地写作不能依赖云端在线。
 
 ## 文档漂移注意

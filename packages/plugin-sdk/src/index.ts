@@ -11,6 +11,7 @@ export interface PluginManifest {
   operations: PluginOperation[];
   requestedCapabilities: Capability[];
   settingsSchema?: Record<string, unknown>;
+  wasmBase64?: string;
 }
 
 export interface PluginOperation {

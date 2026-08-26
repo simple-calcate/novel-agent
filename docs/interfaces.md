@@ -92,7 +92,7 @@ Project（作品） 1—n Book（书） 1—n 可选 Volume（卷） 1—n Chapt
 设置：`save_setting` / `get_setting`；当前作品键 `SETTING_ACTIVE_PROJECT`。
 模型配置：`Workspace::save_model_config` / `load_model_config`；API Key 走 `SecretVault`，不进 `app_settings`。
 
-Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `outbox`；`list_pending_outbox` / `mark_outbox_delivered`。同步发送仍未实现。
+Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `outbox`；`list_pending_outbox` / `mark_outbox_delivered` / `count_pending_outbox`。`Workspace::flush_outbox_journal(path)` 把待发送行追加写成 JSONL 再标记 delivered。这是本机写出，不是设备间同步。
 
 偏好：`save_preference_rule` / `list_preference_rules` / `set_preference_status` / `save_correction`；拒绝续写后写入，下次 `generate_continuation` 拼进 system prompt。停用的规则不进提示。
 
@@ -112,6 +112,7 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 - `save_model_config` / `load_model_config`
 - `record_generation_feedback` / `list_preference_rules` / `set_preference_status`
 - `list_plugins`
+- `pending_outbox_count` / `flush_outbox_journal`
 - `propose_canon_from_chapter` / `list_canon` / `review_canon_fact`
 - `create_story_entry` / `list_story_entries` / `delete_story_entry`
 
@@ -150,7 +151,9 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 | `record_generation_feedback` | `projectId`, `accepted`, `aiText`, `humanText?`, `contextExcerpt?` | `PreferenceRule[]` |
 | `list_preferences` | `projectId` | `PreferenceRule[]` |
 | `set_preference_status` | `projectId`, `ruleId`, `disabled` | `PreferenceRule[]` |
-| `list_plugins` | — | `PluginSummary[]`（`runtime` 目前为 `builtin`） |
+| `list_plugins` | — | `PluginSummary[]`（打包项 `runtime` 为 `builtin`） |
+| `pending_outbox_count` | — | `u32` |
+| `flush_outbox_journal` | — | `{ written, path, note }`；写入应用数据目录 `sync/outbox-journal.jsonl`，不是设备间同步 |
 | `propose_canon` | `chapterId` | `CanonProposal[]`（启发式抽取，非主路径） |
 | `list_canon` | `projectId`, `status?` | `CanonProposal[]` |
 | `review_canon_fact` | `factId`, `accept` | 更新后的 `CanonProposal` |
@@ -160,7 +163,7 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 
 `training.export` 额外字段：`format`（jsonl/sharegpt/alpaca/r1）、`includeMarkup`（默认 true）、`minQuality`（默认 `usable`，丢弃 skip）。返回 `examples`、`dropped`、`qualityCounts`、`protocolVersion`（当前为 2）。每条样本的 `context` 从章首累积思考+正文，不截断。思考里的 `@` 是写作标签（`MarkupRef::Tag`），不是正史实体。写作约定见 [writing-protocol.md](writing-protocol.md)。
 
-前端**只通过** `apps/client/src/api.ts` 的 `libraryApi` 访问作品库、结构、设置、续写、偏好与插件列表。浏览器预览无 Tauri 时使用内存实现。作品库 / 队列 / 编辑会话 / 结构分别在 `hooks/useLibrary.ts`、`hooks/useQueue.ts`、`hooks/useEditorSession.ts`、`hooks/useStructure.ts`。
+前端**只通过** `apps/client/src/api.ts` 的 `libraryApi` 访问作品库、结构、设置、续写、偏好、插件列表与 outbox journal。浏览器预览无 Tauri 时使用内存实现。作品库 / 队列 / 编辑会话 / 结构分别在 `hooks/useLibrary.ts`、`hooks/useQueue.ts`、`hooks/useEditorSession.ts`、`hooks/useStructure.ts`。
 
 ## 6. 改接口时的检查表
 

@@ -34,5 +34,20 @@
     "current": "夜晚的海面",
     "lookback": "",
     "expectedTitles": []
+  },
+  {
+    "id": "lexical-retrieval",
+    "current": "雾季快到了",
+    "lookback": "",
+    "extraEntries": [
+      {
+        "id": "4",
+        "kind": "character",
+        "title": "灯塔守夜人",
+        "summary": "负责在雾季敲钟",
+        "aliases": []
+      }
+    ],
+    "expectedTitles": ["灯塔守夜人"]
   }
 ]

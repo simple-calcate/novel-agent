@@ -69,8 +69,9 @@
 3. 长标题的词核（「雾中灯塔」→「灯塔」）
 4. 说明里拆出的关键词（「刀客」「旧王玺」），去掉停用词
 5. 上一段出现过的人名会短暂留在预选里（dwell）
+6. 本地没命中时，用当前段里的词去条目标题/说明做词汇检索（例如说明写「负责在雾季敲钟」，正文写「雾季快到了」）
 
-桌面走 Rust `context.hints`。浏览器预览没有 Tauri 时走前端 `matchStoryEntries`。两边共用 `packages/match-fixtures/cases.json`。卡片可钉住或忽略（记在本机 `localStorage`）。
+桌面走 Rust `context.hints`。浏览器预览没有 Tauri 时走前端 `matchStoryEntries`。两边共用 `packages/match-fixtures/cases.json`。卡片可钉住或忽略（记在本机 `localStorage`）。LLM 重排还没有。
 
 ## 续写与偏好
 
@@ -78,11 +79,13 @@
 
 拒绝一次 AI 续写会记下一条作者偏好；下次续写把未停用的规则写进 system prompt。同一条规则文本被拒绝两次会升为 Confirmed。右侧 Agent 页可以查看并停用。接受续写则把预览写入正文。
 
-左下角「插件」列出打包清单。当前全部是内置执行器，不是第三方 WASM。
+左下角「插件」列出打包清单。打包项走内置执行器。桌面若清单带 `wasmBase64`，`plugin.operation` 在 wasmi 沙箱里跑（无 WASI、无文件系统）。Android 仍是内置。
+
+工作流页可以把待发送 outbox 写成应用数据目录下的 JSONL。这是本机 journal，**不是**手机和电脑之间的同步。
 
 ## 明确不是什么
 
 - 不是「从本章提取人物再请作者审核」。
-- 不是多人实时协作。同步传输还没做；本机只把变更写入 outbox。
+- 不是多人实时协作。同步传输还没做；工作流页可以把 outbox 写成 JSONL。
 - 不是必须联网才能写。没配模型时仍可编辑本地正文。
 - 场次不是从正文自动切出来的，要作者自己加。

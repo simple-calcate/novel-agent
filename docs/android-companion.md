@@ -15,10 +15,21 @@
 
 ## 构建
 
+CI 对无 C 依赖的 crate 执行：
+
+```bash
+cargo check --target aarch64-linux-android \
+  -p novel-domain \
+  -p novel-kernel \
+  -p novel-story-model \
+  -p novel-feedback-memory \
+  -p novel-context-hints
+```
+
+完整 APK 仍需要 Android SDK、NDK 和 Rust `aarch64-linux-android` target：
+
 ```bash
 cd apps/client
 pnpm tauri android init
 pnpm tauri android build
 ```
-
-需要 Android SDK、NDK 和 Rust `aarch64-linux-android` target。

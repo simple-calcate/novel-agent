@@ -56,6 +56,7 @@ CI（`.github/workflows/ci.yml`）只在面向 `main` 的 pull request / push �
 | `components/StructurePanel.tsx` | 右侧结构 |
 | `components/PreferencePanel.tsx` | Agent 页偏好 |
 | `components/PluginModal.tsx` | 打包插件列表 |
+| `components/WorkflowPanel.tsx` | 工作流模板、队列、outbox journal |
 | `structure/match.ts` | 浏览器侧匹配器 |
 
 ## 改接口检查表

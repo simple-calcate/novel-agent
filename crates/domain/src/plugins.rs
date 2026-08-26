@@ -15,6 +15,9 @@ pub struct PluginManifest {
     pub requested_capabilities: BTreeSet<Capability>,
     #[serde(default)]
     pub settings_schema: Value,
+    /// 可选 WASM 模块（标准 Base64）。桌面在 wasmi 沙箱执行；Android 忽略并走内置器。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wasm_base64: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -69,7 +72,7 @@ pub struct PluginResult {
     pub logs: Vec<String>,
 }
 
-/// 给 UI 的插件摘要。`runtime` 目前只有 `builtin`；WASM 沙箱未落地。
+/// 给 UI 的插件摘要。打包清单为 `builtin`；带 `wasmBase64` 的第三方模块为 `wasm`。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginSummary {

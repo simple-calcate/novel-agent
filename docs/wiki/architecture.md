@@ -31,7 +31,7 @@ UI  ──libraryApi──► Tauri command（只译 JSON）
 | `crates/feedback-memory` | 拒绝续写后的偏好规则 |
 | `crates/story-model` | 启发式正史 / 连续性（非 UI 主路径） |
 | `crates/automation` | 信号、规则、队列状态机 |
-| `crates/plugin-host` | 清单与权限；WASM 沙箱未落地 |
+| `crates/plugin-host` | 清单、权限、桌面 wasmi 沙箱（Android 走内置） |
 | `packages/` | 事件 schema、插件 SDK、工作流模板 |
 
 ## 仓储切分
@@ -54,7 +54,7 @@ UI  ──libraryApi──► Tauri command（只译 JSON）
 
 业务状态、operation log、任务和 outbox 在同一 SQLite 事务提交。[ADR 0002](../architecture/adr/0002-revision-and-outbox.md) 要求如此；同步发送仍是 [阶段 2](../sync-and-cloud.md)。载荷只带 id / 修订号，不带正文、不带 API Key。
 
-`list_pending_outbox` / `mark_outbox_delivered` 给未来同步消费者。现阶段没有传输进程。
+`list_pending_outbox` / `mark_outbox_delivered` / `count_pending_outbox` 给同步消费者。`Workspace::flush_outbox_journal` 把待发送行追加写成 JSONL 再标记 delivered。这是本机写出，不是设备间传输。冲突 UI 与 E2E 仍是 [阶段 2](../sync-and-cloud.md)。
 
 ## 结构匹配
 
@@ -62,12 +62,14 @@ UI  ──libraryApi──► Tauri command（只译 JSON）
 - 桌面：`context.hints` 工具，入参含 `nearbyText` 与可选 `lookbackText`
 - 浏览器：`apps/client/src/structure/match.ts`（`isTauriRuntime()` 为假时）
 - 两边共用 `packages/match-fixtures/cases.json`；改信号必须两边测试都过
-- 预选条可钉住 / 忽略（本机 `localStorage`，还不是 ADR 0005 的检索与 LLM 重排）
+- 预选条可钉住 / 忽略（本机 `localStorage`）
+- 第二级：本地词汇检索（当前段 token → 条目标题/说明）；`index.rebuild` 会把 `story_entries` 写入 FTS
+- LLM 重排未做
 - `story-model` 的抽取与连续性检查仍可被工具调用，**不是**编辑器预选条的数据源
 - `canon` 仓储与 `story_entries` 不要混用一张表、一条 API
 - 写作协议（思考/正文/拍）见 [ADR 0011](../architecture/adr/0011-writing-protocol.md)；导出走 `training.export`，思考里的 `@` 是标签不是正史行
 
-[ADR 0005](../architecture/adr/0005-context-hints.md) 还写了三级预算（本地 → 检索 → LLM 重排）和钉住/忽略。当前落地的是本地多信号匹配；检索与 LLM 重排未做。
+[ADR 0005](../architecture/adr/0005-context-hints.md) 的三级预算：本地多信号 → 本机词汇检索 → 可选 LLM 重排。前两级已落地；LLM 重排未做。
 
 ## 密钥
 

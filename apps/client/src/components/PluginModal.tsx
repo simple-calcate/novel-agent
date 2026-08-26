@@ -20,7 +20,8 @@ export function PluginModal({ open, plugins, onClose }: Props) {
         </div>
         <div className="modal-body">
           <p className="panel-muted">
-            当前全部走内置执行器。WASM 沙箱（第三方插件）还没接入，Android 也只支持声明式工作流。
+            打包插件走内置执行器。桌面在清单带 <code>wasmBase64</code> 时于 wasmi
+            沙箱运行（无 WASI、无文件系统）。Android 仍只支持声明式工作流与内置操作。
           </p>
           <ul className="plugin-list">
             {plugins.map((plugin) => (

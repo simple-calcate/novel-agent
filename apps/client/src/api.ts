@@ -18,6 +18,7 @@ import {
   LibrarySnapshot,
   ModelConfig,
   PluginSummary,
+  OutboxFlushResult,
   PreferenceRule,
   Project,
   Scene,
@@ -734,6 +735,24 @@ export const libraryApi = {
         operations: ["continue-scene"],
       },
     ];
+  },
+
+  async pendingOutboxCount(): Promise<number> {
+    if (isTauriRuntime()) {
+      return command<number>("pending_outbox_count");
+    }
+    return 0;
+  },
+
+  async flushOutboxJournal(): Promise<OutboxFlushResult> {
+    if (isTauriRuntime()) {
+      return command<OutboxFlushResult>("flush_outbox_journal");
+    }
+    return {
+      written: 0,
+      path: "",
+      note: "浏览器预览没有 outbox，桌面才会把变更写成 JSONL。这不是设备间同步。",
+    };
   },
 };
 

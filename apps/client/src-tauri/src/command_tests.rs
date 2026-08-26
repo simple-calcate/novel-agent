@@ -6,9 +6,9 @@ use crate::{
     create_scene, create_story_entry, create_volume, delete_book, delete_chapter, delete_volume,
     editor_tick, emit_domain_event, generate_continuation, install_plugin_manifest, kernel_tools,
     list_canon, list_plugins, list_story_entries, load_chapter, load_library, load_model_config,
-    move_book, propose_canon, rename_book, rename_chapter, rename_project, review_canon_fact,
-    run_queue_step, save_chapter, save_model_config, AppState, EditorTickInput, HintRequest,
-    ModelConfigInput, NewBookInput, NewChapterInput, NewProjectInput, NewSceneInput,
+    move_book, pending_outbox_count, propose_canon, rename_book, rename_chapter, rename_project,
+    review_canon_fact, run_queue_step, save_chapter, save_model_config, AppState, EditorTickInput,
+    HintRequest, ModelConfigInput, NewBookInput, NewChapterInput, NewProjectInput, NewSceneInput,
     NewVolumeInput,
 };
 use novel_domain::{
@@ -730,4 +730,8 @@ fn scene_roundtrip_and_plugin_list() {
         .unwrap()
         .iter()
         .any(|plugin| plugin.id == "continuity-checker"));
+
+    let pending = pending_outbox_count(state());
+    assert!(pending.ok, "{pending:?}");
+    assert!(pending.data.unwrap() > 0);
 }

@@ -64,14 +64,14 @@ cd apps/client && pnpm tauri dev
 ## 核心设计
 
 - **内核 + 扩展**：内核极小且稳定（无 HTTP / SQLite 依赖），预算（时间/token）在内核硬约束；业务全部在扩展层，可覆盖、可增删。
-- **Revision + OperationLog + Outbox**：每章单调版本号，单写者事务，写路径同时入 outbox；同步传输仍是后续阶段。
+- **Revision + OperationLog + Outbox**：每章单调版本号，单写者事务，写路径同时入 outbox；本机可写成 JSONL，同步传输仍是后续阶段。
 - **参数化信号**：`editor.idle`、`paragraph.created`、`chapter.created` 等携带完整上下文。
 - **持久化队列状态机**：原子领取 + 指数退避重试 + 死信 + 崩溃后陈旧任务回收。
 - **正史模型**：人物、事件、关系、知识、伏笔均带有效时间、来源和审核状态。
 - **预先结构**：人物、设定、伏笔由作者写入，编辑器按当前段落匹配并显示在上方预选条。
 - **写作协议**：思考是写给自己看的便签，正文是写给读者看的小说。空行 `Tab` 切到思考，思考里 `@` 点人物/伏笔。约定见 [docs/writing-protocol.md](docs/writing-protocol.md)，完整样章见 [docs/examples/fog-harbor.md](docs/examples/fog-harbor.md)；软件里点「打开示例章节」可装进作品库。
 - **章内场次**：当前章可列大纲场，删场不删正文。
-- **上下文浮带**：写作时持续匹配设定/钩子，可钉住或忽略。
+- **上下文浮带**：写作时按当前段落匹配预先结构，本地规则没命中再做词汇检索；可钉住或忽略。
 - **密钥分离**：模型 API Key 走系统密钥链（或本机 0600 文件），不进 SQLite。
 - **分层插件**：声明式工作流 → 可信 Rust 操作 → 桌面 WASM 沙箱插件。
 

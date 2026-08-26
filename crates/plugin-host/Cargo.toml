@@ -11,3 +11,10 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+base64 = "0.22"
+wasmi = "0.40"
+
+[dev-dependencies]
+wat = "1"
