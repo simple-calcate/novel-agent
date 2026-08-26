@@ -82,6 +82,7 @@ export function App() {
     handleGenerate,
     handleAccept,
     handleReject,
+    preferenceCount,
   } = session;
 
   const activeChapterRecord = chapters.find((chapter) => chapter.id === activeChapter);
@@ -414,6 +415,9 @@ export function App() {
                   ? `当前作品「${project.title}」，上下文固定到 Revision ${revision}。`
                   : "创建作品后即可把 Agent 会话钉在该书的修订历史上。"}
               </p>
+              {preferenceCount > 0 && (
+                <p>已记住 {preferenceCount} 条写作偏好，下次续写会写进提示。</p>
+              )}
             </div>
           </div>
         )}
@@ -425,7 +429,11 @@ export function App() {
         initialConfig={modelConfig}
         onSave={async (config) => {
           logger.info("保存模型配置", { provider: config.provider, model: config.model });
-          setModelConfig(config);
+          setModelConfig({
+            ...config,
+            apiKey: "",
+            apiKeySet: Boolean(config.apiKey) || Boolean(config.apiKeySet),
+          });
           try {
             await invoke("save_model_config", { config });
             logger.info("配置已同步到后端");

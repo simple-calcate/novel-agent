@@ -5,7 +5,7 @@ use novel_domain::{
     LibrarySnapshot, Project, ProjectId, Revision, StoryEntry, StoryEntryKind,
     EVENT_SCHEMA_VERSION,
 };
-use novel_extensions::{BuiltinsExtension, Workspace};
+use novel_extensions::{BuiltinsExtension, SecretVault, Workspace};
 use novel_kernel::{Kernel, ProviderConfig, ToolDescriptor};
 use novel_storage::StorageHandle;
 use serde::{Deserialize, Serialize};
@@ -475,14 +475,18 @@ async fn save_model_config(
         base_url = %config.base_url,
         "save_model_config 保存配置"
     );
-    let json_value = serde_json::to_string(&config).map_err(|e| e.to_string())?;
     workspace(&state)
-        .save_setting("model_config", &json_value)
+        .save_model_config(
+            &config.provider,
+            &config.api_key,
+            &config.base_url,
+            &config.model,
+        )
         .map_err(|e| {
-            error!(error = %e, "保存配置到数据库失败");
+            error!(error = %e, "保存配置失败");
             e.to_string()
         })?;
-    info!("模型配置已保存到数据库");
+    info!("模型配置已保存；API Key 不写入 SQLite");
     Ok(json!({ "saved": true }))
 }
 
@@ -490,16 +494,15 @@ async fn save_model_config(
 fn load_model_config(state: State<'_, AppState>) -> Result<Value, String> {
     debug!("load_model_config 加载配置");
     match workspace(&state)
-        .get_setting("model_config")
+        .load_model_config()
         .map_err(|e| e.to_string())?
     {
-        Some(json_str) => {
-            let config: ModelConfigInput =
-                serde_json::from_str(&json_str).map_err(|e| e.to_string())?;
+        Some(config) => {
             info!(
                 provider = %config.provider,
                 model = %config.model,
-                "从数据库加载模型配置"
+                api_key_set = config.api_key_set,
+                "加载模型配置（不含密钥明文）"
             );
             Ok(json!(config))
         }
@@ -508,6 +511,40 @@ fn load_model_config(state: State<'_, AppState>) -> Result<Value, String> {
             Ok(json!(null))
         }
     }
+}
+
+#[tauri::command]
+fn record_generation_feedback(
+    state: State<'_, AppState>,
+    project_id: String,
+    accepted: bool,
+    ai_text: String,
+    human_text: Option<String>,
+    context_excerpt: Option<String>,
+) -> CommandResult<Vec<novel_domain::PreferenceRule>> {
+    let project_id = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).record_generation_feedback(
+        &project_id,
+        accepted,
+        &ai_text,
+        human_text.as_deref().unwrap_or(""),
+        context_excerpt.as_deref().unwrap_or(""),
+    ))
+}
+
+#[tauri::command]
+fn list_preferences(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> CommandResult<Vec<novel_domain::PreferenceRule>> {
+    let project_id = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).list_preference_rules(&project_id))
 }
 
 #[tauri::command]
@@ -924,9 +961,11 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let database = data_dir.join("novel-agent.sqlite3");
             let storage = Arc::new(StorageHandle::open(database)?);
+            let secrets = Arc::new(SecretVault::open(&data_dir));
 
             let kernel = Kernel::builder()
                 .service(storage)
+                .service(secrets)
                 .extension(BuiltinsExtension)?
                 .build()?;
             app.manage(AppState {
@@ -971,6 +1010,8 @@ pub fn run() {
             create_story_entry,
             list_story_entries,
             delete_story_entry,
+            record_generation_feedback,
+            list_preferences,
         ])
         .run(tauri::generate_context!())
         .expect("error while running novel agent");

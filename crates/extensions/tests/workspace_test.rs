@@ -1,7 +1,7 @@
 //! 应用层作品库：写库结束后才 dispatch，订阅者可以再次进入单写者。
 
 use novel_domain::{DomainEvent, EventKind};
-use novel_extensions::{BuiltinsExtension, Workspace};
+use novel_extensions::{BuiltinsExtension, SecretVault, Workspace};
 use novel_kernel::{EventSubscriber, Kernel, KernelError};
 use novel_storage::StorageHandle;
 use serde_json::{json, Value};
@@ -27,6 +27,7 @@ impl EventSubscriber for TouchStorage {
 fn kernel_with_touch() -> Kernel {
     Kernel::builder()
         .service(Arc::new(StorageHandle::open_in_memory().unwrap()))
+        .service(Arc::new(SecretVault::memory()))
         .subscriber(TouchStorage)
         .extension(BuiltinsExtension)
         .expect("内置扩展")
@@ -130,4 +131,37 @@ fn user_event_kind_matches_library_ops() {
     assert_eq!(EventKind::ChapterCreated.as_str(), "chapter.created");
     assert_eq!(EventKind::CanonProposed.as_str(), "canon.proposed");
     assert_eq!(EventKind::CanonAccepted.as_str(), "canon.accepted");
+}
+
+#[test]
+fn model_key_stays_out_of_sqlite() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    workspace
+        .save_model_config("deepseek", "sk-secret", "https://api.deepseek.com", "chat")
+        .unwrap();
+    let view = workspace.load_model_config().unwrap().unwrap();
+    assert!(view.api_key.is_empty());
+    assert!(view.api_key_set);
+    let stored = workspace.get_setting("model_config").unwrap().unwrap();
+    assert!(!stored.contains("sk-secret"), "{stored}");
+    let loaded = novel_extensions::load_provider_config_from_kernel(&kernel).unwrap();
+    assert_eq!(loaded.api_key, "sk-secret");
+}
+
+#[test]
+fn rejecting_continuation_records_preference() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let project = workspace.create_project("作品").unwrap();
+    let rules = workspace
+        .record_generation_feedback(&project.id, false, "AI 草稿", "", "上下文")
+        .unwrap();
+    assert_eq!(rules.len(), 1);
+    assert!(rules[0].rule.contains("拒绝"));
+    let again = workspace
+        .record_generation_feedback(&project.id, false, "另一段", "", "")
+        .unwrap();
+    assert_eq!(again.len(), 1);
+    assert_eq!(again[0].status, novel_domain::PreferenceStatus::Confirmed);
 }

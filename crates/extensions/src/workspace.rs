@@ -4,14 +4,17 @@
 //! 内完成，**返回之后**再 `kernel.dispatch`，订阅者可以再次进入 writer。
 
 use crate::providers::resolve_provider_name;
+use crate::secrets::{SecretVault, MODEL_API_KEY};
 use crate::util::{storage, with_repository};
 use novel_domain::{
     Annotation, Book, BookId, CanonProposal, Chapter, ChapterBody, ChapterId, ContentBlock,
     ContentPatch, DomainEvent, FactId, FactStatus, Job, JobId, JobStatus, JobView, LibrarySnapshot,
-    Project, ProjectId, Revision, StoryEntry, StoryEntryKind,
+    PreferenceRule, PreferenceScope, Project, ProjectId, ProposalId, RejectionReason, Revision,
+    StoryEntry, StoryEntryKind,
 };
 use novel_kernel::{AgentSpec, DispatchSummary, Kernel, KernelError, ProviderConfig};
 use novel_storage::{StorageError, SETTING_ACTIVE_PROJECT};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
 
@@ -21,8 +24,22 @@ pub enum WorkspaceError {
     Kernel(#[from] KernelError),
     #[error(transparent)]
     Storage(#[from] StorageError),
+    #[error(transparent)]
+    Secret(#[from] crate::secrets::SecretError),
     #[error("{0}")]
     Message(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelConfigView {
+    pub provider: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default)]
+    pub api_key_set: bool,
+    pub base_url: String,
+    pub model: String,
 }
 
 /// 宿主面向的应用门面。不持有仓库锁跨越 `dispatch`。
@@ -335,6 +352,122 @@ impl<'a> Workspace<'a> {
             .execute(|repository| repository.get_setting(key))?)
     }
 
+    pub fn save_model_config(
+        &self,
+        provider: &str,
+        api_key: &str,
+        base_url: &str,
+        model: &str,
+    ) -> Result<(), WorkspaceError> {
+        let stored = json!({
+            "provider": provider,
+            "baseUrl": base_url,
+            "model": model,
+        });
+        self.save_setting("model_config", &stored.to_string())?;
+        if !api_key.is_empty() {
+            self.vault()?.put(MODEL_API_KEY, api_key)?;
+        }
+        Ok(())
+    }
+
+    pub fn load_model_config(&self) -> Result<Option<ModelConfigView>, WorkspaceError> {
+        let Some(raw) = self.get_setting("model_config")? else {
+            return Ok(None);
+        };
+        let value: Value = serde_json::from_str(&raw)
+            .map_err(|error| WorkspaceError::Message(error.to_string()))?;
+        let leftover_key = value
+            .get("apiKey")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned();
+        if !leftover_key.is_empty() {
+            if let Ok(vault) = self.vault() {
+                vault.put(MODEL_API_KEY, &leftover_key)?;
+                let stripped = json!({
+                    "provider": value.get("provider").and_then(Value::as_str).unwrap_or_default(),
+                    "baseUrl": value.get("baseUrl").and_then(Value::as_str).unwrap_or_default(),
+                    "model": value.get("model").and_then(Value::as_str).unwrap_or_default(),
+                });
+                self.save_setting("model_config", &stripped.to_string())?;
+            }
+        }
+        let api_key_set = self
+            .vault()
+            .ok()
+            .map(|vault| vault.is_set(MODEL_API_KEY))
+            .unwrap_or(!leftover_key.is_empty());
+        Ok(Some(ModelConfigView {
+            provider: value
+                .get("provider")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned(),
+            api_key: String::new(),
+            api_key_set,
+            base_url: value
+                .get("baseUrl")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned(),
+            model: value
+                .get("model")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned(),
+        }))
+    }
+
+    fn vault(&self) -> Result<std::sync::Arc<SecretVault>, WorkspaceError> {
+        self.kernel
+            .service::<SecretVault>()
+            .map_err(|_| WorkspaceError::Message("secret vault not registered".into()))
+    }
+
+    pub fn record_generation_feedback(
+        &self,
+        project_id: &ProjectId,
+        accepted: bool,
+        ai_text: &str,
+        human_text: &str,
+        context_excerpt: &str,
+    ) -> Result<Vec<PreferenceRule>, WorkspaceError> {
+        let proposal_id = ProposalId::new();
+        self.handle()?.execute(|repository| {
+            if accepted {
+                if let Some(record) = novel_feedback_memory::correction_from_edit(
+                    proposal_id.clone(),
+                    ai_text,
+                    human_text,
+                    context_excerpt,
+                ) {
+                    repository.save_correction(project_id, &record)?;
+                }
+            } else {
+                let rule = novel_feedback_memory::rejection_rule(
+                    RejectionReason::Other,
+                    PreferenceScope::Project {
+                        project_id: project_id.to_string(),
+                    },
+                    proposal_id,
+                );
+                repository.save_preference_rule(project_id, &rule)?;
+            }
+            Ok(())
+        })?;
+        self.list_preference_rules(project_id)
+    }
+
+    pub fn list_preference_rules(
+        &self,
+        project_id: &ProjectId,
+    ) -> Result<Vec<PreferenceRule>, WorkspaceError> {
+        Ok(self
+            .handle()?
+            .execute(|repository| repository.list_preference_rules(project_id))?)
+    }
+
     pub fn enqueue_job(
         &self,
         project_id: ProjectId,
@@ -394,12 +527,19 @@ impl<'a> Workspace<'a> {
         override_config: Option<ProviderConfig>,
     ) -> Result<ProviderConfig, WorkspaceError> {
         if let Some(mut config) = override_config {
+            if config.api_key.is_empty() {
+                config.api_key = self.secret_api_key().unwrap_or_default();
+            }
             if !config.api_key.is_empty() {
                 config.provider = resolve_provider_name(&config);
                 return Ok(config);
             }
         }
         Ok(load_provider_config_from_kernel(self.kernel)?)
+    }
+
+    fn secret_api_key(&self) -> Result<String, WorkspaceError> {
+        Ok(self.vault()?.get(MODEL_API_KEY)?.unwrap_or_default())
     }
 
     pub async fn generate_continuation(
@@ -412,6 +552,11 @@ impl<'a> Workspace<'a> {
     ) -> Result<ContentPatch, WorkspaceError> {
         let provider_config = self.resolve_provider_config(override_config)?;
         let project_id = self.chapter_project_id(&chapter_id)?.unwrap_or_default();
+        let rules = if project_id.to_string().is_empty() {
+            Vec::new()
+        } else {
+            self.list_preference_rules(&project_id).unwrap_or_default()
+        };
         let spec = AgentSpec {
             id: Default::default(),
             project_id,
@@ -420,7 +565,7 @@ impl<'a> Workspace<'a> {
             prompt,
             context_text,
             budget: Default::default(),
-            system_prompt: None,
+            system_prompt: novel_feedback_memory::prompt_prefix(&rules),
             temperature: 0.8,
             emit_finish_event: true,
         };
@@ -605,6 +750,25 @@ pub fn load_provider_config_from_kernel(kernel: &Kernel) -> Result<ProviderConfi
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_owned();
+        }
+    }
+    if config.api_key.is_empty() {
+        if let Ok(vault) = kernel.service::<SecretVault>() {
+            if let Ok(Some(key)) = vault.get(MODEL_API_KEY) {
+                config.api_key = key;
+            }
+        }
+    } else if let Ok(vault) = kernel.service::<SecretVault>() {
+        let leftover = config.api_key.clone();
+        if vault.put(MODEL_API_KEY, &leftover).is_ok() {
+            let stripped = json!({
+                "provider": config.provider,
+                "baseUrl": config.base_url,
+                "model": config.model,
+            });
+            let _ = with_repository(kernel, |repository| {
+                repository.save_setting("model_config", &stripped.to_string())
+            });
         }
     }
     config.provider = resolve_provider_name(&config);

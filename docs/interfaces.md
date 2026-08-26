@@ -83,6 +83,11 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 `Repository` 按聚合拆在 `crates/storage/src/repository/`：`library`、`revisions`、`canon`、`structure`、`queue`、`automation`。
 
 设置：`save_setting` / `get_setting`；当前作品键 `SETTING_ACTIVE_PROJECT`。
+模型配置：`Workspace::save_model_config` / `load_model_config`；API Key 走 `SecretVault`，不进 `app_settings`。
+
+Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `outbox`；`list_pending_outbox` / `mark_outbox_delivered`。同步发送仍未实现。
+
+偏好：`save_preference_rule` / `list_preference_rules` / `save_correction`；拒绝续写后写入，下次 `generate_continuation` 拼进 system prompt。
 
 单写者：宿主注入 `Arc<StorageHandle>`。所有 SQLite 访问走 `StorageHandle::with` /
 `execute`。**禁止在 `with` 闭包内 `kernel.dispatch`**：同线程嵌套访问返回
@@ -97,6 +102,8 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 - `rename_*` / `delete_*` / `move_*`
 - `enqueue_job` / `list_jobs` / `save_setting` / `get_setting`
 - `generate_continuation`
+- `save_model_config` / `load_model_config`
+- `record_generation_feedback` / `list_preference_rules`
 - `propose_canon_from_chapter` / `list_canon` / `review_canon_fact`
 - `create_story_entry` / `list_story_entries` / `delete_story_entry`
 
@@ -125,7 +132,11 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 | `list_jobs` | — | `JobView[]` |
 | `kernel_tools` | — | 工具自描述列表 |
 | `context_hints` | `projectId`, `chapterId`, `revision`, `nearbyText`, `lookbackText?`, `generation` | `ContextHint[]`（多信号匹配预先结构） |
-| `generate_continuation` | 章、修订、prompt、config | `ContentPatch` |
+| `save_model_config` | provider / baseUrl / model / apiKey? | `{ saved }`；密钥进 `SecretVault`，留空保持原值 |
+| `load_model_config` | — | `{ provider, baseUrl, model, apiKey: "", apiKeySet }` |
+| `generate_continuation` | 章、修订、prompt、config | `ContentPatch`；config 可不带密钥 |
+| `record_generation_feedback` | `projectId`, `accepted`, `aiText`, `humanText?`, `contextExcerpt?` | `PreferenceRule[]` |
+| `list_preferences` | `projectId` | `PreferenceRule[]` |
 | `propose_canon` | `chapterId` | `CanonProposal[]`（启发式抽取，非主路径） |
 | `list_canon` | `projectId`, `status?` | `CanonProposal[]` |
 | `review_canon_fact` | `factId`, `accept` | 更新后的 `CanonProposal` |

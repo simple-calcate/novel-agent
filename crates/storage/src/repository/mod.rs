@@ -6,10 +6,14 @@ use std::path::Path;
 
 mod automation;
 mod canon;
+mod feedback;
 mod library;
+mod outbox;
 mod queue;
 mod revisions;
 mod structure;
+
+pub use outbox::OutboxEvent;
 
 pub const SETTING_ACTIVE_PROJECT: &str = "active_project_id";
 
@@ -53,6 +57,30 @@ impl Repository {
     pub(super) fn next_position(&self, sql: &str, key: &str) -> Result<u32, StorageError> {
         let max: i64 = self.connection.query_row(sql, [key], |row| row.get(0))?;
         Ok((max as u32).saturating_add(1))
+    }
+
+    pub(crate) fn transact<T>(
+        &self,
+        action: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<T, StorageError>,
+    ) -> Result<T, StorageError> {
+        let tx = self.connection.unchecked_transaction()?;
+        let value = action(&tx)?;
+        tx.commit()?;
+        Ok(value)
+    }
+
+    pub(crate) fn write_with_outbox<T>(
+        &self,
+        project_id: &str,
+        event_type: &str,
+        payload: serde_json::Value,
+        action: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<T, StorageError>,
+    ) -> Result<T, StorageError> {
+        self.transact(|tx| {
+            let value = action(tx)?;
+            outbox::insert(tx, project_id, event_type, &payload)?;
+            Ok(value)
+        })
     }
 }
 

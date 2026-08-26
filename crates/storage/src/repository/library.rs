@@ -6,7 +6,8 @@ use chrono::Utc;
 use novel_domain::{
     Book, BookId, Chapter, ChapterId, ChapterStatus, DomainError, Project, ProjectId, Revision,
 };
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
+use serde_json::json;
 use uuid::Uuid;
 
 impl super::Repository {
@@ -18,9 +19,17 @@ impl super::Repository {
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
         };
-        self.connection.execute(
-            "INSERT INTO projects(id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
-            params![project.id.to_string(), project.title, now, now],
+        self.write_with_outbox(
+            &project.id.to_string(),
+            "project.created",
+            json!({ "title": project.title }),
+            |tx| {
+                tx.execute(
+                    "INSERT INTO projects(id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+                    params![project.id.to_string(), project.title, now, now],
+                )?;
+                Ok(())
+            },
         )?;
         Ok(project)
     }
@@ -47,21 +56,33 @@ impl super::Repository {
             synopsis: synopsis.to_owned(),
             position,
         };
-        let inserted = self.connection.execute(
-            "INSERT INTO books(id, project_id, title, synopsis, position)
-             SELECT ?1, ?2, ?3, ?4, ?5
-             WHERE EXISTS(SELECT 1 FROM projects WHERE id = ?2)",
-            params![
-                book.id.to_string(),
-                project_id.to_string(),
-                book.title,
-                book.synopsis,
-                position
-            ],
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "book.created",
+            json!({
+                "bookId": book.id.to_string(),
+                "title": book.title,
+                "position": position
+            }),
+            |tx| {
+                let inserted = tx.execute(
+                    "INSERT INTO books(id, project_id, title, synopsis, position)
+                     SELECT ?1, ?2, ?3, ?4, ?5
+                     WHERE EXISTS(SELECT 1 FROM projects WHERE id = ?2)",
+                    params![
+                        book.id.to_string(),
+                        project_id.to_string(),
+                        book.title,
+                        book.synopsis,
+                        position
+                    ],
+                )?;
+                if inserted == 0 {
+                    return Err(DomainError::NotFound(format!("project {project_id}")).into());
+                }
+                Ok(())
+            },
         )?;
-        if inserted == 0 {
-            return Err(DomainError::NotFound(format!("project {project_id}")).into());
-        }
         Ok(book)
     }
 
@@ -92,23 +113,37 @@ impl super::Repository {
             status: ChapterStatus::Draft,
         };
 
-        let inserted = self.connection.execute(
-            "INSERT INTO chapters(id, book_id, title, position, current_revision, status)
-             SELECT ?1, ?2, ?3, ?4, 0, 'draft'
-             WHERE EXISTS(SELECT 1 FROM books WHERE id = ?2 AND project_id = ?5)",
-            params![
-                chapter.id.to_string(),
-                book_id,
-                title,
-                position,
-                project_id.to_string()
-            ],
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "chapter.created",
+            json!({
+                "chapterId": chapter.id.to_string(),
+                "bookId": book_id,
+                "title": title,
+                "position": position
+            }),
+            |tx| {
+                let inserted = tx.execute(
+                    "INSERT INTO chapters(id, book_id, title, position, current_revision, status)
+                     SELECT ?1, ?2, ?3, ?4, 0, 'draft'
+                     WHERE EXISTS(SELECT 1 FROM books WHERE id = ?2 AND project_id = ?5)",
+                    params![
+                        chapter.id.to_string(),
+                        book_id,
+                        title,
+                        position,
+                        project_id.to_string()
+                    ],
+                )?;
+                if inserted == 0 {
+                    return Err(DomainError::NotFound(format!(
+                        "book {book_id} in project {project_id}"
+                    ))
+                    .into());
+                }
+                Ok(())
+            },
         )?;
-        if inserted == 0 {
-            return Err(
-                DomainError::NotFound(format!("book {book_id} in project {project_id}")).into(),
-            );
-        }
         Ok(chapter)
     }
 
@@ -216,13 +251,21 @@ impl super::Repository {
         title: &str,
     ) -> Result<Project, StorageError> {
         let now = Utc::now().to_rfc3339();
-        let updated = self.connection.execute(
-            "UPDATE projects SET title = ?2, updated_at = ?3 WHERE id = ?1",
-            params![project_id.to_string(), title, now],
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "project.renamed",
+            json!({ "title": title }),
+            |tx| {
+                let updated = tx.execute(
+                    "UPDATE projects SET title = ?2, updated_at = ?3 WHERE id = ?1",
+                    params![project_id.to_string(), title, now],
+                )?;
+                if updated == 0 {
+                    return Err(DomainError::NotFound(format!("project {project_id}")).into());
+                }
+                Ok(())
+            },
         )?;
-        if updated == 0 {
-            return Err(DomainError::NotFound(format!("project {project_id}")).into());
-        }
         self.list_projects()?
             .into_iter()
             .find(|project| &project.id == project_id)
@@ -230,49 +273,74 @@ impl super::Repository {
     }
 
     pub fn delete_project(&self, project_id: &ProjectId) -> Result<(), StorageError> {
-        self.connection.execute(
-            "DELETE FROM jobs WHERE project_id = ?1",
-            [project_id.to_string()],
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "project.deleted",
+            json!({}),
+            |tx| {
+                tx.execute(
+                    "DELETE FROM jobs WHERE project_id = ?1",
+                    [project_id.to_string()],
+                )?;
+                tx.execute(
+                    "DELETE FROM domain_events WHERE project_id = ?1",
+                    [project_id.to_string()],
+                )?;
+                tx.execute(
+                    "DELETE FROM workflows WHERE project_id = ?1",
+                    [project_id.to_string()],
+                )?;
+                tx.execute(
+                    "DELETE FROM canon_entities WHERE project_id = ?1",
+                    [project_id.to_string()],
+                )?;
+                tx.execute(
+                    "DELETE FROM search_documents WHERE project_id = ?1",
+                    [project_id.to_string()],
+                )?;
+                tx.execute(
+                    "DELETE FROM plot_threads WHERE project_id = ?1",
+                    [project_id.to_string()],
+                )?;
+                tx.execute(
+                    "DELETE FROM story_entries WHERE project_id = ?1",
+                    [project_id.to_string()],
+                )?;
+                tx.execute(
+                    "DELETE FROM preference_rules WHERE project_id = ?1",
+                    [project_id.to_string()],
+                )?;
+                tx.execute(
+                    "DELETE FROM correction_records WHERE project_id = ?1",
+                    [project_id.to_string()],
+                )?;
+                tx.execute(
+                    "DELETE FROM outbox WHERE project_id = ?1",
+                    [project_id.to_string()],
+                )?;
+                let deleted = tx.execute(
+                    "DELETE FROM projects WHERE id = ?1",
+                    [project_id.to_string()],
+                )?;
+                if deleted == 0 {
+                    return Err(DomainError::NotFound(format!("project {project_id}")).into());
+                }
+                let active: Option<String> = tx
+                    .query_row(
+                        "SELECT value FROM app_settings WHERE key = ?1",
+                        [SETTING_ACTIVE_PROJECT],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
+                if active.as_deref() == Some(project_id.to_string().as_str()) {
+                    tx.execute(
+                        "DELETE FROM app_settings WHERE key = ?1",
+                        [SETTING_ACTIVE_PROJECT],
+                    )?;
+                }
+                Ok(())
+            },
         )?;
-        self.connection.execute(
-            "DELETE FROM domain_events WHERE project_id = ?1",
-            [project_id.to_string()],
-        )?;
-        self.connection.execute(
-            "DELETE FROM workflows WHERE project_id = ?1",
-            [project_id.to_string()],
-        )?;
-        self.connection.execute(
-            "DELETE FROM canon_entities WHERE project_id = ?1",
-            [project_id.to_string()],
-        )?;
-        self.connection.execute(
-            "DELETE FROM search_documents WHERE project_id = ?1",
-            [project_id.to_string()],
-        )?;
-        self.connection.execute(
-            "DELETE FROM plot_threads WHERE project_id = ?1",
-            [project_id.to_string()],
-        )?;
-        self.connection.execute(
-            "DELETE FROM story_entries WHERE project_id = ?1",
-            [project_id.to_string()],
-        )?;
-        let deleted = self.connection.execute(
-            "DELETE FROM projects WHERE id = ?1",
-            [project_id.to_string()],
-        )?;
-        if deleted == 0 {
-            return Err(DomainError::NotFound(format!("project {project_id}")).into());
-        }
-        if let Ok(Some(active)) = self.get_setting(SETTING_ACTIVE_PROJECT) {
-            if active == project_id.to_string() {
-                let _ = self.connection.execute(
-                    "DELETE FROM app_settings WHERE key = ?1",
-                    [SETTING_ACTIVE_PROJECT],
-                );
-            }
-        }
         Ok(())
     }
 
@@ -282,15 +350,24 @@ impl super::Repository {
         book_id: &BookId,
         title: &str,
     ) -> Result<Book, StorageError> {
-        let updated = self.connection.execute(
-            "UPDATE books SET title = ?3 WHERE id = ?1 AND project_id = ?2",
-            params![book_id.to_string(), project_id.to_string(), title],
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "book.renamed",
+            json!({ "bookId": book_id.to_string(), "title": title }),
+            |tx| {
+                let updated = tx.execute(
+                    "UPDATE books SET title = ?3 WHERE id = ?1 AND project_id = ?2",
+                    params![book_id.to_string(), project_id.to_string(), title],
+                )?;
+                if updated == 0 {
+                    return Err(DomainError::NotFound(format!(
+                        "book {book_id} in project {project_id}"
+                    ))
+                    .into());
+                }
+                Ok(())
+            },
         )?;
-        if updated == 0 {
-            return Err(
-                DomainError::NotFound(format!("book {book_id} in project {project_id}")).into(),
-            );
-        }
         self.list_books(project_id)?
             .into_iter()
             .find(|book| &book.id == book_id)
@@ -302,15 +379,24 @@ impl super::Repository {
         project_id: &ProjectId,
         book_id: &BookId,
     ) -> Result<(), StorageError> {
-        let deleted = self.connection.execute(
-            "DELETE FROM books WHERE id = ?1 AND project_id = ?2",
-            params![book_id.to_string(), project_id.to_string()],
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "book.deleted",
+            json!({ "bookId": book_id.to_string() }),
+            |tx| {
+                let deleted = tx.execute(
+                    "DELETE FROM books WHERE id = ?1 AND project_id = ?2",
+                    params![book_id.to_string(), project_id.to_string()],
+                )?;
+                if deleted == 0 {
+                    return Err(DomainError::NotFound(format!(
+                        "book {book_id} in project {project_id}"
+                    ))
+                    .into());
+                }
+                Ok(())
+            },
         )?;
-        if deleted == 0 {
-            return Err(
-                DomainError::NotFound(format!("book {book_id} in project {project_id}")).into(),
-            );
-        }
         Ok(())
     }
 
@@ -329,7 +415,24 @@ impl super::Repository {
         let target = index as i32 + delta;
         if target >= 0 && (target as usize) < books.len() {
             books.swap(index, target as usize);
-            self.write_book_positions(project_id, &books)?;
+            self.write_with_outbox(
+                &project_id.to_string(),
+                "book.reordered",
+                json!({ "bookId": book_id.to_string(), "delta": delta }),
+                |tx| {
+                    for (position, book) in books.iter().enumerate() {
+                        tx.execute(
+                            "UPDATE books SET position = ?2 WHERE id = ?1 AND project_id = ?3",
+                            params![
+                                book.id.to_string(),
+                                (position as u32) + 1,
+                                project_id.to_string()
+                            ],
+                        )?;
+                    }
+                    Ok(())
+                },
+            )?;
         }
         self.list_books(project_id)
     }
@@ -340,14 +443,22 @@ impl super::Repository {
         chapter_id: &ChapterId,
         title: &str,
     ) -> Result<Chapter, StorageError> {
-        let updated = self.connection.execute(
-            "UPDATE chapters SET title = ?2
-             WHERE id = ?1 AND book_id IN (SELECT id FROM books WHERE project_id = ?3)",
-            params![chapter_id.to_string(), title, project_id.to_string()],
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "chapter.renamed",
+            json!({ "chapterId": chapter_id.to_string(), "title": title }),
+            |tx| {
+                let updated = tx.execute(
+                    "UPDATE chapters SET title = ?2
+                     WHERE id = ?1 AND book_id IN (SELECT id FROM books WHERE project_id = ?3)",
+                    params![chapter_id.to_string(), title, project_id.to_string()],
+                )?;
+                if updated == 0 {
+                    return Err(DomainError::NotFound(format!("chapter {chapter_id}")).into());
+                }
+                Ok(())
+            },
         )?;
-        if updated == 0 {
-            return Err(DomainError::NotFound(format!("chapter {chapter_id}")).into());
-        }
         self.list_chapters(project_id)?
             .into_iter()
             .find(|chapter| &chapter.id == chapter_id)
@@ -359,14 +470,22 @@ impl super::Repository {
         project_id: &ProjectId,
         chapter_id: &ChapterId,
     ) -> Result<(), StorageError> {
-        let deleted = self.connection.execute(
-            "DELETE FROM chapters
-             WHERE id = ?1 AND book_id IN (SELECT id FROM books WHERE project_id = ?2)",
-            params![chapter_id.to_string(), project_id.to_string()],
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "chapter.deleted",
+            json!({ "chapterId": chapter_id.to_string() }),
+            |tx| {
+                let deleted = tx.execute(
+                    "DELETE FROM chapters
+                     WHERE id = ?1 AND book_id IN (SELECT id FROM books WHERE project_id = ?2)",
+                    params![chapter_id.to_string(), project_id.to_string()],
+                )?;
+                if deleted == 0 {
+                    return Err(DomainError::NotFound(format!("chapter {chapter_id}")).into());
+                }
+                Ok(())
+            },
         )?;
-        if deleted == 0 {
-            return Err(DomainError::NotFound(format!("chapter {chapter_id}")).into());
-        }
         Ok(())
     }
 
@@ -391,31 +510,21 @@ impl super::Repository {
         let target = index as i32 + delta;
         if target >= 0 && (target as usize) < siblings.len() {
             siblings.swap(index, target as usize);
-            for (position, item) in siblings.iter().enumerate() {
-                self.connection.execute(
-                    "UPDATE chapters SET position = ?2 WHERE id = ?1",
-                    params![item.id.to_string(), (position as u32) + 1],
-                )?;
-            }
-        }
-        self.list_chapters(project_id)
-    }
-
-    fn write_book_positions(
-        &self,
-        project_id: &ProjectId,
-        books: &[Book],
-    ) -> Result<(), StorageError> {
-        for (index, book) in books.iter().enumerate() {
-            self.connection.execute(
-                "UPDATE books SET position = ?2 WHERE id = ?1 AND project_id = ?3",
-                params![
-                    book.id.to_string(),
-                    (index as u32) + 1,
-                    project_id.to_string()
-                ],
+            self.write_with_outbox(
+                &project_id.to_string(),
+                "chapter.reordered",
+                json!({ "chapterId": chapter_id.to_string(), "delta": delta }),
+                |tx| {
+                    for (position, item) in siblings.iter().enumerate() {
+                        tx.execute(
+                            "UPDATE chapters SET position = ?2 WHERE id = ?1",
+                            params![item.id.to_string(), (position as u32) + 1],
+                        )?;
+                    }
+                    Ok(())
+                },
             )?;
         }
-        Ok(())
+        self.list_chapters(project_id)
     }
 }

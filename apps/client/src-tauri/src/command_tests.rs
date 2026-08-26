@@ -14,7 +14,7 @@ use novel_domain::{
     Actor, BlockKind, ContentBlock, DomainEvent, EventId, EventSource, Platform, Revision,
     WorkflowAction, WorkflowRule, WorkflowTrigger, EVENT_SCHEMA_VERSION,
 };
-use novel_extensions::BuiltinsExtension;
+use novel_extensions::{BuiltinsExtension, SecretVault};
 use novel_kernel::Kernel;
 use novel_storage::StorageHandle;
 use serde_json::json;
@@ -24,8 +24,10 @@ use tauri::Manager;
 
 fn mock_app_with_kernel() -> tauri::App<MockRuntime> {
     let storage = Arc::new(StorageHandle::open_in_memory().unwrap());
+    let secrets = Arc::new(SecretVault::memory());
     let kernel = Kernel::builder()
         .service(storage)
+        .service(secrets)
         .extension(BuiltinsExtension)
         .expect("内置扩展注册失败")
         .build()
@@ -191,6 +193,13 @@ async fn model_config_roundtrip() {
     let loaded = load_model_config(state()).unwrap();
     assert_eq!(loaded["provider"], "deepseek");
     assert_eq!(loaded["model"], "deepseek-chat");
+    assert_eq!(loaded["apiKey"], "");
+    assert_eq!(loaded["apiKeySet"], true);
+    let stored = storage_of(&app)
+        .execute(|repo| repo.get_setting("model_config"))
+        .unwrap()
+        .unwrap();
+    assert!(!stored.contains("sk-test"), "{stored}");
 }
 
 #[tokio::test]

@@ -20,6 +20,7 @@ export function useEditorSession(options: {
   const [hints, setHints] = useState<ContextHint[]>([]);
   const [aiPreview, setAiPreview] = useState("");
   const [revision, setRevision] = useState(0);
+  const [preferenceCount, setPreferenceCount] = useState(0);
   const [modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
   const draftText = useRef("");
   const draftBlocks = useRef<ContentBlock[]>([]);
@@ -30,11 +31,21 @@ export function useEditorSession(options: {
       .then((config) => {
         if (config) {
           logger.info("恢复模型配置", { provider: config.provider, model: config.model });
-          setModelConfig(config);
+          setModelConfig({ ...config, apiKey: "" });
         }
       })
       .catch((e) => logger.error("加载配置失败", { error: String(e) }));
   }, []);
+
+  useEffect(() => {
+    if (!project || !isTauriRuntime()) {
+      setPreferenceCount(0);
+      return;
+    }
+    invoke<{ ok?: boolean; data?: unknown[] }>("list_preferences", { projectId: project.id })
+      .then((result) => setPreferenceCount(result.data?.length ?? 0))
+      .catch(() => setPreferenceCount(0));
+  }, [project]);
 
   useEffect(() => {
     if (!activeChapter) {
@@ -147,7 +158,9 @@ export function useEditorSession(options: {
           revision,
           prompt: "继续当前剧情",
           contextText: draftText.current.slice(-800),
-          config: modelConfig,
+          config: modelConfig
+            ? { ...modelConfig, apiKey: "" }
+            : undefined,
         },
       );
       if (result?.operations?.[0]) {
@@ -169,9 +182,20 @@ export function useEditorSession(options: {
   }, [aiPreview]);
 
   const handleReject = useCallback(() => {
+    const text = aiPreview;
     logger.info("拒绝 AI 续写");
     setAiPreview("");
-  }, []);
+    if (!project || !text) return;
+    invoke<{ ok?: boolean; data?: unknown[] }>("record_generation_feedback", {
+      projectId: project.id,
+      accepted: false,
+      aiText: text,
+      humanText: "",
+      contextExcerpt: draftText.current.slice(-400),
+    })
+      .then((result) => setPreferenceCount(result.data?.length ?? preferenceCount + 1))
+      .catch((error) => logger.warn("记录写作偏好失败", { error: String(error) }));
+  }, [aiPreview, project, preferenceCount]);
 
   return {
     chapterText,
@@ -189,6 +213,7 @@ export function useEditorSession(options: {
     handleGenerate,
     handleAccept,
     handleReject,
+    preferenceCount,
   };
 }
 

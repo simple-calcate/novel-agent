@@ -11,33 +11,46 @@ const JOB_COLUMNS: &str = "id, project_id, workflow_id, operation, payload_json,
 
 impl Repository {
     pub fn enqueue_job(&self, job: &Job) -> Result<bool, StorageError> {
-        let inserted = self.connection.execute(
-            "INSERT OR IGNORE INTO jobs(
-                id, project_id, workflow_id, operation, payload_json, priority, status,
-                idempotency_key, depends_on_json, attempts, max_attempts, run_at,
-                deadline, causation_id, causation_depth, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
-            params![
-                job.id.to_string(),
-                job.project_id.to_string(),
-                job.workflow_id.as_ref().map(ToString::to_string),
-                job.operation,
-                serde_json::to_string(&job.payload)?,
-                job.priority,
-                status_name(job.status),
-                job.idempotency_key,
-                serde_json::to_string(&job.depends_on)?,
-                job.attempts,
-                job.max_attempts,
-                job.run_at.to_rfc3339(),
-                job.deadline.map(|value| value.to_rfc3339()),
-                job.causation_id,
-                job.causation_depth,
-                job.created_at.to_rfc3339(),
-                job.updated_at.to_rfc3339(),
-            ],
-        )?;
-        Ok(inserted > 0)
+        self.transact(|tx| {
+            let inserted = tx.execute(
+                "INSERT OR IGNORE INTO jobs(
+                    id, project_id, workflow_id, operation, payload_json, priority, status,
+                    idempotency_key, depends_on_json, attempts, max_attempts, run_at,
+                    deadline, causation_id, causation_depth, created_at, updated_at
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+                params![
+                    job.id.to_string(),
+                    job.project_id.to_string(),
+                    job.workflow_id.as_ref().map(ToString::to_string),
+                    job.operation,
+                    serde_json::to_string(&job.payload)?,
+                    job.priority,
+                    status_name(job.status),
+                    job.idempotency_key,
+                    serde_json::to_string(&job.depends_on)?,
+                    job.attempts,
+                    job.max_attempts,
+                    job.run_at.to_rfc3339(),
+                    job.deadline.map(|value| value.to_rfc3339()),
+                    job.causation_id,
+                    job.causation_depth,
+                    job.created_at.to_rfc3339(),
+                    job.updated_at.to_rfc3339(),
+                ],
+            )?;
+            if inserted > 0 {
+                crate::repository::outbox::insert(
+                    tx,
+                    &job.project_id.to_string(),
+                    "job.enqueued",
+                    &serde_json::json!({
+                        "jobId": job.id.to_string(),
+                        "operation": job.operation,
+                    }),
+                )?;
+            }
+            Ok(inserted > 0)
+        })
     }
 
     pub fn next_runnable_job(&self, now: &str) -> Result<Option<Job>, StorageError> {

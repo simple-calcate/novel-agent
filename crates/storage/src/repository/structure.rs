@@ -25,24 +25,36 @@ impl Repository {
             summary,
             aliases,
         };
-        let inserted = self.connection.execute(
-            "INSERT OR IGNORE INTO story_entries(id, project_id, kind, title, summary, aliases_json)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![
-                entry.id,
-                project_id.to_string(),
-                kind_name(kind),
-                entry.title,
-                entry.summary,
-                serde_json::to_string(&entry.aliases)?,
-            ],
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "story.entry.created",
+            serde_json::json!({
+                "id": entry.id,
+                "kind": kind_name(kind),
+                "title": entry.title
+            }),
+            |tx| {
+                let inserted = tx.execute(
+                    "INSERT OR IGNORE INTO story_entries(id, project_id, kind, title, summary, aliases_json)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![
+                        entry.id,
+                        project_id.to_string(),
+                        kind_name(kind),
+                        entry.title,
+                        entry.summary,
+                        serde_json::to_string(&entry.aliases)?,
+                    ],
+                )?;
+                if inserted == 0 {
+                    return Err(DomainError::Validation(format!(
+                        "structure entry already exists: {title}"
+                    ))
+                    .into());
+                }
+                Ok(())
+            },
         )?;
-        if inserted == 0 {
-            return Err(DomainError::Validation(format!(
-                "structure entry already exists: {title}"
-            ))
-            .into());
-        }
         Ok(entry)
     }
 
@@ -87,13 +99,21 @@ impl Repository {
         id: &str,
         kind: StoryEntryKind,
     ) -> Result<(), StorageError> {
-        let deleted = self.connection.execute(
-            "DELETE FROM story_entries WHERE id = ?1 AND project_id = ?2 AND kind = ?3",
-            params![id, project_id.to_string(), kind_name(kind)],
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "story.entry.deleted",
+            serde_json::json!({ "id": id, "kind": kind_name(kind) }),
+            |tx| {
+                let deleted = tx.execute(
+                    "DELETE FROM story_entries WHERE id = ?1 AND project_id = ?2 AND kind = ?3",
+                    params![id, project_id.to_string(), kind_name(kind)],
+                )?;
+                if deleted == 0 {
+                    return Err(DomainError::NotFound(format!("story entry {id}")).into());
+                }
+                Ok(())
+            },
         )?;
-        if deleted == 0 {
-            return Err(DomainError::NotFound(format!("story entry {id}")).into());
-        }
         Ok(())
     }
 }

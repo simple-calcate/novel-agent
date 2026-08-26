@@ -195,7 +195,7 @@ impl Repository {
                 actor, operations_json, created_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
-                project_id.unwrap_or_default(),
+                project_id.clone().unwrap_or_default(),
                 patch.chapter_id.to_string(),
                 actual,
                 next.0 as i64,
@@ -204,6 +204,18 @@ impl Repository {
                 now,
             ],
         )?;
+        let project_id = project_id.unwrap_or_default();
+        if !project_id.is_empty() {
+            crate::repository::outbox::insert(
+                &transaction,
+                &project_id,
+                "chapter.revised",
+                &serde_json::json!({
+                    "chapterId": patch.chapter_id.to_string(),
+                    "revision": next.0,
+                }),
+            )?;
+        }
         transaction.commit()?;
         Ok(next)
     }
@@ -293,7 +305,7 @@ impl Repository {
                 actor, operations_json, created_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
-                project_id.unwrap_or_default(),
+                project_id.clone().unwrap_or_default(),
                 chapter_id.to_string(),
                 actual,
                 next.0 as i64,
@@ -306,6 +318,18 @@ impl Repository {
                 now,
             ],
         )?;
+        let project_id = project_id.unwrap_or_default();
+        if !project_id.is_empty() {
+            crate::repository::outbox::insert(
+                &transaction,
+                &project_id,
+                "chapter.revised",
+                &serde_json::json!({
+                    "chapterId": chapter_id.to_string(),
+                    "revision": next.0,
+                }),
+            )?;
+        }
 
         transaction.commit()?;
         Ok(next)
