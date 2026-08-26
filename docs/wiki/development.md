@@ -23,9 +23,9 @@ CI（`.github/workflows/ci.yml`）只在面向 `main` 的 pull request / push �
 
 ## 浏览器 vs 桌面
 
-`isTauriRuntime()` 为假时，`libraryApi` 用内存实现，匹配走 TypeScript。能验 UI、树、预选条，不能验 SQLite、outbox、密钥链、真正的模型调用。
+`isTauriRuntime()` 为假时，`libraryApi` 用内存实现，匹配走 TypeScript。能验 UI、树、预选条、场次、偏好，不能验 SQLite、outbox、密钥链、真正的模型调用。
 
-改作品库或结构 CRUD 时：浏览器测交互，桌面或 `cargo test` 测持久化。改匹配规则时两边都要测：`crates/context-hints` 与 `apps/client/src/structure/match.test.ts`。
+改作品库或结构 CRUD 时：浏览器测交互，桌面或 `cargo test` 测持久化。改匹配规则时两边都要测：`crates/context-hints` 与 `apps/client/src/structure/match.test.ts`，并更新 `packages/match-fixtures/cases.json`。
 
 ## 改能力时的落点
 
@@ -33,33 +33,36 @@ CI（`.github/workflows/ci.yml`）只在面向 `main` 的 pull request / push �
 
 | 你要改的 | 动哪里 |
 |---|---|
-| 数据形状 | `novel-domain` + `crates/storage/migrations` + [interfaces.md](../interfaces.md) + `apps/client/src/types.ts` |
+| 数据形状 | `novel-domain` + `crates/storage/migrations` + [interfaces.md](../interfaces.md) + `apps/client/src/types.ts` + `packages/shared-types/examples.json` |
 | 用户点一下就能做 | `Workspace` → Tauri command → `libraryApi` → 对应 UI hook |
 | Agent / 队列可调用 | `Tool` + `register_tool`；工作流模板与 `OPERATION_LABELS` |
 | 只换实现 | `Kernel::builder().extension(...)` 或覆盖同名工具 |
-| 段落匹配规则 | `crates/context-hints` **和** `apps/client/src/structure/match.ts` |
+| 段落匹配规则 | `crates/context-hints` **和** `apps/client/src/structure/match.ts`，加上共享 fixtures |
 | 模型密钥 | `SecretVault`，不要写进 `save_setting` |
 | 界面文案 / 树交互 | `apps/client/src/App.tsx` 与 `components/`，不改仓储 |
 
-前端作品库与结构只通过 `apps/client/src/api.ts` 的 `libraryApi`。不要在组件里直接 `invoke` 作品库命令。设置、续写、偏好目前仍有部分走 `invoke`，新增同类能力时优先收到 `libraryApi`。
+前端只通过 `apps/client/src/api.ts` 的 `libraryApi`。不要在组件里直接 `invoke`。
 
 ## 前端模块
 
 | 文件 | 职责 |
 |---|---|
-| `hooks/useLibrary.ts` | 作品树、增删改、当前书/卷/章 |
+| `hooks/useLibrary.ts` | 作品树、增删改、当前书/卷/章/场 |
 | `hooks/useStructure.ts` | 预先结构列表 |
-| `hooks/useEditorSession.ts` | 正文、预选、续写、模型配置 |
+| `hooks/useEditorSession.ts` | 正文、预选、续写、模型配置、偏好 |
 | `hooks/useQueue.ts` | 任务队列 |
-| `components/ContextRail.tsx` | 编辑器上方预选条 |
+| `components/ContextRail.tsx` | 编辑器上方预选条（钉住/忽略） |
+| `components/SceneStrip.tsx` | 本章场次 |
 | `components/StructurePanel.tsx` | 右侧结构 |
+| `components/PreferencePanel.tsx` | Agent 页偏好 |
+| `components/PluginModal.tsx` | 打包插件列表 |
 | `structure/match.ts` | 浏览器侧匹配器 |
 
 ## 改接口检查表
 
 改稳定契约时对照 [interfaces.md](../interfaces.md) 末尾清单：
 
-1. domain 字段 → serde camelCase、SQLite 迁移、TS `types.ts`
+1. domain 字段 → serde camelCase、SQLite 迁移、TS `types.ts`、`packages/shared-types/examples.json`
 2. command 名或字段 → `libraryApi`、宿主 command 测试、interfaces 表格
 3. 工具 id → 工作流模板、`OPERATION_LABELS`、interfaces 工具表
 4. `cargo test --workspace` 与前端 test / typecheck

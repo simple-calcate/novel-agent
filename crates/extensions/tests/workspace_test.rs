@@ -167,6 +167,8 @@ fn user_event_kind_matches_library_ops() {
     assert_eq!(EventKind::CanonProposed.as_str(), "canon.proposed");
     assert_eq!(EventKind::CanonAccepted.as_str(), "canon.accepted");
     assert_eq!(EventKind::VolumeCreated.as_str(), "volume.created");
+    assert_eq!(EventKind::SceneCreated.as_str(), "scene.created");
+    assert_eq!(EventKind::SceneDeleted.as_str(), "scene.deleted");
 }
 
 #[test]
@@ -200,4 +202,64 @@ fn rejecting_continuation_records_preference() {
         .unwrap();
     assert_eq!(again.len(), 1);
     assert_eq!(again[0].status, novel_domain::PreferenceStatus::Confirmed);
+}
+
+#[test]
+fn scene_outlines_chapter_without_touching_text() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let project = workspace.create_project("作品").unwrap();
+    let book = workspace.create_book(&project.id, "卷一", "", 0).unwrap();
+    let chapter = workspace
+        .create_chapter(&project.id, &book.id.to_string(), "第一章", 0, None)
+        .unwrap();
+    workspace
+        .save_chapter(&chapter.id, "雾港来客。", None)
+        .unwrap();
+    let scene = workspace
+        .create_scene(
+            &project.id,
+            &chapter.id.to_string(),
+            "码头夜谈",
+            0,
+            None,
+        )
+        .unwrap();
+    let snapshot = workspace.load_library(Some(project.id.clone())).unwrap();
+    assert_eq!(snapshot.scenes.len(), 1);
+    assert_eq!(snapshot.scenes[0].title, "码头夜谈");
+    workspace
+        .rename_scene(&project.id, &scene.id, "码头雨夜")
+        .unwrap();
+    workspace.delete_scene(&project.id, &scene.id).unwrap();
+    let after = workspace.load_library(Some(project.id.clone())).unwrap();
+    assert!(after.scenes.is_empty());
+    assert_eq!(workspace.load_chapter(&chapter.id).unwrap().text, "雾港来客。");
+}
+
+#[test]
+fn disabling_preference_drops_it_from_prompt() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let project = workspace.create_project("作品").unwrap();
+    let rules = workspace
+        .record_generation_feedback(&project.id, false, "AI 草稿", "", "")
+        .unwrap();
+    let disabled = workspace
+        .set_preference_status(&project.id, &rules[0].id, true)
+        .unwrap();
+    assert_eq!(disabled[0].status, novel_domain::PreferenceStatus::Disabled);
+    assert!(novel_feedback_memory::prompt_prefix(&disabled).is_none());
+}
+
+#[test]
+fn list_plugins_reads_bundled_manifests() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let plugins = workspace.list_plugins();
+    assert!(
+        plugins.iter().any(|plugin| plugin.id == "continuity-checker"),
+        "{plugins:?}"
+    );
+    assert!(plugins.iter().all(|plugin| plugin.runtime == "builtin"));
 }

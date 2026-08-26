@@ -1,13 +1,9 @@
 import { useEffect, useState } from "react";
 import { X, Key, Cpu, Globe, Server } from "lucide-react";
 
-export interface ModelConfig {
-  provider: "openai" | "anthropic" | "deepseek" | "ollama" | "custom";
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-  apiKeySet?: boolean;
-}
+import { ModelConfig } from "../types";
+
+export type { ModelConfig };
 
 interface Props {
   open: boolean;

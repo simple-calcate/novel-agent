@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { libraryApi } from "../api";
-import { Book, Chapter, LibrarySnapshot, Project, Volume } from "../types";
+import { Book, Chapter, LibrarySnapshot, Project, Scene, Volume } from "../types";
 import { logger } from "../logger";
 
 export type PromptKind =
   | {
       mode: "create" | "rename";
-      target: "project" | "book" | "volume" | "chapter";
+      target: "project" | "book" | "volume" | "chapter" | "scene";
       id?: string;
       title?: string;
     }
   | null;
 export type DeleteKind =
-  | { target: "project" | "book" | "volume" | "chapter"; id: string; title: string }
+  | { target: "project" | "book" | "volume" | "chapter" | "scene"; id: string; title: string }
   | null;
 
 export function useLibrary() {
@@ -21,6 +21,7 @@ export function useLibrary() {
   const [books, setBooks] = useState<Book[]>([]);
   const [volumes, setVolumes] = useState<Volume[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [scenes, setScenes] = useState<Scene[]>([]);
   const [activeChapter, setActiveChapter] = useState<string | null>(null);
   const [activeBookId, setActiveBookId] = useState<string | null>(null);
   const [activeVolumeId, setActiveVolumeId] = useState<string | null>(null);
@@ -38,6 +39,7 @@ export function useLibrary() {
     setBooks(snapshot.books);
     setVolumes(snapshot.volumes ?? []);
     setChapters(snapshot.chapters);
+    setScenes(snapshot.scenes ?? []);
     setActiveChapter((previous) => {
       if (previous && snapshot.chapters.some((chapter) => chapter.id === previous)) {
         return previous;
@@ -107,6 +109,13 @@ export function useLibrary() {
           setActiveVolumeId(volume.id);
           return;
         }
+        if (prompt.target === "scene") {
+          if (!project) throw new Error("请先创建作品");
+          if (!activeChapter) throw new Error("请先打开一章");
+          await libraryApi.createScene(project.id, activeChapter, title);
+          await refreshLibrary(project.id);
+          return;
+        }
         if (!project) {
           throw new Error("请先创建作品或书籍");
         }
@@ -141,9 +150,13 @@ export function useLibrary() {
         applyLibrary(await libraryApi.renameVolume(project.id, prompt.id, title));
         return;
       }
+      if (prompt.target === "scene") {
+        applyLibrary(await libraryApi.renameScene(project.id, prompt.id, title));
+        return;
+      }
       applyLibrary(await libraryApi.renameChapter(project.id, prompt.id, title));
     },
-    [prompt, project, activeBookId, activeVolumeId, books, volumes, refreshLibrary, applyLibrary],
+    [prompt, project, activeBookId, activeVolumeId, activeChapter, books, volumes, refreshLibrary, applyLibrary],
   );
 
   const handleDelete = useCallback(async () => {
@@ -159,6 +172,10 @@ export function useLibrary() {
     }
     if (pendingDelete.target === "volume") {
       applyLibrary(await libraryApi.deleteVolume(project.id, pendingDelete.id));
+      return;
+    }
+    if (pendingDelete.target === "scene") {
+      applyLibrary(await libraryApi.deleteScene(project.id, pendingDelete.id));
       return;
     }
     applyLibrary(await libraryApi.deleteChapter(project.id, pendingDelete.id));
@@ -188,12 +205,29 @@ export function useLibrary() {
     [project, applyLibrary],
   );
 
+  const mutateScene = useCallback(
+    async (sceneId: string, delta: number) => {
+      if (!project) return;
+      applyLibrary(await libraryApi.moveScene(project.id, sceneId, delta));
+    },
+    [project, applyLibrary],
+  );
+
+  const setScenePov = useCallback(
+    async (sceneId: string, povEntryId: string | null) => {
+      if (!project) return;
+      applyLibrary(await libraryApi.setScenePov(project.id, sceneId, povEntryId));
+    },
+    [project, applyLibrary],
+  );
+
   return {
     projects,
     project,
     books,
     volumes,
     chapters,
+    scenes,
     activeChapter,
     setActiveChapter,
     activeBookId,
@@ -212,5 +246,7 @@ export function useLibrary() {
     mutateBook,
     mutateVolume,
     mutateChapter,
+    mutateScene,
+    setScenePov,
   };
 }

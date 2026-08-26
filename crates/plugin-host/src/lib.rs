@@ -3,7 +3,9 @@
 pub mod manifest;
 pub mod permissions;
 pub mod runtime;
+pub mod discover;
 
 pub use manifest::*;
 pub use permissions::*;
 pub use runtime::*;
+pub use discover::*;

@@ -36,12 +36,21 @@ export interface Chapter {
   status: "draft" | "completed" | "archived";
 }
 
+export interface Scene {
+  id: string;
+  chapterId: string;
+  title: string;
+  position: number;
+  povEntryId?: string | null;
+}
+
 export interface LibrarySnapshot {
   projects: Project[];
   activeProjectId?: string | null;
   books: Book[];
   volumes?: Volume[];
   chapters: Chapter[];
+  scenes?: Scene[];
 }
 
 export interface ChapterBody {
@@ -84,6 +93,7 @@ export interface ContextHint {
   score: number;
   generation: number;
   revision: number;
+  actions?: Array<"expandSource" | "pin" | "snooze" | "ignore" | "markWrong">;
 }
 
 export interface JobView {
@@ -135,4 +145,36 @@ export interface StoryEntry {
   title: string;
   summary: string;
   aliases: string[];
+}
+
+export type PreferenceStatus = "candidate" | "confirmed" | "disabled";
+
+export interface PreferenceRule {
+  id: string;
+  scope: { projectId?: string } | string;
+  rule: string;
+  status: PreferenceStatus;
+  evidenceProposals?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PluginSummary {
+  id: string;
+  name: string;
+  version: string;
+  runtime: string;
+  operations: string[];
+}
+
+export interface ModelConfig {
+  provider: "openai" | "anthropic" | "deepseek" | "ollama" | "custom";
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  apiKeySet?: boolean;
+}
+
+export interface ContinuationPatch {
+  operations: Array<{ text?: string }>;
 }

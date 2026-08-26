@@ -15,7 +15,6 @@ import {
   Sparkles,
   Terminal,
 } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
 import { libraryApi } from "./api";
 import { Editor, AIPreview } from "./components/Editor";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -26,11 +25,15 @@ import { SettingsModal } from "./components/SettingsModal";
 import { LogPanel } from "./components/LogPanel";
 import { CreateDialog } from "./components/CreateDialog";
 import { ConfirmDialog, TreeItemActions } from "./components/LibraryActions";
+import { SceneStrip } from "./components/SceneStrip";
+import { PreferencePanel } from "./components/PreferencePanel";
+import { PluginModal } from "./components/PluginModal";
 import { logger } from "./logger";
 import { useLibrary } from "./hooks/useLibrary";
 import { useQueue } from "./hooks/useQueue";
 import { useEditorSession } from "./hooks/useEditorSession";
 import { useStructure } from "./hooks/useStructure";
+import { PluginSummary } from "./types";
 
 export function App() {
   const [sidebarTab, setSidebarTab] = useState<"context" | "structure" | "workflow" | "agent">(
@@ -38,6 +41,8 @@ export function App() {
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [logPanelOpen, setLogPanelOpen] = useState(false);
+  const [pluginOpen, setPluginOpen] = useState(false);
+  const [plugins, setPlugins] = useState<PluginSummary[]>([]);
   const library = useLibrary();
   const {
     projects,
@@ -45,6 +50,7 @@ export function App() {
     books,
     volumes,
     chapters,
+    scenes,
     activeChapter,
     setActiveChapter,
     setActiveBookId,
@@ -61,6 +67,8 @@ export function App() {
     mutateBook,
     mutateVolume,
     mutateChapter,
+    mutateScene,
+    setScenePov,
   } = library;
   const { jobs, queueReady, enqueue } = useQueue(project);
   const structure = useStructure(project);
@@ -87,7 +95,11 @@ export function App() {
     handleGenerate,
     handleAccept,
     handleReject,
-    preferenceCount,
+    preferences,
+    togglePreference,
+    hintPrefs,
+    pinHint,
+    ignoreHint,
   } = session;
 
   const activeChapterRecord = chapters.find((chapter) => chapter.id === activeChapter);
@@ -101,7 +113,9 @@ export function App() {
                 ? "重命名书"
                 : prompt.target === "volume"
                   ? "重命名卷"
-                  : "重命名章节",
+                  : prompt.target === "scene"
+                    ? "重命名场次"
+                    : "重命名章节",
           label: "名称",
           placeholder: prompt.title ?? "",
           confirm: "保存",
@@ -112,7 +126,9 @@ export function App() {
           ? { title: "新书", label: "书名", placeholder: "例如：雾港纪事", confirm: "创建" }
           : prompt.target === "volume"
             ? { title: "新卷", label: "卷名", placeholder: "例如：卷一 · 雾与海", confirm: "创建" }
-            : { title: "新章节", label: "章节标题", placeholder: "例如：第一章 雾港来客", confirm: "创建" }
+            : prompt.target === "scene"
+              ? { title: "新场", label: "场次标题", placeholder: "例如：码头夜谈", confirm: "创建" }
+              : { title: "新章节", label: "章节标题", placeholder: "例如：第一章 雾港来客", confirm: "创建" }
     : { title: "", label: "", placeholder: "", confirm: "创建" };
 
   return (
@@ -312,7 +328,14 @@ export function App() {
           <button className="icon-button" title="设置" onClick={() => setSettingsOpen(true)}>
             <Settings size={16} />
           </button>
-          <button className="icon-button" title="插件">
+          <button
+            className={`icon-button ${pluginOpen ? "active" : ""}`}
+            title="插件"
+            onClick={() => {
+              setPluginOpen(true);
+              void libraryApi.listPlugins().then(setPlugins).catch(() => setPlugins([]));
+            }}
+          >
             <Layers size={16} />
           </button>
           <button className="icon-button" title="任务队列">
@@ -367,7 +390,29 @@ export function App() {
           )}
           {activeChapter && chapterReady && (
             <>
-              <ContextRail hints={hints} />
+              <ContextRail
+                hints={hints}
+                pinnedIds={hintPrefs.pinned}
+                ignoredIds={hintPrefs.ignored}
+                onPin={pinHint}
+                onIgnore={ignoreHint}
+              />
+              {project && activeChapter && (
+                <SceneStrip
+                  scenes={scenes.filter((scene) => scene.chapterId === activeChapter)}
+                  characters={structure.entries.filter((entry) => entry.kind === "character")}
+                  disabled={!project}
+                  onCreate={() => setPrompt({ mode: "create", target: "scene" })}
+                  onRename={(scene) =>
+                    setPrompt({ mode: "rename", target: "scene", id: scene.id, title: scene.title })
+                  }
+                  onDelete={(scene) =>
+                    setPendingDelete({ target: "scene", id: scene.id, title: scene.title })
+                  }
+                  onMove={(sceneId, delta) => void mutateScene(sceneId, delta)}
+                  onPov={(scene, povEntryId) => void setScenePov(scene.id, povEntryId)}
+                />
+              )}
               <ErrorBoundary label="编辑器">
                 <Editor
                   key={activeChapter}
@@ -488,10 +533,11 @@ export function App() {
                   ? `当前作品「${project.title}」，上下文固定到 Revision ${revision}。`
                   : "创建作品后即可把 Agent 会话钉在该书的修订历史上。"}
               </p>
-              {preferenceCount > 0 && (
-                <p>已记住 {preferenceCount} 条写作偏好，下次续写会写进提示。</p>
+              {preferences.length > 0 && (
+                <p>已记住 {preferences.filter((item) => item.status !== "disabled").length} 条写作偏好，下次续写会写进提示。</p>
               )}
             </div>
+            <PreferencePanel rules={preferences} onToggle={(rule, disabled) => void togglePreference(rule, disabled)} />
           </div>
         )}
       </aside>
@@ -508,7 +554,7 @@ export function App() {
             apiKeySet: Boolean(config.apiKey) || Boolean(config.apiKeySet),
           });
           try {
-            await invoke("save_model_config", { config });
+            await libraryApi.saveModelConfig(config);
             logger.info("配置已同步到后端");
           } catch (e) {
             logger.error("保存失败", { error: String(e) });
@@ -537,16 +583,21 @@ export function App() {
               ? "删除书"
               : pendingDelete?.target === "volume"
                 ? "删除卷"
-                : "删除章节"
+                : pendingDelete?.target === "scene"
+                  ? "删除场次"
+                  : "删除章节"
         }
         body={
           pendingDelete?.target === "volume"
             ? `确定删除「${pendingDelete.title}」？卷下的章节会留在书里，只是不再分卷。`
-            : `确定删除「${pendingDelete?.title ?? ""}」？此操作不可撤销。`
+            : pendingDelete?.target === "scene"
+              ? `确定删除场次「${pendingDelete.title}」？正文不会被删。`
+              : `确定删除「${pendingDelete?.title ?? ""}」？此操作不可撤销。`
         }
         onClose={() => setPendingDelete(null)}
         onConfirm={handleDelete}
       />
+      <PluginModal open={pluginOpen} plugins={plugins} onClose={() => setPluginOpen(false)} />
     </div>
   );
 }

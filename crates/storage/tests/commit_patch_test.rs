@@ -302,3 +302,28 @@ fn volume_groups_and_ungroups_chapters() {
         .volume_id
         .is_none());
 }
+
+#[test]
+fn scene_crud_does_not_delete_chapter_text() {
+    let repository = Repository::open_in_memory().unwrap();
+    let project = repository.create_project("夜航星图").unwrap();
+    let book = repository
+        .create_book(&project.id, "雾港纪事", "", 0)
+        .unwrap();
+    let chapter = repository
+        .create_chapter_with_volume(&project.id, &book.id.to_string(), "第一章", 0, None)
+        .unwrap();
+    let scene = repository
+        .create_scene(
+            &project.id,
+            &chapter.id.to_string(),
+            "码头夜谈",
+            0,
+            None,
+        )
+        .unwrap();
+    assert_eq!(repository.list_scenes(&project.id).unwrap().len(), 1);
+    repository.delete_scene(&project.id, &scene.id).unwrap();
+    assert!(repository.list_scenes(&project.id).unwrap().is_empty());
+    assert_eq!(repository.list_chapters(&project.id).unwrap().len(), 1);
+}

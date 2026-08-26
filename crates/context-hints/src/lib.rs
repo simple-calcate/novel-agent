@@ -134,7 +134,7 @@ impl HintEngine {
             } else {
                 entry.summary.clone()
             };
-            hints.push(hint(
+            let mut card = hint(
                 kind,
                 &entry.title,
                 &summary,
@@ -142,7 +142,9 @@ impl HintEngine {
                 &hit.reason,
                 hit.score,
                 query,
-            ));
+            );
+            card.id = entry.id.clone();
+            hints.push(card);
         }
         hints.sort_by(|left, right| {
             right

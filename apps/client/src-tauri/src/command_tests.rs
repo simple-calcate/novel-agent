@@ -3,12 +3,12 @@
 
 use crate::{
     build_context_package, context_hints, create_book, create_chapter, create_project,
-    create_story_entry, create_volume, delete_book, delete_chapter, delete_volume, editor_tick,
+    create_story_entry, create_volume, create_scene, delete_book, delete_chapter, delete_volume, editor_tick,
     emit_domain_event, generate_continuation, install_plugin_manifest, kernel_tools, list_canon,
-    list_story_entries, load_chapter, load_library, load_model_config, move_book, propose_canon,
+    list_story_entries, load_chapter, load_library, load_model_config, list_plugins, move_book, propose_canon,
     rename_book, rename_chapter, rename_project, review_canon_fact, run_queue_step, save_chapter,
     save_model_config, AppState, EditorTickInput, HintRequest, ModelConfigInput, NewBookInput,
-    NewChapterInput, NewProjectInput, NewVolumeInput,
+    NewChapterInput, NewProjectInput, NewSceneInput, NewVolumeInput,
 };
 use novel_domain::{
     Actor, BlockKind, ContentBlock, DomainEvent, EventId, EventSource, Platform, Revision,
@@ -670,4 +670,63 @@ fn kernel_tools_describes_registry() {
     }
     let providers = data["providers"].as_array().unwrap();
     assert!(providers.iter().any(|p| p == &json!("echo")));
+}
+
+#[test]
+fn scene_roundtrip_and_plugin_list() {
+    let app = mock_app_with_kernel();
+    let state = || app.state::<AppState>();
+    let project = create_project(
+        state(),
+        NewProjectInput {
+            title: "场次测试".into(),
+        },
+    )
+    .data
+    .unwrap();
+    let project_id = project.id.to_string();
+    let book = create_book(
+        state(),
+        NewBookInput {
+            project_id: project_id.clone(),
+            title: "卷一".into(),
+            synopsis: String::new(),
+            position: 0,
+        },
+    )
+    .data
+    .unwrap();
+    let chapter = create_chapter(
+        state(),
+        NewChapterInput {
+            project_id: project_id.clone(),
+            book_id: book.id.to_string(),
+            title: "第一章".into(),
+            position: 0,
+            volume_id: None,
+        },
+    )
+    .data
+    .unwrap();
+    let scene = create_scene(
+        state(),
+        NewSceneInput {
+            project_id: project_id.clone(),
+            chapter_id: chapter.id.to_string(),
+            title: "码头夜谈".into(),
+            position: 0,
+            pov_entry_id: None,
+        },
+    );
+    assert!(scene.ok, "{scene:?}");
+    let library = load_library(state(), Some(project_id));
+    assert_eq!(library.data.unwrap().scenes.len(), 1);
+
+    let plugins = list_plugins(state());
+    assert!(plugins.ok, "{plugins:?}");
+    assert!(plugins
+        .data
+        .unwrap()
+        .iter()
+        .any(|plugin| plugin.id == "continuity-checker"));
 }

@@ -326,3 +326,63 @@ fn unrelated_paragraph_without_lookback_stays_empty() {
     let hints = rank_one("夜晚的海面", "", lin_wan());
     assert!(hints.is_empty());
 }
+
+#[test]
+fn shared_match_fixtures_agree_with_typescript() {
+    let raw = include_str!("../../../packages/match-fixtures/cases.json");
+    let cases: Vec<serde_json::Value> = serde_json::from_str(raw).unwrap();
+    let project_id = ProjectId::new();
+    let entries = vec![
+        novel_domain::StoryEntry {
+            id: "1".into(),
+            project_id: project_id.clone(),
+            kind: novel_domain::StoryEntryKind::Character,
+            title: "林晚".into(),
+            summary: "雾港来的刀客".into(),
+            aliases: vec!["雾儿".into()],
+        },
+        novel_domain::StoryEntry {
+            id: "2".into(),
+            project_id: project_id.clone(),
+            kind: novel_domain::StoryEntryKind::Foreshadow,
+            title: "雾中灯塔".into(),
+            summary: "里面还有旧王玺".into(),
+            aliases: vec![],
+        },
+        novel_domain::StoryEntry {
+            id: "3".into(),
+            project_id,
+            kind: novel_domain::StoryEntryKind::Setting,
+            title: "雾港".into(),
+            summary: "终年被海雾罩住".into(),
+            aliases: vec![],
+        },
+    ];
+    let engine = HintEngine {
+        minimum_dwell_score: 0.0,
+    };
+    for case in cases {
+        let id = case["id"].as_str().unwrap();
+        let current = case["current"].as_str().unwrap();
+        let lookback = case["lookback"].as_str().unwrap();
+        let expected: Vec<String> = case["expectedTitles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|value| value.as_str().map(str::to_owned))
+            .collect();
+        let hints = engine.rank_entries(
+            &HintQuery {
+                work_ref: work_ref(),
+                nearby_text: current.into(),
+                lookback_text: lookback.into(),
+                generation: 1,
+                limit: 5,
+            },
+            &entries,
+        );
+        let titles: Vec<String> = hints.iter().map(|hint| hint.title.clone()).collect();
+        assert_eq!(titles, expected, "case {id}");
+        assert!(hints.iter().all(|hint| entries.iter().any(|entry| entry.id == hint.id)));
+    }
+}

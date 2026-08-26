@@ -1,12 +1,12 @@
 use super::{
-    chapter_status, parse_book_id, parse_project_id, parse_rfc3339, parse_volume_id,
-    SETTING_ACTIVE_PROJECT,
+    chapter_status, parse_book_id, parse_chapter_id, parse_project_id, parse_rfc3339, parse_scene_id,
+    parse_volume_id, SETTING_ACTIVE_PROJECT,
 };
 use crate::StorageError;
 use chrono::Utc;
 use novel_domain::{
     Book, BookId, Chapter, ChapterId, ChapterStatus, DomainError, Project, ProjectId, Revision,
-    Volume, VolumeId,
+    Scene, SceneId, Volume, VolumeId,
 };
 use rusqlite::{params, OptionalExtension};
 use serde_json::json;
@@ -726,5 +726,238 @@ impl super::Repository {
             )?;
         }
         self.list_chapters(project_id)
+    }
+
+    pub fn list_scenes(&self, project_id: &ProjectId) -> Result<Vec<Scene>, StorageError> {
+        let mut stmt = self.connection.prepare(
+            "SELECT s.id, s.chapter_id, s.title, s.position, s.pov_entity_id
+             FROM scenes s
+             JOIN chapters c ON c.id = s.chapter_id
+             JOIN books b ON b.id = c.book_id
+             WHERE b.project_id = ?1
+             ORDER BY b.position, c.position, s.position, s.title",
+        )?;
+        let rows = stmt.query_map([project_id.to_string()], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, Option<String>>(4)?,
+            ))
+        })?;
+        let mut scenes = Vec::new();
+        for row in rows {
+            let (id, chapter_id, title, position, pov) = row?;
+            scenes.push(Scene {
+                id: parse_scene_id(&id)?,
+                chapter_id: parse_chapter_id(&chapter_id)?,
+                title,
+                position: position as u32,
+                pov_entry_id: pov.filter(|value| !value.is_empty()),
+            });
+        }
+        Ok(scenes)
+    }
+
+    pub fn create_scene(
+        &self,
+        project_id: &ProjectId,
+        chapter_id: &str,
+        title: &str,
+        position: u32,
+        pov_entry_id: Option<&str>,
+    ) -> Result<Scene, StorageError> {
+        let position = if position == 0 {
+            self.next_position(
+                "SELECT COALESCE(MAX(position), 0) FROM scenes WHERE chapter_id = ?1",
+                chapter_id,
+            )?
+        } else {
+            position
+        };
+        let scene = Scene {
+            id: SceneId::new(),
+            chapter_id: parse_chapter_id(chapter_id)?,
+            title: title.to_owned(),
+            position,
+            pov_entry_id: pov_entry_id
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned),
+        };
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "scene.created",
+            json!({
+                "sceneId": scene.id.to_string(),
+                "chapterId": chapter_id,
+                "title": title,
+                "position": position,
+                "povEntryId": scene.pov_entry_id,
+            }),
+            |tx| {
+                let inserted = tx.execute(
+                    "INSERT INTO scenes(id, chapter_id, title, position, pov_entity_id)
+                     SELECT ?1, ?2, ?3, ?4, ?5
+                     WHERE EXISTS(
+                        SELECT 1 FROM chapters c
+                        JOIN books b ON b.id = c.book_id
+                        WHERE c.id = ?2 AND b.project_id = ?6
+                     )",
+                    params![
+                        scene.id.to_string(),
+                        chapter_id,
+                        title,
+                        position,
+                        scene.pov_entry_id,
+                        project_id.to_string()
+                    ],
+                )?;
+                if inserted == 0 {
+                    return Err(DomainError::NotFound(format!(
+                        "chapter {chapter_id} in project {project_id}"
+                    ))
+                    .into());
+                }
+                Ok(())
+            },
+        )?;
+        Ok(scene)
+    }
+
+    pub fn rename_scene(
+        &self,
+        project_id: &ProjectId,
+        scene_id: &SceneId,
+        title: &str,
+    ) -> Result<Scene, StorageError> {
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "scene.renamed",
+            json!({ "sceneId": scene_id.to_string(), "title": title }),
+            |tx| {
+                let updated = tx.execute(
+                    "UPDATE scenes SET title = ?2
+                     WHERE id = ?1 AND chapter_id IN (
+                        SELECT c.id FROM chapters c
+                        JOIN books b ON b.id = c.book_id
+                        WHERE b.project_id = ?3
+                     )",
+                    params![scene_id.to_string(), title, project_id.to_string()],
+                )?;
+                if updated == 0 {
+                    return Err(DomainError::NotFound(format!("scene {scene_id}")).into());
+                }
+                Ok(())
+            },
+        )?;
+        self.list_scenes(project_id)?
+            .into_iter()
+            .find(|scene| &scene.id == scene_id)
+            .ok_or_else(|| DomainError::NotFound(format!("scene {scene_id}")).into())
+    }
+
+    pub fn set_scene_pov(
+        &self,
+        project_id: &ProjectId,
+        scene_id: &SceneId,
+        pov_entry_id: Option<&str>,
+    ) -> Result<Scene, StorageError> {
+        let pov = pov_entry_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned);
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "scene.updated",
+            json!({ "sceneId": scene_id.to_string(), "povEntryId": pov }),
+            |tx| {
+                let updated = tx.execute(
+                    "UPDATE scenes SET pov_entity_id = ?2
+                     WHERE id = ?1 AND chapter_id IN (
+                        SELECT c.id FROM chapters c
+                        JOIN books b ON b.id = c.book_id
+                        WHERE b.project_id = ?3
+                     )",
+                    params![scene_id.to_string(), pov, project_id.to_string()],
+                )?;
+                if updated == 0 {
+                    return Err(DomainError::NotFound(format!("scene {scene_id}")).into());
+                }
+                Ok(())
+            },
+        )?;
+        self.list_scenes(project_id)?
+            .into_iter()
+            .find(|scene| &scene.id == scene_id)
+            .ok_or_else(|| DomainError::NotFound(format!("scene {scene_id}")).into())
+    }
+
+    pub fn delete_scene(
+        &self,
+        project_id: &ProjectId,
+        scene_id: &SceneId,
+    ) -> Result<(), StorageError> {
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "scene.deleted",
+            json!({ "sceneId": scene_id.to_string() }),
+            |tx| {
+                let deleted = tx.execute(
+                    "DELETE FROM scenes
+                     WHERE id = ?1 AND chapter_id IN (
+                        SELECT c.id FROM chapters c
+                        JOIN books b ON b.id = c.book_id
+                        WHERE b.project_id = ?2
+                     )",
+                    params![scene_id.to_string(), project_id.to_string()],
+                )?;
+                if deleted == 0 {
+                    return Err(DomainError::NotFound(format!("scene {scene_id}")).into());
+                }
+                Ok(())
+            },
+        )?;
+        Ok(())
+    }
+
+    pub fn move_scene(
+        &self,
+        project_id: &ProjectId,
+        scene_id: &SceneId,
+        delta: i32,
+    ) -> Result<Vec<Scene>, StorageError> {
+        let scenes = self.list_scenes(project_id)?;
+        let Some(scene) = scenes.iter().find(|item| &item.id == scene_id) else {
+            return Err(DomainError::NotFound(format!("scene {scene_id}")).into());
+        };
+        let chapter_id = scene.chapter_id.clone();
+        let mut siblings: Vec<Scene> = scenes
+            .into_iter()
+            .filter(|item| item.chapter_id == chapter_id)
+            .collect();
+        let Some(index) = siblings.iter().position(|item| &item.id == scene_id) else {
+            return Err(DomainError::NotFound(format!("scene {scene_id}")).into());
+        };
+        let target = index as i32 + delta;
+        if target >= 0 && (target as usize) < siblings.len() {
+            siblings.swap(index, target as usize);
+            self.write_with_outbox(
+                &project_id.to_string(),
+                "scene.reordered",
+                json!({ "sceneId": scene_id.to_string(), "delta": delta }),
+                |tx| {
+                    for (position, item) in siblings.iter().enumerate() {
+                        tx.execute(
+                            "UPDATE scenes SET position = ?2 WHERE id = ?1",
+                            params![item.id.to_string(), (position as u32) + 1],
+                        )?;
+                    }
+                    Ok(())
+                },
+            )?;
+        }
+        self.list_scenes(project_id)
     }
 }

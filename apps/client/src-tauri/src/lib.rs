@@ -2,8 +2,8 @@ use novel_automation::TypingSession;
 use novel_domain::{
     Annotation, BlockId, Book, BookId, CanonProposal, Chapter, ChapterBody, ChapterId,
     ContentBlock, ContentPatch, DomainEvent, EventId, EventSource, FactId, FactStatus, JobView,
-    LibrarySnapshot, Project, ProjectId, Revision, StoryEntry, StoryEntryKind, Volume, VolumeId,
-    EVENT_SCHEMA_VERSION,
+    LibrarySnapshot, PluginSummary, Project, ProjectId, Revision, Scene, SceneId, StoryEntry,
+    StoryEntryKind, Volume, VolumeId, EVENT_SCHEMA_VERSION,
 };
 use novel_extensions::{BuiltinsExtension, SecretVault, Workspace};
 use novel_kernel::{Kernel, ProviderConfig, ToolDescriptor};
@@ -125,6 +125,18 @@ pub struct NewVolumeInput {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct NewSceneInput {
+    pub project_id: String,
+    pub chapter_id: String,
+    pub title: String,
+    #[serde(default)]
+    pub position: u32,
+    #[serde(default)]
+    pub pov_entry_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NewBookInput {
     pub project_id: String,
     pub title: String,
@@ -175,6 +187,12 @@ fn parse_volume_id(value: &str) -> Result<VolumeId, String> {
     value
         .parse()
         .map_err(|_| format!("invalid volume id: {value}"))
+}
+
+fn parse_scene_id(value: &str) -> Result<SceneId, String> {
+    value
+        .parse()
+        .map_err(|_| format!("invalid scene id: {value}"))
 }
 
 fn parse_chapter_id(value: &str) -> Result<ChapterId, String> {
@@ -267,6 +285,95 @@ fn create_volume(state: State<'_, AppState>, input: NewVolumeInput) -> CommandRe
         &input.title,
         input.position,
     ))
+}
+
+#[tauri::command]
+fn create_scene(state: State<'_, AppState>, input: NewSceneInput) -> CommandResult<Scene> {
+    let project_id = match parse_project_id(&input.project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    if parse_chapter_id(&input.chapter_id).is_err() {
+        return CommandResult::error("invalid chapter id");
+    }
+    CommandResult::from_result(workspace(&state).create_scene(
+        &project_id,
+        &input.chapter_id,
+        &input.title,
+        input.position,
+        input.pov_entry_id.as_deref(),
+    ))
+}
+
+#[tauri::command]
+fn rename_scene(
+    state: State<'_, AppState>,
+    project_id: String,
+    scene_id: String,
+    title: String,
+) -> CommandResult<LibrarySnapshot> {
+    let pid = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let sid = match parse_scene_id(&scene_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).rename_scene(&pid, &sid, &title))
+}
+
+#[tauri::command]
+fn set_scene_pov(
+    state: State<'_, AppState>,
+    project_id: String,
+    scene_id: String,
+    pov_entry_id: Option<String>,
+) -> CommandResult<LibrarySnapshot> {
+    let pid = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let sid = match parse_scene_id(&scene_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).set_scene_pov(&pid, &sid, pov_entry_id.as_deref()))
+}
+
+#[tauri::command]
+fn delete_scene(
+    state: State<'_, AppState>,
+    project_id: String,
+    scene_id: String,
+) -> CommandResult<LibrarySnapshot> {
+    let pid = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let sid = match parse_scene_id(&scene_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).delete_scene(&pid, &sid))
+}
+
+#[tauri::command]
+fn move_scene(
+    state: State<'_, AppState>,
+    project_id: String,
+    scene_id: String,
+    delta: i32,
+) -> CommandResult<LibrarySnapshot> {
+    let pid = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let sid = match parse_scene_id(&scene_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).move_scene(&pid, &sid, delta))
 }
 
 #[tauri::command]
@@ -634,6 +741,29 @@ fn list_preferences(
         Err(err) => return CommandResult::error(err),
     };
     CommandResult::from_result(workspace(&state).list_preference_rules(&project_id))
+}
+
+#[tauri::command]
+fn set_preference_status(
+    state: State<'_, AppState>,
+    project_id: String,
+    rule_id: String,
+    disabled: bool,
+) -> CommandResult<Vec<novel_domain::PreferenceRule>> {
+    let project_id = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let rule_id = match rule_id.parse() {
+        Ok(id) => id,
+        Err(_) => return CommandResult::error(format!("invalid preference id: {rule_id}")),
+    };
+    CommandResult::from_result(workspace(&state).set_preference_status(&project_id, &rule_id, disabled))
+}
+
+#[tauri::command]
+fn list_plugins(state: State<'_, AppState>) -> CommandResult<Vec<PluginSummary>> {
+    CommandResult::ok(workspace(&state).list_plugins())
 }
 
 #[tauri::command]
@@ -1077,6 +1207,11 @@ pub fn run() {
             delete_book,
             move_book,
             create_volume,
+            create_scene,
+            rename_scene,
+            set_scene_pov,
+            delete_scene,
+            move_scene,
             rename_volume,
             delete_volume,
             move_volume,
@@ -1105,6 +1240,8 @@ pub fn run() {
             delete_story_entry,
             record_generation_feedback,
             list_preferences,
+            set_preference_status,
+            list_plugins,
         ])
         .run(tauri::generate_context!())
         .expect("error while running novel agent");

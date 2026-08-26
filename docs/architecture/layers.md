@@ -18,7 +18,7 @@
 │  call_tool / dispatch / run_continuation     │
 ├──────────────┬──────────────────────────────┤
 │  扩展        │  领域类型（无 IO）             │
-│  providers   │  Project → Book → Volume? → Chapter │
+│  providers   │  Project → Book → Volume? → Chapter → Scene? │
 │  queue/tools │  Event / Job / Patch / Canon  │
 ├──────────────┴──────────────────────────────┤
 │  单写者 StorageHandle → Repository（SQLite） │

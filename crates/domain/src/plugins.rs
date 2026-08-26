@@ -68,3 +68,14 @@ pub struct PluginResult {
     pub output: Value,
     pub logs: Vec<String>,
 }
+
+/// 给 UI 的插件摘要。`runtime` 目前只有 `builtin`；WASM 沙箱未落地。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginSummary {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub runtime: String,
+    pub operations: Vec<String>,
+}

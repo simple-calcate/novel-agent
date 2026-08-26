@@ -40,7 +40,7 @@ UI  ──libraryApi──► Tauri command（只译 JSON）
 
 | 模块 | 职责 |
 |---|---|
-| `library` | 作品 / 书 / 卷 / 章 |
+| `library` | 作品 / 书 / 卷 / 章 / 场 |
 | `revisions` | 修订、补丁、块序列 |
 | `structure` | `story_entries` 预先结构 |
 | `canon` | 启发式正史候选（非 UI 主路径） |
@@ -48,7 +48,7 @@ UI  ──libraryApi──► Tauri command（只译 JSON）
 | `outbox` | 与写操作同一事务入队 |
 | `feedback` | 偏好规则、纠正记录 |
 
-`scenes` 表和领域类型存在，没有对应 UI。不要在编辑器里接「场」除非产品明确要做。
+`scenes` 表已接到 Workspace / IPC / 编辑器「本章场次」。删场不删章正文。POV 可选，指向人物结构条目。
 
 ## 写路径与 outbox
 
@@ -61,6 +61,8 @@ UI  ──libraryApi──► Tauri command（只译 JSON）
 - 产品路径：`story_entries` + `HintEngine::rank_entries`（[ADR 0009](../architecture/adr/0009-canon-review-loop.md)）
 - 桌面：`context.hints` 工具，入参含 `nearbyText` 与可选 `lookbackText`
 - 浏览器：`apps/client/src/structure/match.ts`（`isTauriRuntime()` 为假时）
+- 两边共用 `packages/match-fixtures/cases.json`；改信号必须两边测试都过
+- 预选条可钉住 / 忽略（本机 `localStorage`，还不是 ADR 0005 的检索与 LLM 重排）
 - `story-model` 的抽取与连续性检查仍可被工具调用，**不是**编辑器预选条的数据源
 - `canon` 仓储与 `story_entries` 不要混用一张表、一条 API
 

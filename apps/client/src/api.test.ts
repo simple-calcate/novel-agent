@@ -93,4 +93,33 @@ describe("memory library", () => {
       libraryApi.createStoryEntry(project.id, "foreshadow", "雾中灯塔", "重复"),
     ).rejects.toThrow();
   });
+
+  it("outlines scenes under a chapter without deleting text", async () => {
+    const project = await libraryApi.createProject("夜航星图");
+    const book = await libraryApi.createBook(project.id, "雾港纪事");
+    const chapter = await libraryApi.createChapter(project.id, book.id, "第一章");
+    await libraryApi.saveChapter(chapter.id, "雾港来客。");
+    const scene = await libraryApi.createScene(project.id, chapter.id, "码头夜谈");
+    const library = await libraryApi.loadLibrary(project.id);
+    expect(library.scenes?.map((item) => item.title)).toEqual(["码头夜谈"]);
+    await libraryApi.renameScene(project.id, scene.id, "码头雨夜");
+    await libraryApi.createScene(project.id, chapter.id, "离开");
+    await libraryApi.moveScene(project.id, scene.id, 1);
+    const ordered = await libraryApi.loadLibrary(project.id);
+    expect(ordered.scenes?.map((item) => item.title)).toEqual(["离开", "码头雨夜"]);
+    await libraryApi.deleteScene(project.id, scene.id);
+    const after = await libraryApi.loadLibrary(project.id);
+    expect(after.scenes).toHaveLength(1);
+    expect((await libraryApi.loadChapter(chapter.id)).text).toBe("雾港来客。");
+  });
+
+  it("records and disables writing preferences", async () => {
+    const project = await libraryApi.createProject("夜航星图");
+    const first = await libraryApi.recordGenerationFeedback(project.id, false, "AI 草稿");
+    expect(first).toHaveLength(1);
+    const again = await libraryApi.recordGenerationFeedback(project.id, false, "另一段");
+    expect(again[0].status).toBe("confirmed");
+    const disabled = await libraryApi.setPreferenceStatus(project.id, again[0].id, true);
+    expect(disabled[0].status).toBe("disabled");
+  });
 });

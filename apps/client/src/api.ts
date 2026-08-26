@@ -12,15 +12,21 @@ import {
   ChapterBody,
   CommandResult,
   ContentBlock,
+  ContinuationPatch,
+  ContextHint,
   FactStatus,
   LibrarySnapshot,
+  ModelConfig,
+  PluginSummary,
+  PreferenceRule,
   Project,
+  Scene,
   StoryEntry,
   StoryEntryKind,
   Volume,
 } from "./types";
 import { extractMentions } from "./canon/extract";
-import { splitTitleAndAliases } from "./structure/match";
+import { splitTitleAndAliases, matchStoryEntries } from "./structure/match";
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -43,6 +49,9 @@ interface MemoryState {
   canon: CanonProposal[];
   story: StoryEntry[];
   volumes: Volume[];
+  scenes: Scene[];
+  preferences: PreferenceRule[];
+  modelConfig: ModelConfig | null;
 }
 
 const memory: MemoryState = {
@@ -54,6 +63,9 @@ const memory: MemoryState = {
   canon: [],
   story: [],
   volumes: [],
+  scenes: [],
+  preferences: [],
+  modelConfig: null,
 };
 
 function nowIso(): string {
@@ -78,6 +90,13 @@ function snapshot(projectId?: string): LibrarySnapshot {
     chapters: memory.chapters.filter((chapter) =>
       memory.books.some((book) => book.id === chapter.bookId && book.projectId === active),
     ),
+    scenes: memory.scenes.filter((scene) =>
+      memory.chapters.some(
+        (chapter) =>
+          chapter.id === scene.chapterId &&
+          memory.books.some((book) => book.id === chapter.bookId && book.projectId === active),
+      ),
+    ),
   };
 }
 
@@ -91,6 +110,9 @@ export function resetMemoryLibrary(): void {
   memory.canon = [];
   memory.story = [];
   memory.volumes = [];
+  memory.scenes = [];
+  memory.preferences = [];
+  memory.modelConfig = null;
 }
 
 export const libraryApi = {
@@ -304,6 +326,7 @@ export const libraryApi = {
       return command<LibrarySnapshot>("delete_chapter", { projectId, chapterId });
     }
     memory.chapters = memory.chapters.filter((item) => item.id !== chapterId);
+    memory.scenes = memory.scenes.filter((item) => item.chapterId !== chapterId);
     delete memory.texts[chapterId];
     return snapshot(projectId);
   },
@@ -487,7 +510,237 @@ export const libraryApi = {
     }
     memory.story = memory.story.filter((item) => item.id !== id);
   },
+
+  async createScene(
+    projectId: string,
+    chapterId: string,
+    title: string,
+    povEntryId?: string | null,
+  ): Promise<Scene> {
+    if (isTauriRuntime()) {
+      return command<Scene>("create_scene", {
+        input: { projectId, chapterId, title, position: 0, povEntryId: povEntryId ?? null },
+      });
+    }
+    const chapter = memory.chapters.find((item) => item.id === chapterId);
+    if (!chapter) throw new Error("章节不存在");
+    const siblings = memory.scenes.filter((item) => item.chapterId === chapterId);
+    const scene: Scene = {
+      id: newId(),
+      chapterId,
+      title,
+      position: siblings.reduce((max, item) => Math.max(max, item.position), 0) + 1,
+      povEntryId: povEntryId || null,
+    };
+    memory.scenes.push(scene);
+    return scene;
+  },
+
+  async renameScene(projectId: string, sceneId: string, title: string): Promise<LibrarySnapshot> {
+    if (isTauriRuntime()) {
+      return command<LibrarySnapshot>("rename_scene", { projectId, sceneId, title });
+    }
+    const scene = memory.scenes.find((item) => item.id === sceneId);
+    if (!scene) throw new Error("场次不存在");
+    scene.title = title;
+    return snapshot(projectId);
+  },
+
+  async setScenePov(
+    projectId: string,
+    sceneId: string,
+    povEntryId?: string | null,
+  ): Promise<LibrarySnapshot> {
+    if (isTauriRuntime()) {
+      return command<LibrarySnapshot>("set_scene_pov", {
+        projectId,
+        sceneId,
+        povEntryId: povEntryId ?? null,
+      });
+    }
+    const scene = memory.scenes.find((item) => item.id === sceneId);
+    if (!scene) throw new Error("场次不存在");
+    scene.povEntryId = povEntryId || null;
+    return snapshot(projectId);
+  },
+
+  async deleteScene(projectId: string, sceneId: string): Promise<LibrarySnapshot> {
+    if (isTauriRuntime()) {
+      return command<LibrarySnapshot>("delete_scene", { projectId, sceneId });
+    }
+    memory.scenes = memory.scenes.filter((item) => item.id !== sceneId);
+    return snapshot(projectId);
+  },
+
+  async moveScene(projectId: string, sceneId: string, delta: number): Promise<LibrarySnapshot> {
+    if (isTauriRuntime()) {
+      return command<LibrarySnapshot>("move_scene", { projectId, sceneId, delta });
+    }
+    const scene = memory.scenes.find((item) => item.id === sceneId);
+    if (!scene) throw new Error("场次不存在");
+    const chapterId = scene.chapterId;
+    const siblings = moveById(
+      memory.scenes.filter((item) => item.chapterId === chapterId),
+      sceneId,
+      delta,
+    );
+    memory.scenes = [
+      ...memory.scenes.filter((item) => item.chapterId !== chapterId),
+      ...siblings,
+    ];
+    return snapshot(projectId);
+  },
+
+  async loadModelConfig(): Promise<ModelConfig | null> {
+    if (isTauriRuntime()) {
+      return invoke<ModelConfig | null>("load_model_config");
+    }
+    return memory.modelConfig;
+  },
+
+  async saveModelConfig(config: ModelConfig): Promise<void> {
+    if (isTauriRuntime()) {
+      await invoke("save_model_config", { config });
+      return;
+    }
+    memory.modelConfig = {
+      ...config,
+      apiKey: "",
+      apiKeySet: Boolean(config.apiKey) || Boolean(config.apiKeySet),
+    };
+  },
+
+  async contextHints(input: {
+    projectId: string;
+    chapterId: string;
+    revision: number;
+    nearbyText: string;
+    lookbackText?: string;
+    generation: number;
+  }): Promise<ContextHint[]> {
+    if (isTauriRuntime()) {
+      return command<ContextHint[]>("context_hints", { input });
+    }
+    return matchStoryEntries(
+      input.nearbyText,
+      input.lookbackText ?? "",
+      memory.story.filter((item) => item.projectId === input.projectId),
+      input.revision,
+    );
+  },
+
+  async generateContinuation(input: {
+    chapterId: string;
+    revision: number;
+    prompt: string;
+    contextText: string;
+    config?: ModelConfig | null;
+  }): Promise<ContinuationPatch> {
+    if (isTauriRuntime()) {
+      return invoke<ContinuationPatch>("generate_continuation", {
+        chapterId: input.chapterId,
+        revision: input.revision,
+        prompt: input.prompt,
+        contextText: input.contextText,
+        config: input.config ? { ...input.config, apiKey: "" } : undefined,
+      });
+    }
+    throw new Error("浏览器预览不能调用模型，请用桌面应用续写");
+  },
+
+  async recordGenerationFeedback(
+    projectId: string,
+    accepted: boolean,
+    aiText: string,
+    humanText = "",
+    contextExcerpt = "",
+  ): Promise<PreferenceRule[]> {
+    if (isTauriRuntime()) {
+      return command<PreferenceRule[]>("record_generation_feedback", {
+        projectId,
+        accepted,
+        aiText,
+        humanText,
+        contextExcerpt,
+      });
+    }
+    if (accepted) return memory.preferences.filter((item) => belongsToProject(item, projectId));
+    const existing = memory.preferences.find(
+      (item) => belongsToProject(item, projectId) && item.status !== "disabled",
+    );
+    if (existing) {
+      existing.status = "confirmed";
+      existing.updatedAt = nowIso();
+      return memory.preferences.filter((item) => belongsToProject(item, projectId));
+    }
+    memory.preferences.push({
+      id: newId(),
+      scope: { projectId },
+      rule: "尊重作者明确拒绝",
+      status: "candidate",
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    });
+    return memory.preferences.filter((item) => belongsToProject(item, projectId));
+  },
+
+  async listPreferences(projectId: string): Promise<PreferenceRule[]> {
+    if (isTauriRuntime()) {
+      return command<PreferenceRule[]>("list_preferences", { projectId });
+    }
+    return memory.preferences.filter((item) => belongsToProject(item, projectId));
+  },
+
+  async setPreferenceStatus(
+    projectId: string,
+    ruleId: string,
+    disabled: boolean,
+  ): Promise<PreferenceRule[]> {
+    if (isTauriRuntime()) {
+      return command<PreferenceRule[]>("set_preference_status", { projectId, ruleId, disabled });
+    }
+    const rule = memory.preferences.find((item) => item.id === ruleId);
+    if (rule) {
+      rule.status = disabled ? "disabled" : "confirmed";
+      rule.updatedAt = nowIso();
+    }
+    return memory.preferences.filter((item) => belongsToProject(item, projectId));
+  },
+
+  async listPlugins(): Promise<PluginSummary[]> {
+    if (isTauriRuntime()) {
+      return command<PluginSummary[]>("list_plugins");
+    }
+    return [
+      {
+        id: "continuity-checker",
+        name: "连续性检查",
+        version: "0.1.0",
+        runtime: "builtin",
+        operations: ["check-chapter"],
+      },
+      {
+        id: "summary-extractor",
+        name: "章节摘要与实体抽取",
+        version: "0.1.0",
+        runtime: "builtin",
+        operations: ["extract-story-delta"],
+      },
+      {
+        id: "continuation-writer",
+        name: "智能续写",
+        version: "0.1.0",
+        runtime: "builtin",
+        operations: ["continue-scene"],
+      },
+    ];
+  },
 };
+
+function belongsToProject(rule: PreferenceRule, projectId: string): boolean {
+  if (typeof rule.scope === "string") return true;
+  return !rule.scope.projectId || rule.scope.projectId === projectId;
+}
 
 function kindOrder(kind: StoryEntryKind): number {
   if (kind === "character") return 0;

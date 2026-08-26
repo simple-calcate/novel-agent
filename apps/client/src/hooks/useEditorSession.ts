@@ -1,10 +1,39 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { libraryApi, isTauriRuntime } from "../api";
 import { matchStoryEntries } from "../structure/match";
-import { Chapter, CommandResult, ContentBlock, ContextHint, Project, StoryEntry } from "../types";
+import {
+  Chapter,
+  ContentBlock,
+  ContextHint,
+  ModelConfig,
+  PreferenceRule,
+  Project,
+  StoryEntry,
+} from "../types";
 import { logger } from "../logger";
-import { ModelConfig } from "../components/SettingsModal";
+
+interface HintPrefs {
+  pinned: string[];
+  ignored: string[];
+}
+
+function prefsKey(projectId: string): string {
+  return `moshu.hintPrefs.${projectId}`;
+}
+
+function readPrefs(projectId: string): HintPrefs {
+  try {
+    const raw = localStorage.getItem(prefsKey(projectId));
+    if (!raw) return { pinned: [], ignored: [] };
+    const parsed = JSON.parse(raw) as HintPrefs;
+    return {
+      pinned: parsed.pinned ?? [],
+      ignored: parsed.ignored ?? [],
+    };
+  } catch {
+    return { pinned: [], ignored: [] };
+  }
+}
 
 export function useEditorSession(options: {
   project: Project | null;
@@ -20,14 +49,16 @@ export function useEditorSession(options: {
   const [hints, setHints] = useState<ContextHint[]>([]);
   const [aiPreview, setAiPreview] = useState("");
   const [revision, setRevision] = useState(0);
-  const [preferenceCount, setPreferenceCount] = useState(0);
+  const [preferences, setPreferences] = useState<PreferenceRule[]>([]);
   const [modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
+  const [hintPrefs, setHintPrefs] = useState<HintPrefs>({ pinned: [], ignored: [] });
   const draftText = useRef("");
   const draftBlocks = useRef<ContentBlock[]>([]);
   const nearbyRef = useRef({ current: "", previous: "" });
 
   useEffect(() => {
-    invoke<ModelConfig | null>("load_model_config")
+    libraryApi
+      .loadModelConfig()
       .then((config) => {
         if (config) {
           logger.info("恢复模型配置", { provider: config.provider, model: config.model });
@@ -38,14 +69,48 @@ export function useEditorSession(options: {
   }, []);
 
   useEffect(() => {
-    if (!project || !isTauriRuntime()) {
-      setPreferenceCount(0);
+    if (!project) {
+      setPreferences([]);
+      setHintPrefs({ pinned: [], ignored: [] });
       return;
     }
-    invoke<{ ok?: boolean; data?: unknown[] }>("list_preferences", { projectId: project.id })
-      .then((result) => setPreferenceCount(result.data?.length ?? 0))
-      .catch(() => setPreferenceCount(0));
+    setHintPrefs(readPrefs(project.id));
+    libraryApi
+      .listPreferences(project.id)
+      .then(setPreferences)
+      .catch(() => setPreferences([]));
   }, [project]);
+
+  const persistHintPrefs = useCallback(
+    (next: HintPrefs) => {
+      setHintPrefs(next);
+      if (!project) return;
+      localStorage.setItem(prefsKey(project.id), JSON.stringify(next));
+    },
+    [project],
+  );
+
+  const pinHint = useCallback(
+    (id: string) => {
+      persistHintPrefs({
+        pinned: hintPrefs.pinned.includes(id)
+          ? hintPrefs.pinned.filter((item) => item !== id)
+          : [...hintPrefs.pinned, id],
+        ignored: hintPrefs.ignored,
+      });
+    },
+    [hintPrefs, persistHintPrefs],
+  );
+
+  const ignoreHint = useCallback(
+    (id: string) => {
+      persistHintPrefs({
+        pinned: hintPrefs.pinned.filter((item) => item !== id),
+        ignored: hintPrefs.ignored.includes(id) ? hintPrefs.ignored : [...hintPrefs.ignored, id],
+      });
+    },
+    [hintPrefs, persistHintPrefs],
+  );
 
   useEffect(() => {
     if (!activeChapter) {
@@ -110,25 +175,20 @@ export function useEditorSession(options: {
       }
       logger.debug("刷新上下文提示", { revision, textLength: nearbyText.length });
       try {
-        const result = await invoke<CommandResult<ContextHint[]>>("context_hints", {
-          input: {
-            projectId: project.id,
-            chapterId: activeChapter,
-            revision,
-            nearbyText,
-            lookbackText,
-            generation: Date.now(),
-          },
+        const data = await libraryApi.contextHints({
+          projectId: project.id,
+          chapterId: activeChapter,
+          revision,
+          nearbyText,
+          lookbackText,
+          generation: Date.now(),
         });
-        if (result.ok && result.data) {
-          logger.info("上下文提示更新", { count: result.data.length });
-          setHints(result.data);
-          return;
-        }
+        logger.info("上下文提示更新", { count: data.length });
+        setHints(data);
       } catch (e) {
         logger.warn("上下文提示走本地匹配", { error: String(e) });
+        setHints(matchStoryEntries(nearbyText, lookbackText, storyEntries, revision));
       }
-      setHints(matchStoryEntries(nearbyText, lookbackText, storyEntries, revision));
     },
     [project, activeChapter, revision, storyEntries],
   );
@@ -151,19 +211,14 @@ export function useEditorSession(options: {
     }
     logger.info("开始 AI 续写", { provider: modelConfig.provider, model: modelConfig.model });
     try {
-      const result = await invoke<{ operations: Array<{ text: string }> }>(
-        "generate_continuation",
-        {
-          chapterId: activeChapter,
-          revision,
-          prompt: "继续当前剧情",
-          contextText: draftText.current.slice(-800),
-          config: modelConfig
-            ? { ...modelConfig, apiKey: "" }
-            : undefined,
-        },
-      );
-      if (result?.operations?.[0]) {
+      const result = await libraryApi.generateContinuation({
+        chapterId: activeChapter,
+        revision,
+        prompt: "继续当前剧情",
+        contextText: draftText.current.slice(-800),
+        config: modelConfig,
+      });
+      if (result?.operations?.[0]?.text) {
         logger.info("AI 续写成功", { length: result.operations[0].text.length });
         setAiPreview(result.operations[0].text);
       }
@@ -186,16 +241,23 @@ export function useEditorSession(options: {
     logger.info("拒绝 AI 续写");
     setAiPreview("");
     if (!project || !text) return;
-    invoke<{ ok?: boolean; data?: unknown[] }>("record_generation_feedback", {
-      projectId: project.id,
-      accepted: false,
-      aiText: text,
-      humanText: "",
-      contextExcerpt: draftText.current.slice(-400),
-    })
-      .then((result) => setPreferenceCount(result.data?.length ?? preferenceCount + 1))
+    libraryApi
+      .recordGenerationFeedback(project.id, false, text, "", draftText.current.slice(-400))
+      .then(setPreferences)
       .catch((error) => logger.warn("记录写作偏好失败", { error: String(error) }));
-  }, [aiPreview, project, preferenceCount]);
+  }, [aiPreview, project]);
+
+  const togglePreference = useCallback(
+    async (rule: PreferenceRule, disabled: boolean) => {
+      if (!project) return;
+      try {
+        setPreferences(await libraryApi.setPreferenceStatus(project.id, rule.id, disabled));
+      } catch (error) {
+        logger.warn("更新偏好失败", { error: String(error) });
+      }
+    },
+    [project],
+  );
 
   return {
     chapterText,
@@ -213,7 +275,11 @@ export function useEditorSession(options: {
     handleGenerate,
     handleAccept,
     handleReject,
-    preferenceCount,
+    preferences,
+    togglePreference,
+    hintPrefs,
+    pinHint,
+    ignoreHint,
   };
 }
 

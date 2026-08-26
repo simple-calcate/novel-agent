@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { matchStoryEntries } from "./match";
 import { StoryEntry } from "../types";
+import cases from "../../../../packages/match-fixtures/cases.json";
 
 const linWan: StoryEntry = {
   id: "1",
@@ -50,5 +51,25 @@ describe("structure matching", () => {
 
   it("hides unrelated paragraphs", () => {
     expect(matchStoryEntries("夜晚的海面", "", [linWan, lighthouse], 1)).toEqual([]);
+  });
+
+  it("shares ranking cases with the rust matcher", () => {
+    const fog: StoryEntry = {
+      id: "3",
+      projectId: "p",
+      kind: "setting",
+      title: "雾港",
+      summary: "终年被海雾罩住",
+      aliases: [],
+    };
+    for (const item of cases) {
+      const titles = matchStoryEntries(
+        item.current,
+        item.lookback,
+        [linWan, lighthouse, fog],
+        1,
+      ).map((hint) => hint.title);
+      expect(titles, item.id).toEqual(item.expectedTitles);
+    }
   });
 });

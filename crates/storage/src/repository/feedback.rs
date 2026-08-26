@@ -104,6 +104,29 @@ impl Repository {
         Ok(rules)
     }
 
+    pub fn set_preference_status(
+        &self,
+        project_id: &ProjectId,
+        rule_id: &PreferenceRuleId,
+        status: PreferenceStatus,
+    ) -> Result<PreferenceRule, StorageError> {
+        let mut rules = self.list_preference_rules(project_id)?;
+        let Some(rule) = rules.iter_mut().find(|item| &item.id == rule_id) else {
+            return Err(novel_domain::DomainError::NotFound(format!("preference {rule_id}")).into());
+        };
+        rule.status = status;
+        rule.updated_at = chrono::Utc::now();
+        self.connection.execute(
+            "UPDATE preference_rules SET status = ?2, data_json = ?3 WHERE id = ?1",
+            params![
+                rule.id.to_string(),
+                status_name(rule.status),
+                data_json(rule)?,
+            ],
+        )?;
+        Ok(rule.clone())
+    }
+
     pub fn save_correction(
         &self,
         project_id: &ProjectId,

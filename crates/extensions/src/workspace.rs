@@ -9,8 +9,9 @@ use crate::util::{storage, with_repository};
 use novel_domain::{
     Annotation, Book, BookId, CanonProposal, Chapter, ChapterBody, ChapterId, ContentBlock,
     ContentPatch, DomainEvent, FactId, FactStatus, Job, JobId, JobStatus, JobView, LibrarySnapshot,
-    PreferenceRule, PreferenceScope, Project, ProjectId, ProposalId, RejectionReason, Revision,
-    StoryEntry, StoryEntryKind, Volume, VolumeId,
+    PluginSummary, PreferenceRule, PreferenceRuleId, PreferenceScope, PreferenceStatus, Project,
+    ProjectId, ProposalId, RejectionReason, Revision, Scene, SceneId, StoryEntry, StoryEntryKind,
+    Volume, VolumeId,
 };
 use novel_kernel::{AgentSpec, DispatchSummary, Kernel, KernelError, ProviderConfig};
 use novel_storage::{StorageError, SETTING_ACTIVE_PROJECT};
@@ -159,6 +160,103 @@ impl<'a> Workspace<'a> {
         Ok(volume)
     }
 
+    pub fn create_scene(
+        &self,
+        project_id: &ProjectId,
+        chapter_id: &str,
+        title: &str,
+        position: u32,
+        pov_entry_id: Option<&str>,
+    ) -> Result<Scene, WorkspaceError> {
+        let scene = self.handle()?.execute(|repository| {
+            repository.create_scene(project_id, chapter_id, title, position, pov_entry_id)
+        })?;
+        self.dispatch_user(
+            "scene.created",
+            project_id.clone(),
+            None,
+            Some(scene.chapter_id.clone()),
+            json!({
+                "sceneId": scene.id.to_string(),
+                "title": scene.title,
+                "position": scene.position,
+                "povEntryId": scene.pov_entry_id,
+            }),
+        );
+        Ok(scene)
+    }
+
+    pub fn rename_scene(
+        &self,
+        project_id: &ProjectId,
+        scene_id: &SceneId,
+        title: &str,
+    ) -> Result<LibrarySnapshot, WorkspaceError> {
+        self.handle()?
+            .execute(|repository| repository.rename_scene(project_id, scene_id, title))?;
+        self.dispatch_user(
+            "scene.renamed",
+            project_id.clone(),
+            None,
+            None,
+            json!({ "sceneId": scene_id.to_string(), "title": title }),
+        );
+        self.load_library(Some(project_id.clone()))
+    }
+
+    pub fn set_scene_pov(
+        &self,
+        project_id: &ProjectId,
+        scene_id: &SceneId,
+        pov_entry_id: Option<&str>,
+    ) -> Result<LibrarySnapshot, WorkspaceError> {
+        self.handle()?
+            .execute(|repository| repository.set_scene_pov(project_id, scene_id, pov_entry_id))?;
+        self.dispatch_user(
+            "scene.updated",
+            project_id.clone(),
+            None,
+            None,
+            json!({ "sceneId": scene_id.to_string(), "povEntryId": pov_entry_id }),
+        );
+        self.load_library(Some(project_id.clone()))
+    }
+
+    pub fn delete_scene(
+        &self,
+        project_id: &ProjectId,
+        scene_id: &SceneId,
+    ) -> Result<LibrarySnapshot, WorkspaceError> {
+        self.handle()?
+            .execute(|repository| repository.delete_scene(project_id, scene_id))?;
+        self.dispatch_user(
+            "scene.deleted",
+            project_id.clone(),
+            None,
+            None,
+            json!({ "sceneId": scene_id.to_string() }),
+        );
+        self.load_library(Some(project_id.clone()))
+    }
+
+    pub fn move_scene(
+        &self,
+        project_id: &ProjectId,
+        scene_id: &SceneId,
+        delta: i32,
+    ) -> Result<LibrarySnapshot, WorkspaceError> {
+        self.handle()?
+            .execute(|repository| repository.move_scene(project_id, scene_id, delta))?;
+        self.dispatch_user(
+            "scene.reordered",
+            project_id.clone(),
+            None,
+            None,
+            json!({ "sceneId": scene_id.to_string(), "delta": delta }),
+        );
+        self.load_library(Some(project_id.clone()))
+    }
+
     pub fn load_library(
         &self,
         project_id: Option<ProjectId>,
@@ -176,7 +274,7 @@ impl<'a> Workspace<'a> {
             if let Some(id) = &active {
                 let _ = repository.save_setting(SETTING_ACTIVE_PROJECT, id);
             }
-            let (books, volumes, chapters) = if let Some(id) = &active {
+            let (books, volumes, chapters, scenes) = if let Some(id) = &active {
                 let pid: ProjectId = id.parse().map_err(|_| {
                     StorageError::Domain(novel_domain::DomainError::Validation(format!(
                         "invalid project id: {id}"
@@ -186,9 +284,10 @@ impl<'a> Workspace<'a> {
                     repository.list_books(&pid)?,
                     repository.list_volumes(&pid)?,
                     repository.list_chapters(&pid)?,
+                    repository.list_scenes(&pid)?,
                 )
             } else {
-                (Vec::new(), Vec::new(), Vec::new())
+                (Vec::new(), Vec::new(), Vec::new(), Vec::new())
             };
             Ok(LibrarySnapshot {
                 projects,
@@ -196,6 +295,7 @@ impl<'a> Workspace<'a> {
                 books,
                 volumes,
                 chapters,
+                scenes,
             })
         })?)
     }
@@ -547,6 +647,27 @@ impl<'a> Workspace<'a> {
         Ok(self
             .handle()?
             .execute(|repository| repository.list_preference_rules(project_id))?)
+    }
+
+    pub fn set_preference_status(
+        &self,
+        project_id: &ProjectId,
+        rule_id: &PreferenceRuleId,
+        disabled: bool,
+    ) -> Result<Vec<PreferenceRule>, WorkspaceError> {
+        let status = if disabled {
+            PreferenceStatus::Disabled
+        } else {
+            PreferenceStatus::Confirmed
+        };
+        self.handle()?.execute(|repository| {
+            repository.set_preference_status(project_id, rule_id, status)
+        })?;
+        self.list_preference_rules(project_id)
+    }
+
+    pub fn list_plugins(&self) -> Vec<PluginSummary> {
+        novel_plugin_host::list_bundled_plugins()
     }
 
     pub fn enqueue_job(

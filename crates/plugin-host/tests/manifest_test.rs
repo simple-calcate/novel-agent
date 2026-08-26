@@ -50,5 +50,13 @@ fn evaluate_denies_unapproved() {
     let approved: BTreeSet<Capability> = [Capability::Log].into_iter().collect();
     let decision = evaluate(&manifest, &approved);
     assert!(decision.granted.contains(&Capability::Log));
-    assert!(decision.denied.contains(&Capability::ReadSelection));
+    assert_eq!(decision.denied.contains(&Capability::ReadSelection), true);
+}
+
+#[test]
+fn bundled_plugins_are_embedded() {
+    let plugins = novel_plugin_host::list_bundled_plugins();
+    assert_eq!(plugins.len(), 3);
+    assert!(plugins.iter().any(|plugin| plugin.id == "continuity-checker"));
+    assert!(plugins.iter().all(|plugin| plugin.runtime == "builtin"));
 }
