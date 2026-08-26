@@ -28,6 +28,14 @@ import {
   ExportFormat,
   MarkupRef as MarkupRefType,
 } from "../editor/blocks";
+import { WritingGuide } from "./WritingGuide";
+import {
+  authorExportSummary,
+  countMissingThinking,
+  guideCopy,
+  writerModeFromParent,
+  type WriterMode,
+} from "../editor/guide";
 import type { ContentBlock } from "../types";
 import { logger } from "../logger";
 
@@ -103,6 +111,9 @@ export function Editor({
 }: EditorProps) {
   const [wordCount, setWordCount] = useState(0);
   const [thinkingCount, setThinkingCount] = useState(0);
+  const [writerMode, setWriterMode] = useState<WriterMode>("body");
+  const [missingThinking, setMissingThinking] = useState(0);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [mention, setMention] = useState<MentionMenuState | null>(null);
   /** 类型标记渐隐动画开关：true 时编辑器内正文/思考/标签按类型着色并逐渐消失 */
@@ -208,8 +219,11 @@ export function Editor({
         .map((b) => b.text)
         .join("");
       const thinkBlocks = blocks.filter((b) => b.kind === "thinking");
+      const examples = buildTrainingExamples(blocks, true, chapterTitle);
       setWordCount(bodyText.length);
       setThinkingCount(thinkBlocks.length);
+      setWriterMode(writerModeFromParent(editor.state.selection.$from.parent.type.name));
+      setMissingThinking(countMissingThinking(examples));
       setIsTyping(true);
       onTextChange(bodyText);
       onBlocksChange?.(blocks);
@@ -221,6 +235,7 @@ export function Editor({
       }, 1800);
     },
     onSelectionUpdate: ({ editor }) => {
+      setWriterMode(writerModeFromParent(editor.state.selection.$from.parent.type.name));
       maybeOpenMention(editor);
     },
     onBlur: () => setMention(null),
@@ -290,17 +305,43 @@ export function Editor({
     }
   }, [editor, onInsertText]);
 
+  const insertSlot = useCallback(
+    (text: string) => {
+      if (!editor) return;
+      const type = editor.state.schema.nodes.thinkingBlock;
+      const { $from } = editor.state.selection;
+      if ($from.parent.type !== type) {
+        if ($from.parent.textContent.length === 0) {
+          editor.chain().focus().setNode(type).insertContent(text).run();
+        }
+        return;
+      }
+      if ($from.parent.textContent.length === 0) {
+        editor.chain().focus().insertContent(text).run();
+        return;
+      }
+      if ($from.parent.textContent.startsWith(text)) return;
+      editor.chain().focus().splitBlock().insertContent(text).run();
+    },
+    [editor],
+  );
+
   const handleExport = useCallback(
     (format: ExportFormat) => {
       if (!editor) return;
       const blocks = editorToBlocks(editor);
-      const examples = filterExamples(buildTrainingExamples(blocks, true, chapterTitle), "usable");
+      const all = buildTrainingExamples(blocks, true, chapterTitle);
+      const examples = filterExamples(all, "usable");
+      const missing = countMissingThinking(all);
+      setExportNotice(authorExportSummary(examples.length, missing));
       if (examples.length === 0) return;
       const output = serializeExamples(examples, format);
       downloadText(formatFilename(format), output);
     },
     [editor, chapterTitle],
   );
+
+  const copy = guideCopy({ mode: writerMode, missingThinkingBeats: missingThinking });
 
   return (
     <div className={`editor-wrapper ${flashing ? "mode-flash" : ""}`}>
@@ -335,6 +376,20 @@ export function Editor({
           </button>
         </div>
       </div>
+      <WritingGuide
+        mode={writerMode}
+        title={copy.title}
+        body={copy.body}
+        onInsertSlot={insertSlot}
+      />
+      {exportNotice && (
+        <div className="export-notice" role="status">
+          {exportNotice}
+          <button type="button" className="export-notice-dismiss" onClick={() => setExportNotice(null)}>
+            知道了
+          </button>
+        </div>
+      )}
       <div className="editor-body">
         <EditorContent editor={editor} />
         {mention && (

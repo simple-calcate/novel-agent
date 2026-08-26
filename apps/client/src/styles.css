@@ -426,6 +426,79 @@ body {
   gap: 8px;
 }
 
+.writing-guide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.writing-guide.mode-thinking {
+  background: linear-gradient(135deg, rgba(124, 111, 247, 0.1), rgba(124, 111, 247, 0.03));
+}
+
+.writing-guide-copy strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.writing-guide-copy p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.writing-guide-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.slot-chip {
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.slot-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.export-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 24px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--accent-dim);
+  border-bottom: 1px solid var(--border);
+}
+
+.export-notice-dismiss {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
 .tool-btn {
   width: 32px;
   height: 32px;

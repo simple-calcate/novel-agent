@@ -1,5 +1,6 @@
 import { Extension } from "@tiptap/core";
 import type { Editor } from "@tiptap/core";
+import { THINKING_STARTER } from "./guide";
 
 export type ModeKind = "body" | "thinking";
 
@@ -74,7 +75,11 @@ function freshLineContext(onModeChanged?: (info: ModeChangeInfo) => void): TabCo
       const position = $from.pos;
 
       if (mode === "thinking") {
-        editor.chain().setNode(schema.nodes.thinkingBlock).run();
+        editor
+          .chain()
+          .setNode(schema.nodes.thinkingBlock)
+          .insertContent(THINKING_STARTER)
+          .run();
       } else {
         editor.chain().setParagraph().run();
       }

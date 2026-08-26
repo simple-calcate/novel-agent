@@ -6,6 +6,7 @@ import {
   ReactNodeViewProps,
 } from "@tiptap/react";
 import { Brain, ChevronDown, ChevronRight } from "lucide-react";
+import { THINKING_STARTER } from "./guide";
 
 /**
  * 思考块：作者决策层，读者看不到。协议见 docs/writing-protocol.md
@@ -81,7 +82,10 @@ export const ThinkingBlock = Node.create({
         if ($from.parent.type === type) {
           return editor.chain().setParagraph().run();
         }
-        return editor.chain().setNode(type).run();
+        const empty = $from.parent.textContent.length === 0;
+        const chain = editor.chain().setNode(type);
+        if (empty) chain.insertContent(THINKING_STARTER);
+        return chain.run();
       },
     };
   },
@@ -97,6 +101,7 @@ export const ThinkingBlock = Node.create({
           chain()
             .deleteRange(range)
             .setNode(state.schema.nodes.thinkingBlock)
+            .insertContent(THINKING_STARTER)
             .run();
         },
       }),

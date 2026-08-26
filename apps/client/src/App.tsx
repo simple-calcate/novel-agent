@@ -677,20 +677,33 @@ export function App() {
 
         {sidebarTab === "context" && (
           <div className="panel-content">
-            <h3>当前场景包</h3>
+            <h3>这一段怎么写</h3>
             <div className="context-card">
               <div className="context-card-title">
                 <CircleDot size={12} />
-                POV 边界
+                1. 先写思考
               </div>
-              <p>打开章节后，浮带会根据附近正文匹配正史与伏笔。</p>
+              <p>
+                空行按 Tab。淡紫色块是给自己看的：这段要干什么、现在还不能揭什么。读者看不到。
+              </p>
             </div>
             <div className="context-card">
               <div className="context-card-title">
                 <CircleDot size={12} />
-                作品结构
+                2. 再写正文
               </div>
-              <p>作品 → 书 → 章。每本书可以独立增删，章节挂在当前选中的书下。</p>
+              <p>
+                再按 Tab，写读者看到的小说。角色心里想什么写这里，不要写进思考。
+              </p>
+            </div>
+            <div className="context-card">
+              <div className="context-card-title">
+                <CircleDot size={12} />
+                3. 一小段一小段
+              </div>
+              <p>
+                想一下 → 写几句 → 再想一下。章首先写完大纲再一口气写全章，以后 AI 学不会你在光标处怎么续。
+              </p>
             </div>
           </div>
         )}
