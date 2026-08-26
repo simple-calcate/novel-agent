@@ -23,7 +23,6 @@ import {
   buildTrainingExamples,
   serializeExamples,
   filterExamples,
-  qualityCounts,
   formatFilename,
   downloadText,
   ExportFormat,
@@ -104,9 +103,6 @@ export function Editor({
 }: EditorProps) {
   const [wordCount, setWordCount] = useState(0);
   const [thinkingCount, setThinkingCount] = useState(0);
-  const [beatStats, setBeatStats] = useState(() =>
-    qualityCounts(buildTrainingExamples(initialBlocks ?? [], true, chapterTitle)),
-  );
   const [isTyping, setIsTyping] = useState(false);
   const [mention, setMention] = useState<MentionMenuState | null>(null);
   /** 类型标记渐隐动画开关：true 时编辑器内正文/思考/标签按类型着色并逐渐消失 */
@@ -212,10 +208,8 @@ export function Editor({
         .map((b) => b.text)
         .join("");
       const thinkBlocks = blocks.filter((b) => b.kind === "thinking");
-      const stats = qualityCounts(buildTrainingExamples(blocks, true, chapterTitle));
       setWordCount(bodyText.length);
       setThinkingCount(thinkBlocks.length);
-      setBeatStats(stats);
       setIsTyping(true);
       onTextChange(bodyText);
       onBlocksChange?.(blocks);
@@ -319,23 +313,13 @@ export function Editor({
               {thinkingCount} 段思考
             </span>
           )}
-          {(beatStats.gold > 0 || beatStats.usable > 0) && (
-            <span className="stat" title="写作协议：有思考且未串层的拍">
-              {beatStats.gold + beatStats.usable} 拍可训练
-            </span>
-          )}
-          {beatStats.skip > 0 && (
-            <span className="stat skip" title="缺思考、过短或正文混入作者注">
-              {beatStats.skip} 拍已跳过
-            </span>
-          )}
           <span className={`stat status ${isTyping ? "typing" : ""}`}>
             {isTyping ? "输入中..." : "已停笔"}
           </span>
         </div>
         <div className="editor-actions">
           <div className="export-group">
-            <button className="tool-btn" title="导出为 AI 训练数据" disabled={wordCount === 0}>
+            <button className="tool-btn" title="导出本章（正文+思考）" disabled={wordCount === 0}>
               <Download size={14} />
               导出
             </button>
