@@ -79,5 +79,5 @@ Tauri 命令层只做参数翻译，作品库走 `Workspace`，Agent/队列走 `
 - 内核稳定且极小（无 HTTP、无 SQLite 依赖），业务变化集中在扩展层。
 - 第三方可以覆盖任何内置工具/提供方，或注册新的事件订阅者。
 - 队列操作名与工具名统一（`document.save` 等），工作流动作自动路由到工具。
-- 模型 API Key 仍以明文存于本地 SQLite（app_settings），后续应接入系统密钥链。
+- 模型 API Key 由 `SecretVault` 保存（系统密钥链，失败则落到应用数据目录 0600 文件），不进 SQLite。见 [ADR 0010](0010-secret-vault.md)。
 - WASM 插件沙箱（ADR 0004 第三层）今后可作为又一个扩展接入 `plugin.operation`。

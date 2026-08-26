@@ -36,3 +36,32 @@ pub enum RejectionReason {
     Format,
     Other,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PreferenceScope {
+    Proposal,
+    Character { entity_id: String },
+    Project { project_id: String },
+    GlobalAuthor,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PreferenceStatus {
+    Candidate,
+    Confirmed,
+    Disabled,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreferenceRule {
+    pub id: crate::PreferenceRuleId,
+    pub scope: PreferenceScope,
+    pub rule: String,
+    pub status: PreferenceStatus,
+    pub evidence_proposals: Vec<ProposalId>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}

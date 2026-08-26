@@ -1,5 +1,4 @@
-//! 上下文浮带扩展：`context.hints` 工具从正史存储读取实体/事实/伏笔，
-//! 用 HintEngine 实时匹配。
+//! 上下文浮带扩展：`context.hints` 用当前段落匹配预先设计的人物 / 设定 / 伏笔。
 
 use crate::util::with_repository;
 use async_trait::async_trait;
@@ -18,6 +17,8 @@ struct HintsInput {
     chapter_id: String,
     revision: u64,
     nearby_text: String,
+    #[serde(default)]
+    lookback_text: String,
     generation: u64,
     #[serde(default = "default_limit")]
     limit: usize,
@@ -34,7 +35,7 @@ impl Tool for ContextHintsTool {
     }
 
     fn summary(&self) -> &str {
-        "实时匹配上下文提示（人物状态、世界规则、开放伏笔）"
+        "按当前段落匹配预先设计的人物、设定和伏笔"
     }
 
     async fn execute(&self, input: Value, ctx: &ToolContext<'_>) -> Result<Value, KernelError> {
@@ -52,12 +53,8 @@ impl Tool for ContextHintsTool {
         };
         let chapter_id = parsed.chapter_id.parse::<ChapterId>().unwrap_or_default();
 
-        let (entities, facts, threads) = with_repository(ctx.kernel(), |repository| {
-            Ok((
-                repository.list_canon_entities()?,
-                repository.list_canon_facts()?,
-                repository.list_plot_threads()?,
-            ))
+        let entries = with_repository(ctx.kernel(), |repository| {
+            repository.list_story_entries(&project_id)
         })?;
 
         let query = HintQuery {
@@ -70,13 +67,14 @@ impl Tool for ContextHintsTool {
                 pov_entity_id: None,
             },
             nearby_text: parsed.nearby_text,
+            lookback_text: parsed.lookback_text,
             generation: parsed.generation,
             limit: parsed.limit.clamp(1, 6),
         };
         let hints = HintEngine {
             minimum_dwell_score: 0.2,
         }
-        .rank(&query, &entities, &facts, &threads);
+        .rank_entries(&query, &entries);
         Ok(json!(hints))
     }
 }

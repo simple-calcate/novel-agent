@@ -1,9 +1,9 @@
-use crate::{ChapterId, EntityId, FactId, PlotThreadId, Revision, StoryEventId};
+use crate::{ChapterId, EntityId, FactId, PlotThreadId, ProjectId, Revision, StoryEventId};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EntityKind {
     Character,
@@ -18,11 +18,41 @@ pub enum EntityKind {
 #[serde(rename_all = "camelCase")]
 pub struct CanonEntity {
     pub id: EntityId,
+    pub project_id: ProjectId,
     pub branch_id: String,
     pub kind: EntityKind,
     pub canonical_name: String,
     pub aliases: Vec<String>,
     pub attributes: BTreeMap<String, serde_json::Value>,
+}
+
+/// 启发式抽取得到的一条提及，尚未进入正史。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractedMention {
+    pub entity_name: String,
+    pub entity_kind: EntityKind,
+    pub predicate: String,
+    pub object: String,
+    pub quote: String,
+    pub confidence: f32,
+}
+
+/// 给作者审核的正史候选（或已接受/已拒绝的事实视图）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CanonProposal {
+    pub fact_id: FactId,
+    pub entity_id: EntityId,
+    pub project_id: ProjectId,
+    pub chapter_id: Option<ChapterId>,
+    pub entity_name: String,
+    pub entity_kind: EntityKind,
+    pub predicate: String,
+    pub object: String,
+    pub quote: String,
+    pub status: FactStatus,
+    pub confidence: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -130,8 +160,45 @@ pub struct PlotThread {
     pub id: PlotThreadId,
     pub branch_id: String,
     pub title: String,
+    #[serde(default)]
+    pub summary: String,
     pub status: PlotThreadStatus,
     pub introduced_at: StoryInstant,
     pub due_by: Option<StoryInstant>,
     pub milestones: Vec<StoryEventId>,
+}
+
+/// 作者预先设计的结构条目：人物 / 设定 / 伏笔。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StoryEntryKind {
+    Character,
+    Setting,
+    Foreshadow,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoryEntry {
+    pub id: String,
+    pub project_id: ProjectId,
+    pub kind: StoryEntryKind,
+    pub title: String,
+    pub summary: String,
+    #[serde(default)]
+    pub aliases: Vec<String>,
+}
+
+/// 名称里用顿号/斜线写下的别名：`林晚、雾儿` → 标题林晚，别名雾儿。
+pub fn split_title_and_aliases(raw: &str) -> (String, Vec<String>) {
+    let parts: Vec<String> = raw
+        .split(['、', ',', '，', '/', '／', ';', '；'])
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .map(ToOwned::to_owned)
+        .collect();
+    match parts.split_first() {
+        Some((title, rest)) => (title.clone(), rest.to_vec()),
+        None => (String::new(), Vec::new()),
+    }
 }

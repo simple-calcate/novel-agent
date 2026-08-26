@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Bookmark,
   BookOpen,
   Brain,
   CheckCircle2,
@@ -14,34 +15,47 @@ import {
   Sparkles,
   Terminal,
 } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
 import { libraryApi } from "./api";
 import { Editor, AIPreview } from "./components/Editor";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ContextRail } from "./components/ContextRail";
 import { WorkflowPanel } from "./components/WorkflowPanel";
+import { StructurePanel } from "./components/StructurePanel";
 import { SettingsModal } from "./components/SettingsModal";
 import { LogPanel } from "./components/LogPanel";
 import { CreateDialog } from "./components/CreateDialog";
 import { ConfirmDialog, TreeItemActions } from "./components/LibraryActions";
+import { SceneStrip } from "./components/SceneStrip";
+import { PreferencePanel } from "./components/PreferencePanel";
+import { PluginModal } from "./components/PluginModal";
 import { logger } from "./logger";
 import { useLibrary } from "./hooks/useLibrary";
 import { useQueue } from "./hooks/useQueue";
 import { useEditorSession } from "./hooks/useEditorSession";
+import { useStructure } from "./hooks/useStructure";
+import { PluginSummary } from "./types";
 
 export function App() {
-  const [sidebarTab, setSidebarTab] = useState<"context" | "workflow" | "agent">("context");
+  const [sidebarTab, setSidebarTab] = useState<"context" | "structure" | "workflow" | "agent">(
+    "structure",
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [logPanelOpen, setLogPanelOpen] = useState(false);
+  const [pluginOpen, setPluginOpen] = useState(false);
+  const [plugins, setPlugins] = useState<PluginSummary[]>([]);
   const library = useLibrary();
   const {
     projects,
     project,
     books,
+    volumes,
     chapters,
+    scenes,
     activeChapter,
     setActiveChapter,
     setActiveBookId,
+    activeVolumeId,
+    setActiveVolumeId,
     libraryError,
     prompt,
     setPrompt,
@@ -51,14 +65,19 @@ export function App() {
     handlePrompt,
     handleDelete,
     mutateBook,
+    mutateVolume,
     mutateChapter,
+    mutateScene,
+    setScenePov,
   } = library;
   const { jobs, queueReady, enqueue } = useQueue(project);
+  const structure = useStructure(project);
   const session = useEditorSession({
     project,
     chapters,
     activeChapter,
     setActiveBookId,
+    storyEntries: structure.entries,
   });
   const {
     chapterText,
@@ -76,6 +95,11 @@ export function App() {
     handleGenerate,
     handleAccept,
     handleReject,
+    preferences,
+    togglePreference,
+    hintPrefs,
+    pinHint,
+    ignoreHint,
   } = session;
 
   const activeChapterRecord = chapters.find((chapter) => chapter.id === activeChapter);
@@ -83,7 +107,15 @@ export function App() {
     ? prompt.mode === "rename"
       ? {
           title:
-            prompt.target === "project" ? "重命名作品" : prompt.target === "book" ? "重命名书" : "重命名章节",
+            prompt.target === "project"
+              ? "重命名作品"
+              : prompt.target === "book"
+                ? "重命名书"
+                : prompt.target === "volume"
+                  ? "重命名卷"
+                  : prompt.target === "scene"
+                    ? "重命名场次"
+                    : "重命名章节",
           label: "名称",
           placeholder: prompt.title ?? "",
           confirm: "保存",
@@ -91,8 +123,12 @@ export function App() {
       : prompt.target === "project"
         ? { title: "新作品", label: "作品名称", placeholder: "例如：夜航星图", confirm: "创建" }
         : prompt.target === "book"
-          ? { title: "新书", label: "书名 / 卷名", placeholder: "例如：卷一 · 雾与海", confirm: "创建" }
-          : { title: "新章节", label: "章节标题", placeholder: "例如：第一章 雾港来客", confirm: "创建" }
+          ? { title: "新书", label: "书名", placeholder: "例如：雾港纪事", confirm: "创建" }
+          : prompt.target === "volume"
+            ? { title: "新卷", label: "卷名", placeholder: "例如：卷一 · 雾与海", confirm: "创建" }
+            : prompt.target === "scene"
+              ? { title: "新场", label: "场次标题", placeholder: "例如：码头夜谈", confirm: "创建" }
+              : { title: "新章节", label: "章节标题", placeholder: "例如：第一章 雾港来客", confirm: "创建" }
     : { title: "", label: "", placeholder: "", confirm: "创建" };
 
   return (
@@ -140,6 +176,13 @@ export function App() {
             <button className="text-button" onClick={() => setPrompt({ mode: "create", target: "book" })}>
               新书
             </button>
+            <button
+              className="text-button"
+              onClick={() => setPrompt({ mode: "create", target: "volume" })}
+              disabled={!project || books.length === 0}
+            >
+              新卷
+            </button>
             {project && (
               <>
                 <button
@@ -167,15 +210,59 @@ export function App() {
             <div className="tree-empty">还没有书。点上方「新书」创建第一本。</div>
           )}
           {books.map((book, bookIndex) => {
-            const bookChapters = chapters.filter((chapter) => chapter.bookId === book.id);
+            const bookVolumes = volumes.filter((volume) => volume.bookId === book.id);
+            const ungrouped = chapters.filter(
+              (chapter) => chapter.bookId === book.id && !chapter.volumeId,
+            );
+            const renderChapters = (list: typeof chapters, nested: boolean) =>
+              list.map((chapter, chapterIndex) => (
+                <div
+                  key={chapter.id}
+                  className={`tree-item ${nested ? "nested" : "ungrouped"} ${activeChapter === chapter.id ? "active" : ""}`}
+                  onClick={() => {
+                    void persistChapter();
+                    setActiveChapter(chapter.id);
+                    setActiveBookId(book.id);
+                    setActiveVolumeId(chapter.volumeId ?? null);
+                  }}
+                >
+                  <FileText size={14} />
+                  <span>{chapter.title}</span>
+                  <TreeItemActions
+                    disableUp={chapterIndex === 0}
+                    disableDown={chapterIndex === list.length - 1}
+                    deleteTitle="删除章节"
+                    onRename={() =>
+                      setPrompt({
+                        mode: "rename",
+                        target: "chapter",
+                        id: chapter.id,
+                        title: chapter.title,
+                      })
+                    }
+                    onDelete={() =>
+                      setPendingDelete({ target: "chapter", id: chapter.id, title: chapter.title })
+                    }
+                    onMoveUp={() => void mutateChapter(chapter.id, -1)}
+                    onMoveDown={() => void mutateChapter(chapter.id, 1)}
+                  />
+                </div>
+              ));
             return (
               <div key={book.id} className="tree-book">
-                <div className="tree-section">
+                <div
+                  className={`tree-section ${activeVolumeId === null && activeChapterRecord?.bookId === book.id ? "current" : ""}`}
+                  onClick={() => {
+                    setActiveBookId(book.id);
+                    setActiveVolumeId(null);
+                  }}
+                >
                   <Layers size={14} />
                   <span>{book.title}</span>
                   <TreeItemActions
                     disableUp={bookIndex === 0}
                     disableDown={bookIndex === books.length - 1}
+                    deleteTitle="删除书"
                     onRename={() =>
                       setPrompt({ mode: "rename", target: "book", id: book.id, title: book.title })
                     }
@@ -184,37 +271,46 @@ export function App() {
                     onMoveDown={() => void mutateBook(book.id, 1)}
                   />
                 </div>
-                {bookChapters.map((chapter, chapterIndex) => (
-                  <div
-                    key={chapter.id}
-                    className={`tree-item ${activeChapter === chapter.id ? "active" : ""}`}
-                    onClick={() => {
-                      void persistChapter();
-                      setActiveChapter(chapter.id);
-                      setActiveBookId(book.id);
-                    }}
-                  >
-                    <FileText size={14} />
-                    <span>{chapter.title}</span>
-                    <TreeItemActions
-                      disableUp={chapterIndex === 0}
-                      disableDown={chapterIndex === bookChapters.length - 1}
-                      onRename={() =>
-                        setPrompt({
-                          mode: "rename",
-                          target: "chapter",
-                          id: chapter.id,
-                          title: chapter.title,
-                        })
-                      }
-                      onDelete={() =>
-                        setPendingDelete({ target: "chapter", id: chapter.id, title: chapter.title })
-                      }
-                      onMoveUp={() => void mutateChapter(chapter.id, -1)}
-                      onMoveDown={() => void mutateChapter(chapter.id, 1)}
-                    />
-                  </div>
-                ))}
+                {bookVolumes.map((volume, volumeIndex) => {
+                  const volumeChapters = chapters.filter((chapter) => chapter.volumeId === volume.id);
+                  return (
+                    <div key={volume.id} className="tree-volume">
+                      <div
+                        className={`tree-section volume ${activeVolumeId === volume.id ? "current" : ""}`}
+                        onClick={() => {
+                          setActiveBookId(book.id);
+                          setActiveVolumeId(volume.id);
+                        }}
+                      >
+                        <Bookmark size={14} />
+                        <span>{volume.title}</span>
+                        <TreeItemActions
+                          disableUp={volumeIndex === 0}
+                          disableDown={volumeIndex === bookVolumes.length - 1}
+                          deleteTitle="删除卷"
+                          onRename={() =>
+                            setPrompt({
+                              mode: "rename",
+                              target: "volume",
+                              id: volume.id,
+                              title: volume.title,
+                            })
+                          }
+                          onDelete={() =>
+                            setPendingDelete({ target: "volume", id: volume.id, title: volume.title })
+                          }
+                          onMoveUp={() => void mutateVolume(volume.id, -1)}
+                          onMoveDown={() => void mutateVolume(volume.id, 1)}
+                        />
+                      </div>
+                      {renderChapters(volumeChapters, true)}
+                    </div>
+                  );
+                })}
+                {ungrouped.length > 0 && bookVolumes.length > 0 && (
+                  <div className="tree-section ungrouped-label">未分卷</div>
+                )}
+                {renderChapters(ungrouped, false)}
               </div>
             );
           })}
@@ -232,7 +328,14 @@ export function App() {
           <button className="icon-button" title="设置" onClick={() => setSettingsOpen(true)}>
             <Settings size={16} />
           </button>
-          <button className="icon-button" title="插件">
+          <button
+            className={`icon-button ${pluginOpen ? "active" : ""}`}
+            title="插件"
+            onClick={() => {
+              setPluginOpen(true);
+              void libraryApi.listPlugins().then(setPlugins).catch(() => setPlugins([]));
+            }}
+          >
             <Layers size={16} />
           </button>
           <button className="icon-button" title="任务队列">
@@ -286,28 +389,54 @@ export function App() {
             </div>
           )}
           {activeChapter && chapterReady && (
-            <ErrorBoundary label="编辑器">
-              <Editor
-                key={activeChapter}
-                initialText={chapterText}
-                initialBlocks={chapterBlocks}
-                projectId={project?.id}
-                chapterId={activeChapter}
-                onTextChange={(text) => {
-                  draftText.current = text;
-                  refreshHints(text.slice(-300));
-                }}
-                onBlocksChange={(blocks) => {
-                  draftBlocks.current = blocks;
-                }}
-                onIdle={() => {
-                  void persistChapter();
-                  enqueue("index.rebuild");
-                }}
+            <>
+              <ContextRail
+                hints={hints}
+                pinnedIds={hintPrefs.pinned}
+                ignoredIds={hintPrefs.ignored}
+                onPin={pinHint}
+                onIgnore={ignoreHint}
               />
-            </ErrorBoundary>
+              {project && activeChapter && (
+                <SceneStrip
+                  scenes={scenes.filter((scene) => scene.chapterId === activeChapter)}
+                  characters={structure.entries.filter((entry) => entry.kind === "character")}
+                  disabled={!project}
+                  onCreate={() => setPrompt({ mode: "create", target: "scene" })}
+                  onRename={(scene) =>
+                    setPrompt({ mode: "rename", target: "scene", id: scene.id, title: scene.title })
+                  }
+                  onDelete={(scene) =>
+                    setPendingDelete({ target: "scene", id: scene.id, title: scene.title })
+                  }
+                  onMove={(sceneId, delta) => void mutateScene(sceneId, delta)}
+                  onPov={(scene, povEntryId) => void setScenePov(scene.id, povEntryId)}
+                />
+              )}
+              <ErrorBoundary label="编辑器">
+                <Editor
+                  key={activeChapter}
+                  initialText={chapterText}
+                  initialBlocks={chapterBlocks}
+                  projectId={project?.id}
+                  chapterId={activeChapter}
+                  onTextChange={(text) => {
+                    draftText.current = text;
+                  }}
+                  onNearbyChange={(nearby) => {
+                    refreshHints(nearby.current, nearby.previous);
+                  }}
+                  onBlocksChange={(blocks) => {
+                    draftBlocks.current = blocks;
+                  }}
+                  onIdle={() => {
+                    void persistChapter();
+                    enqueue("index.rebuild");
+                  }}
+                />
+              </ErrorBoundary>
+            </>
           )}
-          <ContextRail hints={hints} />
 
           {aiPreview && (
             <AIPreview
@@ -328,6 +457,13 @@ export function App() {
           >
             <Brain size={14} />
             上下文
+          </button>
+          <button
+            className={sidebarTab === "structure" ? "active" : ""}
+            onClick={() => setSidebarTab("structure")}
+          >
+            <BookOpen size={14} />
+            结构
           </button>
           <button
             className={sidebarTab === "workflow" ? "active" : ""}
@@ -353,16 +489,27 @@ export function App() {
                 <CircleDot size={12} />
                 POV 边界
               </div>
-              <p>打开章节后，浮带会根据附近正文匹配正史与伏笔。</p>
+              <p>打开章节后，编辑器上方会按当前段落匹配你预先写好的人物、设定和伏笔。</p>
             </div>
             <div className="context-card">
               <div className="context-card-title">
                 <CircleDot size={12} />
                 作品结构
               </div>
-              <p>作品 → 书 → 章。每本书可以独立增删，章节挂在当前选中的书下。</p>
+              <p>作品 → 书 → 可选卷 → 章。卷只用来分组；删卷不会删章节。</p>
             </div>
           </div>
+        )}
+
+        {sidebarTab === "structure" && (
+          <StructurePanel
+            disabled={!project}
+            busy={structure.busy}
+            error={structure.error}
+            entries={structure.entries}
+            onCreate={(kind, title, summary) => void structure.create(kind, title, summary)}
+            onDelete={(entry) => void structure.remove(entry)}
+          />
         )}
 
         {sidebarTab === "workflow" && (
@@ -386,7 +533,11 @@ export function App() {
                   ? `当前作品「${project.title}」，上下文固定到 Revision ${revision}。`
                   : "创建作品后即可把 Agent 会话钉在该书的修订历史上。"}
               </p>
+              {preferences.length > 0 && (
+                <p>已记住 {preferences.filter((item) => item.status !== "disabled").length} 条写作偏好，下次续写会写进提示。</p>
+              )}
             </div>
+            <PreferencePanel rules={preferences} onToggle={(rule, disabled) => void togglePreference(rule, disabled)} />
           </div>
         )}
       </aside>
@@ -397,9 +548,13 @@ export function App() {
         initialConfig={modelConfig}
         onSave={async (config) => {
           logger.info("保存模型配置", { provider: config.provider, model: config.model });
-          setModelConfig(config);
+          setModelConfig({
+            ...config,
+            apiKey: "",
+            apiKeySet: Boolean(config.apiKey) || Boolean(config.apiKeySet),
+          });
           try {
-            await invoke("save_model_config", { config });
+            await libraryApi.saveModelConfig(config);
             logger.info("配置已同步到后端");
           } catch (e) {
             logger.error("保存失败", { error: String(e) });
@@ -426,12 +581,23 @@ export function App() {
             ? "删除作品"
             : pendingDelete?.target === "book"
               ? "删除书"
-              : "删除章节"
+              : pendingDelete?.target === "volume"
+                ? "删除卷"
+                : pendingDelete?.target === "scene"
+                  ? "删除场次"
+                  : "删除章节"
         }
-        body={`确定删除「${pendingDelete?.title ?? ""}」？此操作不可撤销。`}
+        body={
+          pendingDelete?.target === "volume"
+            ? `确定删除「${pendingDelete.title}」？卷下的章节会留在书里，只是不再分卷。`
+            : pendingDelete?.target === "scene"
+              ? `确定删除场次「${pendingDelete.title}」？正文不会被删。`
+              : `确定删除「${pendingDelete?.title ?? ""}」？此操作不可撤销。`
+        }
         onClose={() => setPendingDelete(null)}
         onConfirm={handleDelete}
       />
+      <PluginModal open={pluginOpen} plugins={plugins} onClose={() => setPluginOpen(false)} />
     </div>
   );
 }

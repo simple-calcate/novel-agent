@@ -2,17 +2,20 @@
 //! 覆盖配置回退链、事件 → 工作流 → 队列全链路、参数校验与内核自描述。
 
 use crate::{
-    build_context_package, context_hints, create_book, create_chapter, create_project, delete_book,
-    delete_chapter, editor_tick, emit_domain_event, generate_continuation, install_plugin_manifest,
-    kernel_tools, load_chapter, load_library, load_model_config, move_book, rename_book,
-    rename_chapter, rename_project, run_queue_step, save_chapter, save_model_config, AppState,
-    EditorTickInput, HintRequest, ModelConfigInput, NewBookInput, NewChapterInput, NewProjectInput,
+    build_context_package, context_hints, create_book, create_chapter, create_project,
+    create_scene, create_story_entry, create_volume, delete_book, delete_chapter, delete_volume,
+    editor_tick, emit_domain_event, generate_continuation, install_plugin_manifest, kernel_tools,
+    list_canon, list_plugins, list_story_entries, load_chapter, load_library, load_model_config,
+    move_book, propose_canon, rename_book, rename_chapter, rename_project, review_canon_fact,
+    run_queue_step, save_chapter, save_model_config, AppState, EditorTickInput, HintRequest,
+    ModelConfigInput, NewBookInput, NewChapterInput, NewProjectInput, NewSceneInput,
+    NewVolumeInput,
 };
 use novel_domain::{
     Actor, BlockKind, ContentBlock, DomainEvent, EventId, EventSource, Platform, Revision,
     WorkflowAction, WorkflowRule, WorkflowTrigger, EVENT_SCHEMA_VERSION,
 };
-use novel_extensions::BuiltinsExtension;
+use novel_extensions::{BuiltinsExtension, SecretVault};
 use novel_kernel::Kernel;
 use novel_storage::StorageHandle;
 use serde_json::json;
@@ -22,8 +25,10 @@ use tauri::Manager;
 
 fn mock_app_with_kernel() -> tauri::App<MockRuntime> {
     let storage = Arc::new(StorageHandle::open_in_memory().unwrap());
+    let secrets = Arc::new(SecretVault::memory());
     let kernel = Kernel::builder()
         .service(storage)
+        .service(secrets)
         .extension(BuiltinsExtension)
         .expect("内置扩展注册失败")
         .build()
@@ -70,6 +75,18 @@ fn create_project_and_chapter_roundtrip() {
     assert!(book.ok, "{book:?}");
     let book = book.data.unwrap();
 
+    let volume = create_volume(
+        state(),
+        NewVolumeInput {
+            project_id: project_id.clone(),
+            book_id: book.id.to_string(),
+            title: "上卷".into(),
+            position: 0,
+        },
+    );
+    assert!(volume.ok, "{volume:?}");
+    let volume = volume.data.unwrap();
+
     let chapter = create_chapter(
         state(),
         NewChapterInput {
@@ -77,6 +94,7 @@ fn create_project_and_chapter_roundtrip() {
             book_id: book.id.to_string(),
             title: "第一章".into(),
             position: 1,
+            volume_id: Some(volume.id.to_string()),
         },
     );
     assert!(chapter.ok, "{chapter:?}");
@@ -89,6 +107,7 @@ fn create_project_and_chapter_roundtrip() {
             book_id: book.id.to_string(),
             title: "x".into(),
             position: 2,
+            volume_id: None,
         },
     );
     assert!(!bad.ok);
@@ -98,7 +117,21 @@ fn create_project_and_chapter_roundtrip() {
     assert!(library.ok, "{library:?}");
     let snapshot = library.data.unwrap();
     assert_eq!(snapshot.books.len(), 1);
+    assert_eq!(snapshot.volumes.len(), 1);
     assert_eq!(snapshot.chapters.len(), 1);
+    assert_eq!(
+        snapshot.chapters[0]
+            .volume_id
+            .as_ref()
+            .map(ToString::to_string),
+        Some(volume.id.to_string())
+    );
+
+    let ungrouped = delete_volume(state(), project_id.clone(), volume.id.to_string());
+    assert!(ungrouped.ok, "{ungrouped:?}");
+    let after_delete = ungrouped.data.unwrap();
+    assert!(after_delete.volumes.is_empty());
+    assert!(after_delete.chapters[0].volume_id.is_none());
 
     let chapter_id = snapshot.chapters[0].id.to_string();
     let saved = save_chapter(state(), chapter_id.clone(), "雾港来客。".into(), None);
@@ -189,6 +222,13 @@ async fn model_config_roundtrip() {
     let loaded = load_model_config(state()).unwrap();
     assert_eq!(loaded["provider"], "deepseek");
     assert_eq!(loaded["model"], "deepseek-chat");
+    assert_eq!(loaded["apiKey"], "");
+    assert_eq!(loaded["apiKeySet"], true);
+    let stored = storage_of(&app)
+        .execute(|repo| repo.get_setting("model_config"))
+        .unwrap()
+        .unwrap();
+    assert!(!stored.contains("sk-test"), "{stored}");
 }
 
 #[tokio::test]
@@ -299,6 +339,7 @@ async fn context_hints_rejects_invalid_project() {
             chapter_id: "c1".into(),
             revision: 3,
             nearby_text: "雾港".into(),
+            lookback_text: String::new(),
             generation: 1,
         },
     )
@@ -328,6 +369,7 @@ async fn context_hints_accepts_valid_project() {
             chapter_id: "c1".into(),
             revision: 3,
             nearby_text: "雾港".into(),
+            lookback_text: String::new(),
             generation: 1,
         },
     )
@@ -335,6 +377,199 @@ async fn context_hints_accepts_valid_project() {
     .unwrap();
     assert!(result.ok, "{result:?}");
     assert_eq!(result.data.unwrap(), json!([]));
+}
+
+#[tokio::test]
+async fn canon_accept_does_not_appear_in_structure_rail() {
+    let app = mock_app_with_kernel();
+    let state = || app.state::<AppState>();
+
+    let project = create_project(
+        state(),
+        NewProjectInput {
+            title: "正史测试".into(),
+        },
+    )
+    .data
+    .unwrap();
+    let project_id = project.id.to_string();
+    let book = create_book(
+        state(),
+        NewBookInput {
+            project_id: project_id.clone(),
+            title: "卷一".into(),
+            synopsis: String::new(),
+            position: 0,
+        },
+    )
+    .data
+    .unwrap();
+    let chapter = create_chapter(
+        state(),
+        NewChapterInput {
+            project_id: project_id.clone(),
+            book_id: book.id.to_string(),
+            title: "第一章".into(),
+            position: 0,
+            volume_id: None,
+        },
+    )
+    .data
+    .unwrap();
+    let chapter_id = chapter.id.to_string();
+    let saved = save_chapter(
+        state(),
+        chapter_id.clone(),
+        "林晚说道：「今夜雾很重。」".into(),
+        None,
+    );
+    assert!(saved.ok, "{saved:?}");
+
+    let proposed = propose_canon(state(), chapter_id.clone());
+    assert!(proposed.ok, "{proposed:?}");
+    let created = proposed.data.unwrap();
+    assert!(!created.is_empty());
+    let lin = created
+        .iter()
+        .find(|item| item.entity_name == "林晚")
+        .expect("应抽到林晚");
+
+    let before = context_hints(
+        state(),
+        HintRequest {
+            project_id: project_id.clone(),
+            chapter_id: chapter_id.clone(),
+            revision: 1,
+            nearby_text: "林晚走进雾港".into(),
+            lookback_text: String::new(),
+            generation: 1,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(before.ok, "{before:?}");
+    assert_eq!(before.data.unwrap(), json!([]));
+
+    let reviewed = review_canon_fact(state(), lin.fact_id.to_string(), true);
+    assert!(reviewed.ok, "{reviewed:?}");
+    assert_eq!(
+        reviewed.data.unwrap().status,
+        novel_domain::FactStatus::Accepted
+    );
+
+    let accepted = list_canon(state(), project_id.clone(), Some("accepted".into()));
+    assert_eq!(accepted.data.unwrap().len(), 1);
+
+    let after = context_hints(
+        state(),
+        HintRequest {
+            project_id,
+            chapter_id,
+            revision: 1,
+            nearby_text: "林晚走进雾港".into(),
+            lookback_text: String::new(),
+            generation: 2,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(after.ok, "{after:?}");
+    assert_eq!(
+        after.data.unwrap(),
+        json!([]),
+        "抽取确认不应出现在结构预选里"
+    );
+}
+
+#[tokio::test]
+async fn designed_story_entry_matches_nearby_paragraph() {
+    let app = mock_app_with_kernel();
+    let state = || app.state::<AppState>();
+    let project = create_project(
+        state(),
+        NewProjectInput {
+            title: "结构测试".into(),
+        },
+    )
+    .data
+    .unwrap();
+    let project_id = project.id.to_string();
+    let created = create_story_entry(
+        state(),
+        project_id.clone(),
+        "character".into(),
+        "林晚".into(),
+        "雾港来的刀客".into(),
+    );
+    assert!(created.ok, "{created:?}");
+    let listed = list_story_entries(state(), project_id.clone());
+    assert_eq!(listed.data.unwrap().len(), 1);
+
+    let hints = context_hints(
+        state(),
+        HintRequest {
+            project_id: project_id.clone(),
+            chapter_id: "c1".into(),
+            revision: 1,
+            nearby_text: "林晚走进雾港".into(),
+            lookback_text: String::new(),
+            generation: 1,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(hints.ok, "{hints:?}");
+    let payload = hints.data.unwrap();
+    let titles: Vec<String> = payload
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|hint| {
+            hint.get("title")
+                .and_then(|value| value.as_str())
+                .map(str::to_owned)
+        })
+        .collect();
+    assert!(titles.iter().any(|title| title == "林晚"), "{titles:?}");
+    let summary = payload
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|hint| hint.get("title").and_then(|value| value.as_str()) == Some("林晚"))
+        .and_then(|hint| hint.get("summary").and_then(|value| value.as_str()))
+        .unwrap_or_default();
+    assert_eq!(summary, "雾港来的刀客");
+
+    let by_keyword = context_hints(
+        state(),
+        HintRequest {
+            project_id: project_id.clone(),
+            chapter_id: "c1".into(),
+            revision: 1,
+            nearby_text: "那个刀客转过身".into(),
+            lookback_text: String::new(),
+            generation: 3,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(by_keyword.ok, "{by_keyword:?}");
+    let keyword_titles: Vec<String> = by_keyword
+        .data
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|hint| {
+            hint.get("title")
+                .and_then(|value| value.as_str())
+                .map(str::to_owned)
+        })
+        .collect();
+    assert!(
+        keyword_titles.iter().any(|title| title == "林晚"),
+        "{keyword_titles:?}"
+    );
 }
 
 #[tokio::test]
@@ -436,4 +671,63 @@ fn kernel_tools_describes_registry() {
     }
     let providers = data["providers"].as_array().unwrap();
     assert!(providers.iter().any(|p| p == &json!("echo")));
+}
+
+#[test]
+fn scene_roundtrip_and_plugin_list() {
+    let app = mock_app_with_kernel();
+    let state = || app.state::<AppState>();
+    let project = create_project(
+        state(),
+        NewProjectInput {
+            title: "场次测试".into(),
+        },
+    )
+    .data
+    .unwrap();
+    let project_id = project.id.to_string();
+    let book = create_book(
+        state(),
+        NewBookInput {
+            project_id: project_id.clone(),
+            title: "卷一".into(),
+            synopsis: String::new(),
+            position: 0,
+        },
+    )
+    .data
+    .unwrap();
+    let chapter = create_chapter(
+        state(),
+        NewChapterInput {
+            project_id: project_id.clone(),
+            book_id: book.id.to_string(),
+            title: "第一章".into(),
+            position: 0,
+            volume_id: None,
+        },
+    )
+    .data
+    .unwrap();
+    let scene = create_scene(
+        state(),
+        NewSceneInput {
+            project_id: project_id.clone(),
+            chapter_id: chapter.id.to_string(),
+            title: "码头夜谈".into(),
+            position: 0,
+            pov_entry_id: None,
+        },
+    );
+    assert!(scene.ok, "{scene:?}");
+    let library = load_library(state(), Some(project_id));
+    assert_eq!(library.data.unwrap().scenes.len(), 1);
+
+    let plugins = list_plugins(state());
+    assert!(plugins.ok, "{plugins:?}");
+    assert!(plugins
+        .data
+        .unwrap()
+        .iter()
+        .any(|plugin| plugin.id == "continuity-checker"));
 }

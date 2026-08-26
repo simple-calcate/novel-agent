@@ -14,5 +14,7 @@
 
 ## 后果
 - 崩溃后可恢复到一致状态。
+- 作品库、修订、任务入队、结构条目的写路径会在同一 SQLite 事务里插入 `outbox` 行；`list_pending_outbox` / `mark_outbox_delivered` 供同步消费者使用。
+- 同步传输仍是阶段 2（见 `docs/sync-and-cloud.md`）：本机只保证变更已入队，不发送。
 - 冲突解决逻辑简单可靠。
 - 多人实时协作需要后续升级为 Yjs/CRDT。

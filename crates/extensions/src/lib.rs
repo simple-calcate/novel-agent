@@ -9,6 +9,7 @@ pub mod hints;
 pub mod plugins;
 pub mod providers;
 pub mod queue;
+pub mod secrets;
 pub mod util;
 pub mod workflow;
 pub mod workspace;
@@ -29,9 +30,10 @@ pub use providers::{
     resolve_provider_name, EchoProvider, OpenAICompatibleProvider, ProvidersExtension, SseParser,
 };
 pub use queue::{QueueExtension, QueuePolicy, QueueTickTool};
+pub use secrets::{SecretVault, MODEL_API_KEY};
 pub use workflow::{WorkflowEngineExtension, WorkflowEngineSubscriber};
 pub use workspace::{
-    load_provider_config_from_kernel, read_chapter_body, Workspace, WorkspaceError,
+    load_provider_config_from_kernel, read_chapter_body, ModelConfigView, Workspace, WorkspaceError,
 };
 
 use novel_kernel::{Extension, KernelBuilder, KernelError};

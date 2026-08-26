@@ -268,3 +268,56 @@ fn commit_patch_unknown_chapter_fails() {
         )
         .is_err());
 }
+
+#[test]
+fn volume_groups_and_ungroups_chapters() {
+    let repository = Repository::open_in_memory().unwrap();
+    let project = repository.create_project("夜航星图").unwrap();
+    let book = repository
+        .create_book(&project.id, "雾港纪事", "", 0)
+        .unwrap();
+    let volume = repository
+        .create_volume(&project.id, &book.id.to_string(), "上卷", 0)
+        .unwrap();
+    let chapter = repository
+        .create_chapter_with_volume(
+            &project.id,
+            &book.id.to_string(),
+            "第一章",
+            0,
+            Some(&volume.id.to_string()),
+        )
+        .unwrap();
+    assert_eq!(chapter.volume_id.as_ref(), Some(&volume.id));
+    assert_eq!(repository.list_volumes(&project.id).unwrap().len(), 1);
+
+    let pending = repository.list_pending_outbox(20).unwrap();
+    assert!(pending
+        .iter()
+        .any(|event| event.event_type == "volume.created"));
+
+    repository.delete_volume(&project.id, &volume.id).unwrap();
+    assert!(repository.list_volumes(&project.id).unwrap().is_empty());
+    assert!(repository.list_chapters(&project.id).unwrap()[0]
+        .volume_id
+        .is_none());
+}
+
+#[test]
+fn scene_crud_does_not_delete_chapter_text() {
+    let repository = Repository::open_in_memory().unwrap();
+    let project = repository.create_project("夜航星图").unwrap();
+    let book = repository
+        .create_book(&project.id, "雾港纪事", "", 0)
+        .unwrap();
+    let chapter = repository
+        .create_chapter_with_volume(&project.id, &book.id.to_string(), "第一章", 0, None)
+        .unwrap();
+    let scene = repository
+        .create_scene(&project.id, &chapter.id.to_string(), "码头夜谈", 0, None)
+        .unwrap();
+    assert_eq!(repository.list_scenes(&project.id).unwrap().len(), 1);
+    repository.delete_scene(&project.id, &scene.id).unwrap();
+    assert!(repository.list_scenes(&project.id).unwrap().is_empty());
+    assert_eq!(repository.list_chapters(&project.id).unwrap().len(), 1);
+}
