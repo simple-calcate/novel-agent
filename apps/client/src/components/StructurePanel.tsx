@@ -35,7 +35,7 @@ export function StructurePanel({ disabled, busy, error, entries, onCreate, onDel
     <div className="panel-content">
       <h3>结构</h3>
       <p className="canon-lead">
-        预先写好人物、设定和伏笔。写作时按名称、别名和设定关键词匹配当前段落。
+        预先写好人物、设定和伏笔。写作时按名称、别名和设定关键词匹配当前段落；本地没命中时再用这段里的词去说明里检索。
       </p>
       {error && <div className="tree-empty">{error}</div>}
 
