@@ -250,6 +250,14 @@ impl super::Repository {
             "DELETE FROM search_documents WHERE project_id = ?1",
             [project_id.to_string()],
         )?;
+        self.connection.execute(
+            "DELETE FROM plot_threads WHERE project_id = ?1",
+            [project_id.to_string()],
+        )?;
+        self.connection.execute(
+            "DELETE FROM story_entries WHERE project_id = ?1",
+            [project_id.to_string()],
+        )?;
         let deleted = self.connection.execute(
             "DELETE FROM projects WHERE id = ?1",
             [project_id.to_string()],

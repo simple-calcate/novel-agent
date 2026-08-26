@@ -53,4 +53,19 @@ describe("memory library", () => {
     const leftover = await libraryApi.listCanon(project.id, "candidate");
     expect(leftover.every((item) => item.factId !== accepted[0].factId)).toBe(true);
   });
+
+  it("stores designed story structure and lists it", async () => {
+    const project = await libraryApi.createProject("夜航星图");
+    await libraryApi.createStoryEntry(project.id, "character", "林晚", "雾港来的刀客");
+    await libraryApi.createStoryEntry(project.id, "foreshadow", "雾中灯塔", "里面还有旧王玺");
+    const entries = await libraryApi.listStoryEntries(project.id);
+    expect(entries.map((item) => item.title)).toEqual(["林晚", "雾中灯塔"]);
+    await libraryApi.deleteStoryEntry(project.id, entries[0].id, entries[0].kind);
+    const leftover = await libraryApi.listStoryEntries(project.id);
+    expect(leftover).toHaveLength(1);
+    expect(leftover[0].title).toBe("雾中灯塔");
+    await expect(
+      libraryApi.createStoryEntry(project.id, "foreshadow", "雾中灯塔", "重复"),
+    ).rejects.toThrow();
+  });
 });

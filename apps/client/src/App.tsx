@@ -11,7 +11,6 @@ import {
   PenLine,
   Plus,
   Settings,
-  ScrollText,
   Sparkles,
   Terminal,
 } from "lucide-react";
@@ -21,7 +20,7 @@ import { Editor, AIPreview } from "./components/Editor";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ContextRail } from "./components/ContextRail";
 import { WorkflowPanel } from "./components/WorkflowPanel";
-import { CanonPanel } from "./components/CanonPanel";
+import { StructurePanel } from "./components/StructurePanel";
 import { SettingsModal } from "./components/SettingsModal";
 import { LogPanel } from "./components/LogPanel";
 import { CreateDialog } from "./components/CreateDialog";
@@ -30,10 +29,12 @@ import { logger } from "./logger";
 import { useLibrary } from "./hooks/useLibrary";
 import { useQueue } from "./hooks/useQueue";
 import { useEditorSession } from "./hooks/useEditorSession";
-import { useCanon } from "./hooks/useCanon";
+import { useStructure } from "./hooks/useStructure";
 
 export function App() {
-  const [sidebarTab, setSidebarTab] = useState<"context" | "canon" | "workflow" | "agent">("context");
+  const [sidebarTab, setSidebarTab] = useState<"context" | "structure" | "workflow" | "agent">(
+    "structure",
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [logPanelOpen, setLogPanelOpen] = useState(false);
   const library = useLibrary();
@@ -57,11 +58,13 @@ export function App() {
     mutateChapter,
   } = library;
   const { jobs, queueReady, enqueue } = useQueue(project);
+  const structure = useStructure(project);
   const session = useEditorSession({
     project,
     chapters,
     activeChapter,
     setActiveBookId,
+    storyEntries: structure.entries,
   });
   const {
     chapterText,
@@ -80,7 +83,6 @@ export function App() {
     handleAccept,
     handleReject,
   } = session;
-  const canon = useCanon(project, activeChapter);
 
   const activeChapterRecord = chapters.find((chapter) => chapter.id === activeChapter);
   const promptCopy = prompt
@@ -290,28 +292,32 @@ export function App() {
             </div>
           )}
           {activeChapter && chapterReady && (
-            <ErrorBoundary label="编辑器">
-              <Editor
-                key={activeChapter}
-                initialText={chapterText}
-                initialBlocks={chapterBlocks}
-                projectId={project?.id}
-                chapterId={activeChapter}
-                onTextChange={(text) => {
-                  draftText.current = text;
-                  refreshHints(text.slice(-300));
-                }}
-                onBlocksChange={(blocks) => {
-                  draftBlocks.current = blocks;
-                }}
-                onIdle={() => {
-                  void persistChapter();
-                  enqueue("index.rebuild");
-                }}
-              />
-            </ErrorBoundary>
+            <>
+              <ContextRail hints={hints} />
+              <ErrorBoundary label="编辑器">
+                <Editor
+                  key={activeChapter}
+                  initialText={chapterText}
+                  initialBlocks={chapterBlocks}
+                  projectId={project?.id}
+                  chapterId={activeChapter}
+                  onTextChange={(text) => {
+                    draftText.current = text;
+                  }}
+                  onNearbyChange={(nearby) => {
+                    refreshHints(nearby);
+                  }}
+                  onBlocksChange={(blocks) => {
+                    draftBlocks.current = blocks;
+                  }}
+                  onIdle={() => {
+                    void persistChapter();
+                    enqueue("index.rebuild");
+                  }}
+                />
+              </ErrorBoundary>
+            </>
           )}
-          <ContextRail hints={hints} />
 
           {aiPreview && (
             <AIPreview
@@ -334,11 +340,11 @@ export function App() {
             上下文
           </button>
           <button
-            className={sidebarTab === "canon" ? "active" : ""}
-            onClick={() => setSidebarTab("canon")}
+            className={sidebarTab === "structure" ? "active" : ""}
+            onClick={() => setSidebarTab("structure")}
           >
-            <ScrollText size={14} />
-            正史
+            <BookOpen size={14} />
+            结构
           </button>
           <button
             className={sidebarTab === "workflow" ? "active" : ""}
@@ -364,7 +370,7 @@ export function App() {
                 <CircleDot size={12} />
                 POV 边界
               </div>
-              <p>打开章节后，浮带会根据附近正文匹配正史与伏笔。</p>
+              <p>打开章节后，编辑器上方会按当前段落匹配你预先写好的人物、设定和伏笔。</p>
             </div>
             <div className="context-card">
               <div className="context-card-title">
@@ -376,15 +382,14 @@ export function App() {
           </div>
         )}
 
-        {sidebarTab === "canon" && (
-          <CanonPanel
-            chapterReady={Boolean(activeChapter && chapterReady)}
-            busy={canon.busy}
-            error={canon.error}
-            candidates={canon.candidates}
-            accepted={canon.accepted}
-            onExtract={() => void canon.proposeFromChapter()}
-            onReview={(factId, accept) => void canon.review(factId, accept)}
+        {sidebarTab === "structure" && (
+          <StructurePanel
+            disabled={!project}
+            busy={structure.busy}
+            error={structure.error}
+            entries={structure.entries}
+            onCreate={(kind, title, summary) => void structure.create(kind, title, summary)}
+            onDelete={(entry) => void structure.remove(entry)}
           />
         )}
 

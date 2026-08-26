@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { libraryApi } from "../api";
-import { Chapter, CommandResult, ContentBlock, ContextHint, Project } from "../types";
+import { Chapter, CommandResult, ContentBlock, ContextHint, Project, StoryEntry } from "../types";
 import { logger } from "../logger";
 import { ModelConfig } from "../components/SettingsModal";
 
@@ -10,8 +10,9 @@ export function useEditorSession(options: {
   chapters: Chapter[];
   activeChapter: string | null;
   setActiveBookId: (id: string | null) => void;
+  storyEntries: StoryEntry[];
 }) {
-  const { project, chapters, activeChapter, setActiveBookId } = options;
+  const { project, chapters, activeChapter, setActiveBookId, storyEntries } = options;
   const [chapterText, setChapterText] = useState("");
   const [chapterBlocks, setChapterBlocks] = useState<ContentBlock[]>([]);
   const [chapterReady, setChapterReady] = useState(false);
@@ -85,7 +86,14 @@ export function useEditorSession(options: {
 
   const refreshHints = useCallback(
     async (nearbyText: string) => {
-      if (!project || !activeChapter) return;
+      if (!activeChapter) {
+        setHints([]);
+        return;
+      }
+      if (!project) {
+        setHints(matchStoryEntries(nearbyText, storyEntries, revision));
+        return;
+      }
       logger.debug("刷新上下文提示", { revision, textLength: nearbyText.length });
       try {
         const result = await invoke<CommandResult<ContextHint[]>>("context_hints", {
@@ -100,18 +108,19 @@ export function useEditorSession(options: {
         if (result.ok && result.data) {
           logger.info("上下文提示更新", { count: result.data.length });
           setHints(result.data);
+          return;
         }
       } catch (e) {
-        logger.error("上下文提示失败", { error: String(e) });
-        setHints(buildLocalHints(nearbyText, revision));
+        logger.warn("上下文提示走本地匹配", { error: String(e) });
       }
+      setHints(matchStoryEntries(nearbyText, storyEntries, revision));
     },
-    [project, activeChapter, revision],
+    [project, activeChapter, revision, storyEntries],
   );
 
   useEffect(() => {
-    setHints(buildLocalHints("", revision));
-  }, [revision]);
+    void refreshHints(nearbyFromText(draftText.current));
+  }, [refreshHints, chapterReady]);
 
   const handleGenerate = useCallback(async () => {
     if (!modelConfig) {
@@ -177,21 +186,52 @@ export function useEditorSession(options: {
   };
 }
 
-function buildLocalHints(nearby: string, revision: number): ContextHint[] {
-  const base: ContextHint[] = [];
-  if (nearby.includes("玺")) {
-    base.push({
-      id: "h0",
-      kind: "plotHook",
-      title: "旧王玺",
-      summary: "沈雾不知道它已在船长手中；避免提前揭示",
-      sourceLabel: "正史",
-      matchReason: "当前文字包含「玺」",
-      confidence: 0.98,
-      score: 1,
+function nearbyFromText(text: string): string {
+  return (
+    text
+      .split(/\n+/)
+      .map((item) => item.trim())
+      .find(Boolean) ?? ""
+  );
+}
+
+function matchStoryEntries(nearby: string, entries: StoryEntry[], revision: number): ContextHint[] {
+  if (!nearby) return [];
+  const hints: ContextHint[] = [];
+  for (const entry of entries) {
+    if (entry.title.length < 2 || !nearby.includes(entry.title)) {
+      continue;
+    }
+    const kind =
+      entry.kind === "character"
+        ? "characterState"
+        : entry.kind === "foreshadow"
+          ? "openForeshadowing"
+          : "worldRule";
+    const index = nearby.indexOf(entry.title);
+    hints.push({
+      id: entry.id,
+      kind,
+      title: entry.title,
+      summary: entry.summary || `${entry.title} · 预先设定`,
+      sourceLabel: entry.kind,
+      matchReason: "当前段落匹配到该结构",
+      confidence: 0.9,
+      score: Math.max(0.8, 1 - (index / Math.max(nearby.length, 1)) * 0.2),
       generation: revision,
       revision,
     });
   }
-  return base.slice(0, 5);
+  const kindRank: Record<ContextHint["kind"], number> = {
+    characterState: 0,
+    worldRule: 1,
+    timelineConstraint: 1,
+    openForeshadowing: 2,
+    plotHook: 2,
+    preference: 1,
+    continuityRisk: 1,
+  };
+  return hints
+    .sort((left, right) => right.score - left.score || kindRank[left.kind] - kindRank[right.kind])
+    .slice(0, 6);
 }

@@ -129,13 +129,44 @@ impl Repository {
     }
 
     pub fn list_plot_threads(&self) -> Result<Vec<PlotThread>, StorageError> {
-        let mut statement = self
-            .connection
-            .prepare("SELECT data_json FROM plot_threads")?;
-        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+        self.query_plot_threads(None)
+    }
+
+    pub fn list_plot_threads_for_project(
+        &self,
+        project_id: &ProjectId,
+    ) -> Result<Vec<PlotThread>, StorageError> {
+        self.query_plot_threads(Some(project_id))
+    }
+
+    fn query_plot_threads(
+        &self,
+        project_id: Option<&ProjectId>,
+    ) -> Result<Vec<PlotThread>, StorageError> {
+        let sql = if project_id.is_some() {
+            "SELECT data_json FROM plot_threads WHERE project_id = ?1"
+        } else {
+            "SELECT data_json FROM plot_threads"
+        };
+        let mut statement = self.connection.prepare(sql)?;
+        let mut jsons = Vec::new();
+        match project_id {
+            Some(id) => {
+                let mut rows = statement.query(params![id.to_string()])?;
+                while let Some(row) = rows.next()? {
+                    jsons.push(row.get::<_, String>(0)?);
+                }
+            }
+            None => {
+                let mut rows = statement.query([])?;
+                while let Some(row) = rows.next()? {
+                    jsons.push(row.get::<_, String>(0)?);
+                }
+            }
+        }
         let mut threads = Vec::new();
-        for row in rows {
-            if let Ok(thread) = serde_json::from_str::<PlotThread>(&row?) {
+        for json in jsons {
+            if let Ok(thread) = serde_json::from_str::<PlotThread>(&json) {
                 threads.push(thread);
             }
         }

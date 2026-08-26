@@ -1,8 +1,8 @@
 //! 写作时的上下文浮带：按附近文本匹配人物状态、世界规则与未兑现伏笔。
 
 use novel_domain::{
-    CanonEntity, CanonFact, ContextHint, HintAction, HintKind, PlotThread, PlotThreadStatus,
-    Revision, WorkContextRef,
+    CanonEntity, CanonFact, ContextHint, EntityKind, HintAction, HintKind, PlotThread,
+    PlotThreadStatus, Revision, StoryEntry, StoryEntryKind, WorkContextRef,
 };
 use serde::{Deserialize, Serialize};
 
@@ -35,26 +35,44 @@ impl HintEngine {
             if score <= 0.0 {
                 continue;
             }
+            let (kind, source, summary) = match entity.kind {
+                EntityKind::Character => (
+                    HintKind::CharacterState,
+                    "人物",
+                    format!("{} · 预先设定的人物", entity.canonical_name),
+                ),
+                _ => (
+                    HintKind::WorldRule,
+                    "设定",
+                    format!("{} · 预先设定的条目", entity.canonical_name),
+                ),
+            };
             hints.push(hint(
-                HintKind::CharacterState,
+                kind,
                 &matched_name,
-                &format!("{} 可能出现在当前写作环境中", entity.canonical_name),
-                "人物设定",
-                "检测到人物名称或别名",
+                &summary,
+                source,
+                "当前段落出现该名称",
                 score,
                 query,
             ));
         }
 
         for fact in facts {
-            let text = fact.value.to_string();
+            let text = match &fact.value {
+                serde_json::Value::String(value) => value.clone(),
+                other => other.to_string(),
+            };
+            if fact.predicate == "note" {
+                continue;
+            }
             if fact_relevant(query, &fact.predicate, &text) {
                 hints.push(hint(
                     HintKind::WorldRule,
                     &fact.predicate,
                     &format!("{}: {}", fact.predicate, text),
-                    "正史设定",
-                    "当前文字与设定字段匹配",
+                    "设定",
+                    "当前文字与设定匹配",
                     fact.confidence,
                     query,
                 ));
@@ -62,20 +80,67 @@ impl HintEngine {
         }
 
         for thread in threads {
-            if thread.status == PlotThreadStatus::Open {
-                hints.push(hint(
-                    HintKind::OpenForeshadowing,
-                    &thread.title,
-                    &format!("伏笔「{}」仍未兑现", thread.title),
-                    "伏笔看板",
-                    "存在开放伏笔",
-                    0.75,
-                    query,
-                ));
+            if thread.status != PlotThreadStatus::Open {
+                continue;
             }
+            if !query.nearby_text.contains(&thread.title) {
+                continue;
+            }
+            let summary = if thread.summary.is_empty() {
+                format!("伏笔「{}」仍未兑现", thread.title)
+            } else {
+                thread.summary.clone()
+            };
+            hints.push(hint(
+                HintKind::OpenForeshadowing,
+                &thread.title,
+                &summary,
+                "伏笔",
+                "当前段落提到该伏笔",
+                0.86,
+                query,
+            ));
         }
 
         hints.sort_by(|left, right| right.score.total_cmp(&left.score));
+        hints.truncate(query.limit.clamp(1, 6));
+        hints
+    }
+
+    /// 按当前段落匹配作者预先写好的人物 / 设定 / 伏笔。
+    pub fn rank_entries(&self, query: &HintQuery, entries: &[StoryEntry]) -> Vec<ContextHint> {
+        let mut hints = Vec::new();
+        for entry in entries {
+            let Some(score) = entry_score(query, entry) else {
+                continue;
+            };
+            let (kind, source) = match entry.kind {
+                StoryEntryKind::Character => (HintKind::CharacterState, "人物"),
+                StoryEntryKind::Setting => (HintKind::WorldRule, "设定"),
+                StoryEntryKind::Foreshadow => (HintKind::OpenForeshadowing, "伏笔"),
+            };
+            let summary = if entry.summary.is_empty() {
+                format!("{} · 预先设定", entry.title)
+            } else {
+                entry.summary.clone()
+            };
+            hints.push(hint(
+                kind,
+                &entry.title,
+                &summary,
+                source,
+                "当前段落匹配到该结构",
+                score,
+                query,
+            ));
+        }
+        hints.sort_by(|left, right| {
+            right
+                .score
+                .total_cmp(&left.score)
+                .then(kind_rank(left.kind).cmp(&kind_rank(right.kind)))
+                .then(left.title.cmp(&right.title))
+        });
         hints.truncate(query.limit.clamp(1, 6));
         hints
     }
@@ -125,4 +190,22 @@ fn name_score(query: &HintQuery, entity: &CanonEntity) -> f32 {
 
 fn fact_relevant(query: &HintQuery, predicate: &str, value: &str) -> bool {
     query.nearby_text.contains(predicate) || query.nearby_text.contains(value)
+}
+
+fn entry_score(query: &HintQuery, entry: &StoryEntry) -> Option<f32> {
+    if entry.title.chars().count() < 2 {
+        return None;
+    }
+    let index = query.nearby_text.find(&entry.title)?;
+    let length = query.nearby_text.len().max(1) as f32;
+    Some((1.0 - (index as f32 / length) * 0.2).clamp(0.8, 1.0))
+}
+
+fn kind_rank(kind: HintKind) -> u8 {
+    match kind {
+        HintKind::CharacterState => 0,
+        HintKind::WorldRule => 1,
+        HintKind::OpenForeshadowing => 2,
+        _ => 9,
+    }
 }

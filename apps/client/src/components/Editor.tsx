@@ -32,6 +32,8 @@ import { logger } from "../logger";
 
 interface EditorProps {
   onTextChange: (text: string) => void;
+  /** 当前光标所在段落，用于匹配预先设计的结构。 */
+  onNearbyChange?: (nearby: string) => void;
   onIdle: () => void;
   onInsertText?: (text: string) => void;
   /** 领域事件定位：用于模式切换信号发射（浏览器模式自动降级） */
@@ -90,6 +92,7 @@ const MENTION_ITEMS: Array<{
 
 export function Editor({
   onTextChange,
+  onNearbyChange,
   onIdle,
   onInsertText,
   projectId,
@@ -159,6 +162,18 @@ export function Editor({
   // 保持 useEditor 首次闭包拿到最新回调
   const emitModeChangeRef = useRef(emitModeChange);
   emitModeChangeRef.current = emitModeChange;
+  const onNearbyChangeRef = useRef(onNearbyChange);
+  onNearbyChangeRef.current = onNearbyChange;
+  const nearbyTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  const reportNearby = useCallback((ed: NonNullable<ReturnType<typeof useEditor>>) => {
+    if (!ed) return;
+    const nearby = currentParagraphText(ed);
+    if (nearbyTimer.current) clearTimeout(nearbyTimer.current);
+    nearbyTimer.current = setTimeout(() => {
+      onNearbyChangeRef.current?.(nearby);
+    }, 80);
+  }, []);
 
   const editor = useEditor({
     extensions: [
@@ -205,6 +220,7 @@ export function Editor({
       setIsTyping(true);
       onTextChange(bodyText);
       onBlocksChange?.(blocks);
+      reportNearby(editor);
 
       if (idleTimer.current) clearTimeout(idleTimer.current);
       idleTimer.current = setTimeout(() => {
@@ -214,6 +230,10 @@ export function Editor({
     },
     onSelectionUpdate: ({ editor }) => {
       maybeOpenMention(editor);
+      reportNearby(editor);
+    },
+    onCreate: ({ editor }) => {
+      reportNearby(editor);
     },
     onBlur: () => setMention(null),
   }, [chapterId]);
@@ -271,6 +291,7 @@ export function Editor({
       mounted.current = false;
       if (idleTimer.current) clearTimeout(idleTimer.current);
       if (flashTimer.current) clearTimeout(flashTimer.current);
+      if (nearbyTimer.current) clearTimeout(nearbyTimer.current);
     };
   }, []);
 
@@ -348,6 +369,27 @@ export function Editor({
       </div>
     </div>
   );
+}
+
+function currentParagraphText(editor: {
+  state: {
+    selection: { $from: { parent: { textContent: string } } };
+    doc: {
+      descendants: (fn: (node: { isTextblock: boolean; textContent: string }) => boolean) => void;
+    };
+  };
+}): string {
+  const current = editor.state.selection.$from.parent.textContent.trim();
+  if (current) return current;
+  let fallback = "";
+  editor.state.doc.descendants((node) => {
+    if (node.isTextblock) {
+      const text = node.textContent.trim();
+      if (text) fallback = text;
+    }
+    return true;
+  });
+  return fallback;
 }
 
 // AI 生成内容预览组件 - 内联显示在编辑器中

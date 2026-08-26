@@ -160,8 +160,29 @@ pub struct PlotThread {
     pub id: PlotThreadId,
     pub branch_id: String,
     pub title: String,
+    #[serde(default)]
+    pub summary: String,
     pub status: PlotThreadStatus,
     pub introduced_at: StoryInstant,
     pub due_by: Option<StoryInstant>,
     pub milestones: Vec<StoryEventId>,
+}
+
+/// 作者预先设计的结构条目：人物 / 设定 / 伏笔。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StoryEntryKind {
+    Character,
+    Setting,
+    Foreshadow,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoryEntry {
+    pub id: String,
+    pub project_id: ProjectId,
+    pub kind: StoryEntryKind,
+    pub title: String,
+    pub summary: String,
 }

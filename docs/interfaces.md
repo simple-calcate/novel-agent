@@ -77,9 +77,10 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 - `save_chapter_snapshot` / `save_block_sequence` / `block_sequence`
 - `chapter_text` / `current_revision` / `commit_patch`
 - `propose_canon_mentions` / `list_canon_proposals` / `set_fact_status`
-- `list_canon_entities_for_project` / `list_canon_facts_for_project`
+- `create_story_entry` / `list_story_entries` / `delete_story_entry`
+- `list_canon_entities_for_project` / `list_canon_facts_for_project` / `list_plot_threads_for_project`
 
-`Repository` 按聚合拆在 `crates/storage/src/repository/`：`library`、`revisions`、`canon`、`queue`、`automation`。
+`Repository` 按聚合拆在 `crates/storage/src/repository/`：`library`、`revisions`、`canon`、`structure`、`queue`、`automation`。
 
 设置：`save_setting` / `get_setting`；当前作品键 `SETTING_ACTIVE_PROJECT`。
 
@@ -97,10 +98,11 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 - `enqueue_job` / `list_jobs` / `save_setting` / `get_setting`
 - `generate_continuation`
 - `propose_canon_from_chapter` / `list_canon` / `review_canon_fact`
+- `create_story_entry` / `list_story_entries` / `delete_story_entry`
 
-`LibrarySnapshot`、`ChapterBody`、`JobView`、`CanonProposal` 定义在 `novel-domain`。
+`LibrarySnapshot`、`ChapterBody`、`JobView`、`CanonProposal`、`StoryEntry` 定义在 `novel-domain`。
 
-抽取启发式在 `novel-story-model::extract_mentions`：只生成 `FactStatus::Candidate`。作者接受后才是正史。`context.hints` 与 `continuity.check` 只读已接受事实。
+产品路径：作者预先添加人物 / 设定 / 伏笔；`context.hints` 按当前段落匹配，结果排在编辑器上方。启发式抽取仍可用，但 UI 不走这条路径。
 
 ## 5. 宿主 IPC（Tauri）
 
@@ -124,11 +126,14 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 | `kernel_tools` | — | 工具自描述列表 |
 | `context_hints` | 见 `HintRequest` | `ContextHint[]` |
 | `generate_continuation` | 章、修订、prompt、config | `ContentPatch` |
-| `propose_canon` | `chapterId` | `CanonProposal[]`（新产生的候选） |
+| `propose_canon` | `chapterId` | `CanonProposal[]`（启发式抽取，非主路径） |
 | `list_canon` | `projectId`, `status?` | `CanonProposal[]` |
 | `review_canon_fact` | `factId`, `accept` | 更新后的 `CanonProposal` |
+| `create_story_entry` | `projectId`, `kind`, `title`, `summary?` | `StoryEntry`（`character` / `setting` / `foreshadow`） |
+| `list_story_entries` | `projectId` | `StoryEntry[]` |
+| `delete_story_entry` | `projectId`, `id`, `kind` | — |
 
-前端**只通过** `apps/client/src/api.ts` 的 `libraryApi` 访问作品库与正史。浏览器预览无 Tauri 时使用内存实现，契约与上表相同。作品库 / 队列 / 编辑会话 / 正史分别在 `hooks/useLibrary.ts`、`hooks/useQueue.ts`、`hooks/useEditorSession.ts`、`hooks/useCanon.ts`。
+前端**只通过** `apps/client/src/api.ts` 的 `libraryApi` 访问作品库与结构。浏览器预览无 Tauri 时使用内存实现。作品库 / 队列 / 编辑会话 / 结构分别在 `hooks/useLibrary.ts`、`hooks/useQueue.ts`、`hooks/useEditorSession.ts`、`hooks/useStructure.ts`。
 
 ## 6. 改接口时的检查表
 

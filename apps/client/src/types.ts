@@ -117,3 +117,13 @@ export interface CanonProposal {
   status: FactStatus;
   confidence: number;
 }
+
+export type StoryEntryKind = "character" | "setting" | "foreshadow";
+
+export interface StoryEntry {
+  id: string;
+  projectId: string;
+  kind: StoryEntryKind;
+  title: string;
+  summary: string;
+}

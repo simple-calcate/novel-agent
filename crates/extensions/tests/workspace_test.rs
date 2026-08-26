@@ -66,6 +66,35 @@ fn book_and_chapter_roundtrip() {
 }
 
 #[test]
+fn create_designed_story_entries() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let project = workspace.create_project("作品").unwrap();
+    workspace
+        .create_story_entry(
+            &project.id,
+            novel_domain::StoryEntryKind::Character,
+            "林晚",
+            "雾港来的刀客",
+        )
+        .unwrap();
+    workspace
+        .create_story_entry(
+            &project.id,
+            novel_domain::StoryEntryKind::Foreshadow,
+            "雾中灯塔",
+            "灯塔里还藏着旧王玺",
+        )
+        .unwrap();
+    let entries = workspace.list_story_entries(&project.id).unwrap();
+    assert_eq!(entries.len(), 2);
+    assert!(entries.iter().any(|entry| entry.title == "林晚"));
+    assert!(entries
+        .iter()
+        .any(|entry| entry.kind == novel_domain::StoryEntryKind::Foreshadow));
+}
+
+#[test]
 fn propose_and_review_canon_from_chapter() {
     let kernel = kernel_with_touch();
     let workspace = Workspace::new(&kernel);

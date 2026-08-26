@@ -2,7 +2,8 @@ use novel_automation::TypingSession;
 use novel_domain::{
     Annotation, BlockId, Book, BookId, CanonProposal, Chapter, ChapterBody, ChapterId,
     ContentBlock, ContentPatch, DomainEvent, EventId, EventSource, FactId, FactStatus, JobView,
-    LibrarySnapshot, Project, ProjectId, Revision, EVENT_SCHEMA_VERSION,
+    LibrarySnapshot, Project, ProjectId, Revision, StoryEntry, StoryEntryKind,
+    EVENT_SCHEMA_VERSION,
 };
 use novel_extensions::{BuiltinsExtension, Workspace};
 use novel_kernel::{Kernel, ProviderConfig, ToolDescriptor};
@@ -176,6 +177,15 @@ fn parse_fact_status(value: Option<&str>) -> Result<Option<FactStatus>, String> 
         Some("rejected") => Ok(Some(FactStatus::Rejected)),
         Some("superseded") => Ok(Some(FactStatus::Superseded)),
         Some(other) => Err(format!("invalid fact status: {other}")),
+    }
+}
+
+fn parse_story_kind(value: &str) -> Result<StoryEntryKind, String> {
+    match value {
+        "character" => Ok(StoryEntryKind::Character),
+        "setting" => Ok(StoryEntryKind::Setting),
+        "foreshadow" => Ok(StoryEntryKind::Foreshadow),
+        other => Err(format!("invalid story entry kind: {other}")),
     }
 }
 
@@ -835,6 +845,60 @@ fn review_canon_fact(
     CommandResult::from_result(workspace(&state).review_canon_fact(&fact_id, accept))
 }
 
+#[tauri::command]
+fn create_story_entry(
+    state: State<'_, AppState>,
+    project_id: String,
+    kind: String,
+    title: String,
+    summary: String,
+) -> CommandResult<StoryEntry> {
+    let project_id = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let kind = match parse_story_kind(&kind) {
+        Ok(kind) => kind,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).create_story_entry(
+        &project_id,
+        kind,
+        &title,
+        &summary,
+    ))
+}
+
+#[tauri::command]
+fn list_story_entries(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> CommandResult<Vec<StoryEntry>> {
+    let project_id = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).list_story_entries(&project_id))
+}
+
+#[tauri::command]
+fn delete_story_entry(
+    state: State<'_, AppState>,
+    project_id: String,
+    id: String,
+    kind: String,
+) -> CommandResult<()> {
+    let project_id = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let kind = match parse_story_kind(&kind) {
+        Ok(kind) => kind,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).delete_story_entry(&project_id, &id, kind))
+}
+
 #[cfg(test)]
 mod command_tests;
 
@@ -902,6 +966,9 @@ pub fn run() {
             propose_canon,
             list_canon,
             review_canon_fact,
+            create_story_entry,
+            list_story_entries,
+            delete_story_entry,
         ])
         .run(tauri::generate_context!())
         .expect("error while running novel agent");

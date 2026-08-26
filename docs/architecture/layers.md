@@ -12,7 +12,7 @@
 ├─────────────────────────────────────────────┤
 │  应用层 Workspace                            │
 │  novel-extensions::Workspace                 │
-│  作品库 / 设置 / 入队 / 续写 / 正史审核        │
+│  作品库 / 设置 / 入队 / 续写 / 故事结构        │
 ├─────────────────────────────────────────────┤
 │  内核 Kernel                                 │
 │  call_tool / dispatch / run_continuation     │
@@ -22,7 +22,7 @@
 │  queue/tools │  Event / Job / Patch / Canon  │
 ├──────────────┴──────────────────────────────┤
 │  单写者 StorageHandle → Repository（SQLite） │
-│  library / revisions / canon / queue / …     │
+│  library / revisions / canon / structure / … │
 └─────────────────────────────────────────────┘
 ```
 

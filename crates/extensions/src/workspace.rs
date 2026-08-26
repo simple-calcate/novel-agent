@@ -8,7 +8,7 @@ use crate::util::{storage, with_repository};
 use novel_domain::{
     Annotation, Book, BookId, CanonProposal, Chapter, ChapterBody, ChapterId, ContentBlock,
     ContentPatch, DomainEvent, FactId, FactStatus, Job, JobId, JobStatus, JobView, LibrarySnapshot,
-    Project, ProjectId, Revision,
+    Project, ProjectId, Revision, StoryEntry, StoryEntryKind,
 };
 use novel_kernel::{AgentSpec, DispatchSummary, Kernel, KernelError, ProviderConfig};
 use novel_storage::{StorageError, SETTING_ACTIVE_PROJECT};
@@ -497,6 +497,60 @@ impl<'a> Workspace<'a> {
             }),
         );
         Ok(proposal)
+    }
+
+    pub fn create_story_entry(
+        &self,
+        project_id: &ProjectId,
+        kind: StoryEntryKind,
+        title: &str,
+        summary: &str,
+    ) -> Result<StoryEntry, WorkspaceError> {
+        let entry = self.handle()?.execute(|repository| {
+            repository.create_story_entry(project_id, kind, title, summary)
+        })?;
+        self.dispatch_user(
+            "story.entry.created",
+            project_id.clone(),
+            None,
+            None,
+            json!({
+                "id": entry.id,
+                "kind": serde_json::to_value(kind).unwrap_or(Value::Null),
+                "title": title
+            }),
+        );
+        Ok(entry)
+    }
+
+    pub fn list_story_entries(
+        &self,
+        project_id: &ProjectId,
+    ) -> Result<Vec<StoryEntry>, WorkspaceError> {
+        Ok(self
+            .handle()?
+            .execute(|repository| repository.list_story_entries(project_id))?)
+    }
+
+    pub fn delete_story_entry(
+        &self,
+        project_id: &ProjectId,
+        id: &str,
+        kind: StoryEntryKind,
+    ) -> Result<(), WorkspaceError> {
+        self.handle()?
+            .execute(|repository| repository.delete_story_entry(project_id, id, kind))?;
+        self.dispatch_user(
+            "story.entry.deleted",
+            project_id.clone(),
+            None,
+            None,
+            json!({
+                "id": id,
+                "kind": serde_json::to_value(kind).unwrap_or(Value::Null)
+            }),
+        );
+        Ok(())
     }
 }
 

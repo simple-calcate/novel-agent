@@ -56,4 +56,7 @@ fn propose_accept_filters_candidates_from_hints_source() {
 
     let indexed = repository.rebuild_search_index(&project.id).unwrap();
     assert_eq!(indexed, 1);
+
+    let designed = repository.list_story_entries(&project.id).unwrap();
+    assert!(designed.is_empty(), "抽取确认不应进入预先结构");
 }

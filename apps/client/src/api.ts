@@ -15,6 +15,8 @@ import {
   FactStatus,
   LibrarySnapshot,
   Project,
+  StoryEntry,
+  StoryEntryKind,
 } from "./types";
 import { extractMentions } from "./canon/extract";
 
@@ -37,6 +39,7 @@ interface MemoryState {
   texts: Record<string, ChapterBody>;
   activeProjectId: string | undefined;
   canon: CanonProposal[];
+  story: StoryEntry[];
 }
 
 const memory: MemoryState = {
@@ -46,6 +49,7 @@ const memory: MemoryState = {
   texts: {},
   activeProjectId: undefined,
   canon: [],
+  story: [],
 };
 
 function nowIso(): string {
@@ -78,6 +82,7 @@ export function resetMemoryLibrary(): void {
   memory.texts = {};
   memory.activeProjectId = undefined;
   memory.canon = [];
+  memory.story = [];
 }
 
 export const libraryApi = {
@@ -201,6 +206,7 @@ export const libraryApi = {
     );
     memory.projects = memory.projects.filter((item) => item.id !== projectId);
     memory.canon = memory.canon.filter((item) => item.projectId !== projectId);
+    memory.story = memory.story.filter((item) => item.projectId !== projectId);
     if (memory.activeProjectId === projectId) {
       memory.activeProjectId = memory.projects[0]?.id;
     }
@@ -339,7 +345,54 @@ export const libraryApi = {
     fact.status = accept ? "accepted" : "rejected";
     return fact;
   },
+
+  async createStoryEntry(
+    projectId: string,
+    kind: StoryEntryKind,
+    title: string,
+    summary = "",
+  ): Promise<StoryEntry> {
+    if (isTauriRuntime()) {
+      return command<StoryEntry>("create_story_entry", { projectId, kind, title, summary });
+    }
+    const trimmed = title.trim();
+    if (!trimmed) throw new Error("请填写名称");
+    if (
+      memory.story.some(
+        (item) => item.projectId === projectId && item.kind === kind && item.title === trimmed,
+      )
+    ) {
+      throw new Error("该结构已存在");
+    }
+    const entry: StoryEntry = { id: newId(), projectId, kind, title: trimmed, summary };
+    memory.story.push(entry);
+    return entry;
+  },
+
+  async listStoryEntries(projectId: string): Promise<StoryEntry[]> {
+    if (isTauriRuntime()) {
+      return command<StoryEntry[]>("list_story_entries", { projectId });
+    }
+    return memory.story
+      .filter((item) => item.projectId === projectId)
+      .slice()
+      .sort((left, right) => kindOrder(left.kind) - kindOrder(right.kind) || left.title.localeCompare(right.title, "zh"));
+  },
+
+  async deleteStoryEntry(projectId: string, id: string, kind: StoryEntryKind): Promise<void> {
+    if (isTauriRuntime()) {
+      await command("delete_story_entry", { projectId, id, kind });
+      return;
+    }
+    memory.story = memory.story.filter((item) => item.id !== id);
+  },
 };
+
+function kindOrder(kind: StoryEntryKind): number {
+  if (kind === "character") return 0;
+  if (kind === "setting") return 1;
+  return 2;
+}
 
 function blockContent(block: ContentBlock): Pick<ContentBlock, "kind" | "text" | "position" | "markup"> {
   return { kind: block.kind, text: block.text, position: block.position, markup: block.markup };

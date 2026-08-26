@@ -92,7 +92,10 @@ impl Tool for ContinuityCheckTool {
                     .filter(|fact| fact.status == FactStatus::Accepted)
                     .collect(),
             };
-            let threads = repository.list_plot_threads()?;
+            let threads = match &project_id {
+                Some(id) => repository.list_plot_threads_for_project(id)?,
+                None => repository.list_plot_threads()?,
+            };
             let issues = validate_at(
                 &facts,
                 &[],

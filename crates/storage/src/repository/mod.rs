@@ -9,6 +9,7 @@ mod canon;
 mod library;
 mod queue;
 mod revisions;
+mod structure;
 
 pub const SETTING_ACTIVE_PROJECT: &str = "active_project_id";
 
