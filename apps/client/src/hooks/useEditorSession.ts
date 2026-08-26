@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { libraryApi } from "../api";
+import { libraryApi, isTauriRuntime } from "../api";
 import { Chapter, CommandResult, ContentBlock, ContextHint, Project, StoryEntry } from "../types";
 import { logger } from "../logger";
 import { ModelConfig } from "../components/SettingsModal";
@@ -22,6 +22,7 @@ export function useEditorSession(options: {
   const [modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
   const draftText = useRef("");
   const draftBlocks = useRef<ContentBlock[]>([]);
+  const nearbyRef = useRef("");
 
   useEffect(() => {
     invoke<ModelConfig | null>("load_model_config")
@@ -86,11 +87,12 @@ export function useEditorSession(options: {
 
   const refreshHints = useCallback(
     async (nearbyText: string) => {
+      nearbyRef.current = nearbyText;
       if (!activeChapter) {
         setHints([]);
         return;
       }
-      if (!project) {
+      if (!project || !isTauriRuntime()) {
         setHints(matchStoryEntries(nearbyText, storyEntries, revision));
         return;
       }
@@ -119,7 +121,7 @@ export function useEditorSession(options: {
   );
 
   useEffect(() => {
-    void refreshHints(nearbyFromText(draftText.current));
+    void refreshHints(nearbyRef.current || nearbyFromText(draftText.current));
   }, [refreshHints, chapterReady]);
 
   const handleGenerate = useCallback(async () => {
@@ -187,12 +189,11 @@ export function useEditorSession(options: {
 }
 
 function nearbyFromText(text: string): string {
-  return (
-    text
-      .split(/\n+/)
-      .map((item) => item.trim())
-      .find(Boolean) ?? ""
-  );
+  const parts = text
+    .split(/\n+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return parts[0] ?? "";
 }
 
 function matchStoryEntries(nearby: string, entries: StoryEntry[], revision: number): ContextHint[] {

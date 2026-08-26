@@ -164,15 +164,14 @@ export function Editor({
   emitModeChangeRef.current = emitModeChange;
   const onNearbyChangeRef = useRef(onNearbyChange);
   onNearbyChangeRef.current = onNearbyChange;
-  const nearbyTimer = useRef<ReturnType<typeof setTimeout>>();
+  const lastNearby = useRef<string | null>(null);
 
   const reportNearby = useCallback((ed: NonNullable<ReturnType<typeof useEditor>>) => {
     if (!ed) return;
     const nearby = currentParagraphText(ed);
-    if (nearbyTimer.current) clearTimeout(nearbyTimer.current);
-    nearbyTimer.current = setTimeout(() => {
-      onNearbyChangeRef.current?.(nearby);
-    }, 80);
+    if (lastNearby.current === nearby) return;
+    lastNearby.current = nearby;
+    onNearbyChangeRef.current?.(nearby);
   }, []);
 
   const editor = useEditor({
@@ -213,7 +212,7 @@ export function Editor({
       const bodyText = blocks
         .filter((b) => b.kind === "body")
         .map((b) => b.text)
-        .join("");
+        .join("\n");
       const thinkBlocks = blocks.filter((b) => b.kind === "thinking");
       setWordCount(bodyText.length);
       setThinkingCount(thinkBlocks.length);
@@ -291,7 +290,6 @@ export function Editor({
       mounted.current = false;
       if (idleTimer.current) clearTimeout(idleTimer.current);
       if (flashTimer.current) clearTimeout(flashTimer.current);
-      if (nearbyTimer.current) clearTimeout(nearbyTimer.current);
     };
   }, []);
 
