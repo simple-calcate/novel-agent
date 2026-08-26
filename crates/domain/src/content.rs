@@ -67,7 +67,7 @@ pub enum ContentFormat {
     StructuredAst,
 }
 
-/// 块类型：正文块 vs 思考块（模拟 AI reasoning + output 的写作模型）。
+/// 块类型：正文块 vs 思考块。语义见写作协议 `docs/writing-protocol.md`。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BlockKind {

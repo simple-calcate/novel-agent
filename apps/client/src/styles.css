@@ -579,12 +579,30 @@ body {
   flex-shrink: 0;
 }
 
+.novel-editor .thinking-content-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
 .novel-editor .thinking-content {
   flex: 1;
   font-style: italic;
   font-size: 0.94em;
   line-height: 1.75;
   min-width: 0;
+}
+
+.novel-editor .thinking-placeholder {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--text-dim);
+  font-style: italic;
+  font-size: 0.94em;
+  line-height: 1.75;
+  pointer-events: none;
+  opacity: 0.7;
 }
 
 .novel-editor .thinking-content p {
@@ -714,6 +732,10 @@ body {
   align-items: center;
   gap: 4px;
   color: var(--accent);
+}
+
+.stat.skip {
+  color: var(--gold);
 }
 
 /* 导出菜单 */

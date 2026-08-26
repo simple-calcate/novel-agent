@@ -11,6 +11,7 @@ pub mod ids;
 pub mod jobs;
 pub mod patches;
 pub mod plugins;
+pub mod protocol;
 pub mod story;
 pub mod work;
 
@@ -21,6 +22,7 @@ pub use ids::*;
 pub use jobs::*;
 pub use patches::*;
 pub use plugins::*;
+pub use protocol::*;
 pub use story::*;
 pub use work::*;
 

@@ -3,14 +3,15 @@ import { Extension } from "@tiptap/core";
 import type { BlockKind, ContentBlock, MarkupRef } from "../types";
 
 export type { BlockKind, ContentBlock, MarkupRef };
-
-/** 一条训练样本：思考 + 正文 */
-export interface TrainingExample {
-  thinking: string;
-  content: string;
-}
-
-export type ExportFormat = "jsonl" | "sharegpt" | "r1";
+export {
+  buildTrainingExamples,
+  filterExamples,
+  formatFilename,
+  qualityCounts,
+  serializeExamples,
+  type ExportFormat,
+  type TrainingExample,
+} from "./protocol";
 
 function newId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -161,7 +162,7 @@ function markupFromAttrs(attrs: Record<string, unknown>): MarkupRef | null {
   }
 }
 
-/** 标记引用的可读标签，与 Rust 端 label() 一致 */
+/** 标记引用的可读标签（编辑器展示）。训练导出用 Rust 口径的摘要，见 protocol.ts。 */
 export function markupLabel(ref: MarkupRef): string {
   switch (ref.type) {
     case "task":
@@ -170,91 +171,6 @@ export function markupLabel(ref: MarkupRef): string {
       return `设定: ${ref.entityPath}.${ref.field}`;
     case "custom":
       return `@${ref.tag}: ${ref.body}`;
-  }
-}
-
-/**
- * 按「思考 -> 正文」配对构建训练样本。
- * 连续 thinking 块合并为同一段思考；连续 body 块累积为同一段正文，
- * 直到下一个 thinking 出现时结算上一条样本。与 Rust 端 build_training_examples 一致。
- */
-export function buildTrainingExamples(
-  blocks: ContentBlock[],
-  includeMarkup = false,
-): TrainingExample[] {
-  const examples: TrainingExample[] = [];
-  let thinking = "";
-  let content = "";
-
-  for (const block of blocks) {
-    if (block.kind === "thinking") {
-      // 新的思考段：先结算上一条思考 + 正文对（若有未结算正文）
-      if (content) {
-        examples.push({ thinking, content });
-        thinking = "";
-        content = "";
-      }
-      if (thinking) thinking += "\n";
-      thinking += block.text;
-      if (includeMarkup) {
-        for (const ref of block.markup) {
-          thinking += `\n[${markupLabel(ref)}]`;
-        }
-      }
-    } else {
-      if (content) content += "\n";
-      content += block.text;
-    }
-  }
-  if (content) {
-    examples.push({ thinking, content });
-  }
-  return examples;
-}
-
-function r1Turn(thinking: string, content: string): string {
-  const t = thinking.trim();
-  if (t) {
-    return `<think>\n${t}\n</think>\n\n${content}`;
-  }
-  return content;
-}
-
-/**
- * 序列化为三种训练格式，与 Rust 端 serialize_examples 一致：
- * - jsonl: 每行 {"thinking": "...", "content": "..."}
- * - sharegpt: [{"conversations": [{"from": "human", ...}, {"from": "assistant", ...}]}]
- * - r1: "<think>...</think>\n\n正文" 每条一行（JSON 转义）
- */
-export function serializeExamples(examples: TrainingExample[], format: ExportFormat): string {
-  switch (format) {
-    case "jsonl":
-      return examples
-        .map((e) => JSON.stringify({ thinking: e.thinking, content: e.content }))
-        .join("\n");
-    case "sharegpt":
-      return JSON.stringify(
-        examples.map((e) => ({
-          conversations: [
-            { from: "human", value: "继续写作" },
-            { from: "assistant", value: r1Turn(e.thinking, e.content) },
-          ],
-        })),
-      );
-    case "r1":
-      return examples.map((e) => r1Turn(e.thinking, e.content)).join("\n");
-  }
-}
-
-export function formatFilename(format: ExportFormat): string {
-  const stamp = new Date().toISOString().slice(0, 10);
-  switch (format) {
-    case "jsonl":
-      return `training-${stamp}.jsonl`;
-    case "sharegpt":
-      return `training-${stamp}.json`;
-    case "r1":
-      return `training-${stamp}.txt`;
   }
 }
 

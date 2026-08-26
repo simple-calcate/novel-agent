@@ -622,6 +622,7 @@ export function App() {
                 initialBlocks={chapterBlocks}
                 projectId={project?.id}
                 chapterId={activeChapter}
+                chapterTitle={activeChapterRecord?.title}
                 onTextChange={(text) => {
                   draftText.current = text;
                   refreshHints(text.slice(-300));

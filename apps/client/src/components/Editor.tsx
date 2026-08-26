@@ -22,6 +22,8 @@ import {
   BlockIdentity,
   buildTrainingExamples,
   serializeExamples,
+  filterExamples,
+  qualityCounts,
   formatFilename,
   downloadText,
   ExportFormat,
@@ -37,6 +39,7 @@ interface EditorProps {
   /** 领域事件定位：用于模式切换信号发射（浏览器模式自动降级） */
   projectId?: string | undefined;
   chapterId?: string | undefined;
+  chapterTitle?: string | undefined;
   /** 切换章节时注入已保存正文；编辑器按 chapterId 重建 */
   initialText?: string | undefined;
   initialBlocks?: ContentBlock[] | undefined;
@@ -94,12 +97,16 @@ export function Editor({
   onInsertText,
   projectId,
   chapterId,
+  chapterTitle,
   initialText = "",
   initialBlocks,
   onBlocksChange,
 }: EditorProps) {
   const [wordCount, setWordCount] = useState(0);
   const [thinkingCount, setThinkingCount] = useState(0);
+  const [beatStats, setBeatStats] = useState(() =>
+    qualityCounts(buildTrainingExamples(initialBlocks ?? [], true, chapterTitle)),
+  );
   const [isTyping, setIsTyping] = useState(false);
   const [mention, setMention] = useState<MentionMenuState | null>(null);
   /** 类型标记渐隐动画开关：true 时编辑器内正文/思考/标签按类型着色并逐渐消失 */
@@ -166,7 +173,12 @@ export function Editor({
         heading: { levels: [1, 2, 3] },
       }),
       Placeholder.configure({
-        placeholder: "开始你的创作...\n新行行首按 Tab 切换思考/正文",
+        placeholder: ({ node }) =>
+          node.type.name === "thinkingBlock"
+            ? ""
+            : "写给读者的正文。空行按 Tab 切到思考",
+        includeChildren: true,
+        showOnlyCurrent: false,
       }),
       ThinkingBlock,
       MarkupRef,
@@ -200,8 +212,10 @@ export function Editor({
         .map((b) => b.text)
         .join("");
       const thinkBlocks = blocks.filter((b) => b.kind === "thinking");
+      const stats = qualityCounts(buildTrainingExamples(blocks, true, chapterTitle));
       setWordCount(bodyText.length);
       setThinkingCount(thinkBlocks.length);
+      setBeatStats(stats);
       setIsTyping(true);
       onTextChange(bodyText);
       onBlocksChange?.(blocks);
@@ -286,12 +300,12 @@ export function Editor({
     (format: ExportFormat) => {
       if (!editor) return;
       const blocks = editorToBlocks(editor);
-      const examples = buildTrainingExamples(blocks, true);
+      const examples = filterExamples(buildTrainingExamples(blocks, true, chapterTitle), "usable");
       if (examples.length === 0) return;
       const output = serializeExamples(examples, format);
       downloadText(formatFilename(format), output);
     },
-    [editor],
+    [editor, chapterTitle],
   );
 
   return (
@@ -305,6 +319,16 @@ export function Editor({
               {thinkingCount} 段思考
             </span>
           )}
+          {(beatStats.gold > 0 || beatStats.usable > 0) && (
+            <span className="stat" title="写作协议：有思考且未串层的拍">
+              {beatStats.gold + beatStats.usable} 拍可训练
+            </span>
+          )}
+          {beatStats.skip > 0 && (
+            <span className="stat skip" title="缺思考、过短或正文混入作者注">
+              {beatStats.skip} 拍已跳过
+            </span>
+          )}
           <span className={`stat status ${isTyping ? "typing" : ""}`}>
             {isTyping ? "输入中..." : "已停笔"}
           </span>
@@ -316,8 +340,9 @@ export function Editor({
               导出
             </button>
             <div className="export-menu">
-              <button onClick={() => handleExport("jsonl")}>JSONL · thinking/content 对</button>
-              <button onClick={() => handleExport("sharegpt")}>ShareGPT · 对话格式</button>
+              <button onClick={() => handleExport("jsonl")}>JSONL · 协议字段</button>
+              <button onClick={() => handleExport("sharegpt")}>ShareGPT · 含系统短指令</button>
+              <button onClick={() => handleExport("alpaca")}>Alpaca · instruction/input/output</button>
               <button onClick={() => handleExport("r1")}>R1 风格 · &lt;think&gt; 标签</button>
             </div>
           </div>

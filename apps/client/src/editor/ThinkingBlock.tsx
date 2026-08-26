@@ -8,10 +8,11 @@ import {
 import { Brain, ChevronDown, ChevronRight } from "lucide-react";
 
 /**
- * 思考块：模拟 AI 的 thinking 输出。
- * - 行首输入 `>> ` 把当前段落转为思考块
- * - 思考块内 Enter 延续思考（多行 = 多个连续 thinking 块）
- * - 思考块行首输入 `<< ` 或按 Mod-Enter 退出，回到正文
+ * 思考块：作者决策层，读者看不到。协议见 docs/writing-protocol.md
+ * - 空行行首 Tab 切换思考/正文（拍的边界）
+ * - 行首 `>> ` 把当前段落转为思考块
+ * - 思考块内 Enter 延续同一拍思考
+ * - 思考块行首 `<< ` 或 Mod-Enter 结束思考，开始本拍正文
  * - 可折叠为单行摘要
  */
 export const ThinkingBlock = Node.create({
@@ -121,6 +122,7 @@ export const ThinkingBlock = Node.create({
 
 function ThinkingBlockView({ node, updateAttributes }: ReactNodeViewProps) {
   const collapsed = node.attrs.collapsed === true;
+  const isEmpty = !(node.textContent || "").trim();
   const firstLine = (node.textContent || "思考…").split("\n")[0];
   const summary = firstLine.length > 40 ? `${firstLine.slice(0, 40)}…` : firstLine;
 
@@ -143,7 +145,14 @@ function ThinkingBlockView({ node, updateAttributes }: ReactNodeViewProps) {
           <span className="thinking-summary-hint">· 思考已折叠</span>
         </span>
       ) : (
-        <NodeViewContent className="thinking-content" />
+        <span className="thinking-content-wrap">
+          {isEmpty && (
+            <span className="thinking-placeholder" contentEditable={false}>
+              意图：这一拍要完成什么（读者看不到）
+            </span>
+          )}
+          <NodeViewContent className="thinking-content" />
+        </span>
       )}
     </NodeViewWrapper>
   );

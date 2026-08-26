@@ -140,7 +140,7 @@ pub(crate) fn build_request(model: &str, spec: &AgentSpec) -> ModelRequest {
         system_prompt: spec
             .system_prompt
             .clone()
-            .unwrap_or_else(|| "你是网文续写助手，必须遵守给定设定。".into()),
+            .unwrap_or_else(|| novel_domain::WRITING_PROTOCOL_SYSTEM.into()),
         user_prompt: format!("{}\n\n任务：{}", spec.context_text, spec.prompt),
         max_tokens: spec.budget.max_tokens,
         temperature: spec.temperature,
