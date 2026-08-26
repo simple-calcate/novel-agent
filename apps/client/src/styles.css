@@ -1004,8 +1004,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 14px;
+  gap: 4px;
+  padding: 12px 6px;
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -1060,6 +1060,36 @@ body {
   font-size: 12px;
   color: var(--text-muted);
   line-height: 1.6;
+}
+
+.canon-lead {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.canon-kind {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.canon-quote {
+  font-family: var(--font-editor);
+  color: var(--text-dim) !important;
+  font-size: 11px !important;
+}
+
+.canon-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 /* Agent Messages */

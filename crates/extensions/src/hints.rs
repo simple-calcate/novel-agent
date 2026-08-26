@@ -4,10 +4,11 @@
 use crate::util::with_repository;
 use async_trait::async_trait;
 use novel_context_hints::{HintEngine, HintQuery};
-use novel_domain::{ChapterId, ProjectId, Revision, WorkContextRef};
+use novel_domain::{ChapterId, FactStatus, ProjectId, Revision, WorkContextRef};
 use novel_kernel::{Extension, KernelBuilder, KernelError, Tool, ToolContext};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use std::collections::HashSet;
 
 pub struct ContextHintsTool;
 
@@ -53,11 +54,17 @@ impl Tool for ContextHintsTool {
         let chapter_id = parsed.chapter_id.parse::<ChapterId>().unwrap_or_default();
 
         let (entities, facts, threads) = with_repository(ctx.kernel(), |repository| {
-            Ok((
-                repository.list_canon_entities()?,
-                repository.list_canon_facts()?,
-                repository.list_plot_threads()?,
-            ))
+            let facts =
+                repository.list_canon_facts_for_project(&project_id, Some(FactStatus::Accepted))?;
+            let accepted_ids: HashSet<_> =
+                facts.iter().map(|fact| fact.entity_id.clone()).collect();
+            let entities = repository
+                .list_canon_entities_for_project(&project_id)?
+                .into_iter()
+                .filter(|entity| accepted_ids.contains(&entity.id))
+                .collect::<Vec<_>>();
+            let threads = repository.list_plot_threads()?;
+            Ok((entities, facts, threads))
         })?;
 
         let query = HintQuery {

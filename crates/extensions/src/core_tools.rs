@@ -4,7 +4,7 @@
 use crate::util::with_repository;
 use async_trait::async_trait;
 use novel_domain::StoryInstant;
-use novel_domain::{ProjectId, Revision};
+use novel_domain::{FactStatus, ProjectId, Revision};
 use novel_kernel::{
     AgentSpec, Extension, KernelBuilder, KernelError, ProviderConfig, Tool, ToolContext,
 };
@@ -79,9 +79,19 @@ impl Tool for ContinuityCheckTool {
         "基于正史模型检查连续性问题"
     }
 
-    async fn execute(&self, _input: Value, ctx: &ToolContext<'_>) -> Result<Value, KernelError> {
+    async fn execute(&self, input: Value, ctx: &ToolContext<'_>) -> Result<Value, KernelError> {
+        let project_id = string_field(&input, "projectId").and_then(|value| value.parse().ok());
         let (issues, open_threads) = with_repository(ctx.kernel(), |repository| {
-            let facts = repository.list_canon_facts()?;
+            let facts = match &project_id {
+                Some(id) => {
+                    repository.list_canon_facts_for_project(id, Some(FactStatus::Accepted))?
+                }
+                None => repository
+                    .list_canon_facts()?
+                    .into_iter()
+                    .filter(|fact| fact.status == FactStatus::Accepted)
+                    .collect(),
+            };
             let threads = repository.list_plot_threads()?;
             let issues = validate_at(
                 &facts,

@@ -7,13 +7,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
   Book,
+  CanonProposal,
   Chapter,
   ChapterBody,
   CommandResult,
   ContentBlock,
+  FactStatus,
   LibrarySnapshot,
   Project,
 } from "./types";
+import { extractMentions } from "./canon/extract";
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -33,6 +36,7 @@ interface MemoryState {
   chapters: Chapter[];
   texts: Record<string, ChapterBody>;
   activeProjectId: string | undefined;
+  canon: CanonProposal[];
 }
 
 const memory: MemoryState = {
@@ -41,6 +45,7 @@ const memory: MemoryState = {
   chapters: [],
   texts: {},
   activeProjectId: undefined,
+  canon: [],
 };
 
 function nowIso(): string {
@@ -72,6 +77,7 @@ export function resetMemoryLibrary(): void {
   memory.chapters = [];
   memory.texts = {};
   memory.activeProjectId = undefined;
+  memory.canon = [];
 }
 
 export const libraryApi = {
@@ -194,6 +200,7 @@ export const libraryApi = {
       memory.books.some((book) => book.id === chapter.bookId),
     );
     memory.projects = memory.projects.filter((item) => item.id !== projectId);
+    memory.canon = memory.canon.filter((item) => item.projectId !== projectId);
     if (memory.activeProjectId === projectId) {
       memory.activeProjectId = memory.projects[0]?.id;
     }
@@ -275,6 +282,62 @@ export const libraryApi = {
       ...siblings,
     ];
     return snapshot(projectId);
+  },
+
+  async proposeCanon(chapterId: string): Promise<CanonProposal[]> {
+    if (isTauriRuntime()) {
+      return command<CanonProposal[]>("propose_canon", { chapterId });
+    }
+    const chapter = memory.chapters.find((item) => item.id === chapterId);
+    const book = memory.books.find((item) => item.id === chapter?.bookId);
+    if (!chapter || !book) throw new Error("章节不存在");
+    const text = memory.texts[chapterId]?.text ?? "";
+    const created: CanonProposal[] = [];
+    for (const mention of extractMentions(text)) {
+      const duplicate = memory.canon.some(
+        (item) =>
+          item.projectId === book.projectId &&
+          item.entityName === mention.entityName &&
+          item.entityKind === mention.entityKind &&
+          item.predicate === mention.predicate &&
+          item.chapterId === chapterId,
+      );
+      if (duplicate) continue;
+      created.push({
+        factId: newId(),
+        entityId: newId(),
+        projectId: book.projectId,
+        chapterId,
+        entityName: mention.entityName,
+        entityKind: mention.entityKind,
+        predicate: mention.predicate,
+        object: mention.object,
+        quote: mention.quote,
+        status: "candidate",
+        confidence: mention.confidence,
+      });
+    }
+    memory.canon.push(...created);
+    return created;
+  },
+
+  async listCanon(projectId: string, status?: FactStatus): Promise<CanonProposal[]> {
+    if (isTauriRuntime()) {
+      return command<CanonProposal[]>("list_canon", { projectId, status: status ?? null });
+    }
+    return memory.canon.filter(
+      (item) => item.projectId === projectId && (status ? item.status === status : true),
+    );
+  },
+
+  async reviewCanonFact(factId: string, accept: boolean): Promise<CanonProposal> {
+    if (isTauriRuntime()) {
+      return command<CanonProposal>("review_canon_fact", { factId, accept });
+    }
+    const fact = memory.canon.find((item) => item.factId === factId);
+    if (!fact) throw new Error("正史条目不存在");
+    fact.status = accept ? "accepted" : "rejected";
+    return fact;
   },
 };
 

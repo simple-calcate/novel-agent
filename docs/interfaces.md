@@ -23,6 +23,7 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 | `project.created` / `project.renamed` / `project.deleted` | 作品增删改 |
 | `book.created` / `book.renamed` / `book.deleted` / `book.reordered` | 书 |
 | `chapter.created` / `chapter.renamed` / `chapter.deleted` / `chapter.reordered` | 章 |
+| `canon.proposed` / `canon.accepted` / `canon.rejected` | 正史候选生成与作者审核 |
 | `block.mode.changed` | 编辑器思考/正文切换 |
 | `agent.finished` | 内核续写结束（可选） |
 
@@ -75,6 +76,10 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 - `rename_chapter` / `delete_chapter` / `move_chapter(delta)`
 - `save_chapter_snapshot` / `save_block_sequence` / `block_sequence`
 - `chapter_text` / `current_revision` / `commit_patch`
+- `propose_canon_mentions` / `list_canon_proposals` / `set_fact_status`
+- `list_canon_entities_for_project` / `list_canon_facts_for_project`
+
+`Repository` 按聚合拆在 `crates/storage/src/repository/`：`library`、`revisions`、`canon`、`queue`、`automation`。
 
 设置：`save_setting` / `get_setting`；当前作品键 `SETTING_ACTIVE_PROJECT`。
 
@@ -91,8 +96,11 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 - `rename_*` / `delete_*` / `move_*`
 - `enqueue_job` / `list_jobs` / `save_setting` / `get_setting`
 - `generate_continuation`
+- `propose_canon_from_chapter` / `list_canon` / `review_canon_fact`
 
-`LibrarySnapshot`、`ChapterBody`、`JobView` 定义在 `novel-domain`。
+`LibrarySnapshot`、`ChapterBody`、`JobView`、`CanonProposal` 定义在 `novel-domain`。
+
+抽取启发式在 `novel-story-model::extract_mentions`：只生成 `FactStatus::Candidate`。作者接受后才是正史。`context.hints` 与 `continuity.check` 只读已接受事实。
 
 ## 5. 宿主 IPC（Tauri）
 
@@ -116,8 +124,11 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 | `kernel_tools` | — | 工具自描述列表 |
 | `context_hints` | 见 `HintRequest` | `ContextHint[]` |
 | `generate_continuation` | 章、修订、prompt、config | `ContentPatch` |
+| `propose_canon` | `chapterId` | `CanonProposal[]`（新产生的候选） |
+| `list_canon` | `projectId`, `status?` | `CanonProposal[]` |
+| `review_canon_fact` | `factId`, `accept` | 更新后的 `CanonProposal` |
 
-前端**只通过** `apps/client/src/api.ts` 的 `libraryApi` 访问作品库。浏览器预览无 Tauri 时使用内存实现，契约与上表相同。作品库 / 队列 / 编辑会话状态分别在 `hooks/useLibrary.ts`、`hooks/useQueue.ts`、`hooks/useEditorSession.ts`。
+前端**只通过** `apps/client/src/api.ts` 的 `libraryApi` 访问作品库与正史。浏览器预览无 Tauri 时使用内存实现，契约与上表相同。作品库 / 队列 / 编辑会话 / 正史分别在 `hooks/useLibrary.ts`、`hooks/useQueue.ts`、`hooks/useEditorSession.ts`、`hooks/useCanon.ts`。
 
 ## 6. 改接口时的检查表
 

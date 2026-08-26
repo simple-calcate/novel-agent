@@ -33,4 +33,24 @@ describe("memory library", () => {
     expect(after.chapters).toHaveLength(0);
     expect(after.books).toHaveLength(1);
   });
+
+  it("extracts canon candidates and accepts them", async () => {
+    const project = await libraryApi.createProject("夜航星图");
+    const book = await libraryApi.createBook(project.id, "卷一");
+    const chapter = await libraryApi.createChapter(project.id, book.id, "第一章");
+    await libraryApi.saveChapter(chapter.id, "林晚说道：「今夜雾很重。」走进雾港码头。");
+
+    const created = await libraryApi.proposeCanon(chapter.id);
+    expect(created.some((item) => item.entityName === "林晚")).toBe(true);
+    const again = await libraryApi.proposeCanon(chapter.id);
+    expect(again).toHaveLength(0);
+
+    const candidates = await libraryApi.listCanon(project.id, "candidate");
+    expect(candidates.length).toBeGreaterThan(0);
+    await libraryApi.reviewCanonFact(candidates[0].factId, true);
+    const accepted = await libraryApi.listCanon(project.id, "accepted");
+    expect(accepted).toHaveLength(1);
+    const leftover = await libraryApi.listCanon(project.id, "candidate");
+    expect(leftover.every((item) => item.factId !== accepted[0].factId)).toBe(true);
+  });
 });

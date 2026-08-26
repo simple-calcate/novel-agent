@@ -93,3 +93,27 @@ export interface JobView {
   createdAt: string;
   updatedAt: string;
 }
+
+export type EntityKind =
+  | "character"
+  | "location"
+  | "organization"
+  | "item"
+  | "ability"
+  | "worldRule";
+
+export type FactStatus = "candidate" | "accepted" | "rejected" | "superseded";
+
+export interface CanonProposal {
+  factId: string;
+  entityId: string;
+  projectId: string;
+  chapterId?: string | null;
+  entityName: string;
+  entityKind: EntityKind;
+  predicate: string;
+  object: string;
+  quote: string;
+  status: FactStatus;
+  confidence: number;
+}

@@ -66,8 +66,39 @@ fn book_and_chapter_roundtrip() {
 }
 
 #[test]
+fn propose_and_review_canon_from_chapter() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let project = workspace.create_project("作品").unwrap();
+    let book = workspace.create_book(&project.id, "卷一", "", 0).unwrap();
+    let chapter = workspace
+        .create_chapter(&project.id, &book.id.to_string(), "第一章", 0)
+        .unwrap();
+    workspace
+        .save_chapter(&chapter.id, "林晚说道：「今夜雾很重。」", None)
+        .unwrap();
+    let created = workspace.propose_canon_from_chapter(&chapter.id).unwrap();
+    assert!(!created.is_empty());
+    let candidates = workspace
+        .list_canon(&project.id, Some(novel_domain::FactStatus::Candidate))
+        .unwrap();
+    assert_eq!(candidates.len(), created.len());
+    let reviewed = workspace
+        .review_canon_fact(&candidates[0].fact_id, true)
+        .unwrap();
+    assert_eq!(reviewed.status, novel_domain::FactStatus::Accepted);
+    assert!(workspace
+        .list_canon(&project.id, Some(novel_domain::FactStatus::Candidate))
+        .unwrap()
+        .iter()
+        .all(|item| item.fact_id != reviewed.fact_id));
+}
+
+#[test]
 fn user_event_kind_matches_library_ops() {
     assert_eq!(EventKind::ProjectCreated.as_str(), "project.created");
     assert_eq!(EventKind::BookCreated.as_str(), "book.created");
     assert_eq!(EventKind::ChapterCreated.as_str(), "chapter.created");
+    assert_eq!(EventKind::CanonProposed.as_str(), "canon.proposed");
+    assert_eq!(EventKind::CanonAccepted.as_str(), "canon.accepted");
 }

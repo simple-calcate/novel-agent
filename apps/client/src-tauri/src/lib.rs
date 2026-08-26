@@ -1,8 +1,8 @@
 use novel_automation::TypingSession;
 use novel_domain::{
-    Annotation, BlockId, Book, BookId, Chapter, ChapterBody, ChapterId, ContentBlock, ContentPatch,
-    DomainEvent, EventId, EventSource, JobView, LibrarySnapshot, Project, ProjectId, Revision,
-    EVENT_SCHEMA_VERSION,
+    Annotation, BlockId, Book, BookId, CanonProposal, Chapter, ChapterBody, ChapterId,
+    ContentBlock, ContentPatch, DomainEvent, EventId, EventSource, FactId, FactStatus, JobView,
+    LibrarySnapshot, Project, ProjectId, Revision, EVENT_SCHEMA_VERSION,
 };
 use novel_extensions::{BuiltinsExtension, Workspace};
 use novel_kernel::{Kernel, ProviderConfig, ToolDescriptor};
@@ -160,6 +160,23 @@ fn parse_chapter_id(value: &str) -> Result<ChapterId, String> {
     value
         .parse()
         .map_err(|_| format!("invalid chapter id: {value}"))
+}
+
+fn parse_fact_id(value: &str) -> Result<FactId, String> {
+    value
+        .parse()
+        .map_err(|_| format!("invalid fact id: {value}"))
+}
+
+fn parse_fact_status(value: Option<&str>) -> Result<Option<FactStatus>, String> {
+    match value {
+        None | Some("") => Ok(None),
+        Some("candidate") => Ok(Some(FactStatus::Candidate)),
+        Some("accepted") => Ok(Some(FactStatus::Accepted)),
+        Some("rejected") => Ok(Some(FactStatus::Rejected)),
+        Some("superseded") => Ok(Some(FactStatus::Superseded)),
+        Some(other) => Err(format!("invalid fact status: {other}")),
+    }
 }
 
 #[tauri::command]
@@ -776,6 +793,48 @@ fn list_jobs(state: State<'_, AppState>) -> CommandResult<Vec<JobView>> {
     CommandResult::from_result(workspace(&state).list_jobs(30))
 }
 
+#[tauri::command]
+fn propose_canon(
+    state: State<'_, AppState>,
+    chapter_id: String,
+) -> CommandResult<Vec<CanonProposal>> {
+    let chapter_id = match parse_chapter_id(&chapter_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).propose_canon_from_chapter(&chapter_id))
+}
+
+#[tauri::command]
+fn list_canon(
+    state: State<'_, AppState>,
+    project_id: String,
+    status: Option<String>,
+) -> CommandResult<Vec<CanonProposal>> {
+    let project_id = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let status = match parse_fact_status(status.as_deref()) {
+        Ok(status) => status,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).list_canon(&project_id, status))
+}
+
+#[tauri::command]
+fn review_canon_fact(
+    state: State<'_, AppState>,
+    fact_id: String,
+    accept: bool,
+) -> CommandResult<CanonProposal> {
+    let fact_id = match parse_fact_id(&fact_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).review_canon_fact(&fact_id, accept))
+}
+
 #[cfg(test)]
 mod command_tests;
 
@@ -840,6 +899,9 @@ pub fn run() {
             kernel_tools,
             enqueue_job,
             list_jobs,
+            propose_canon,
+            list_canon,
+            review_canon_fact,
         ])
         .run(tauri::generate_context!())
         .expect("error while running novel agent");

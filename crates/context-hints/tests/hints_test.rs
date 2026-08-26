@@ -22,6 +22,7 @@ fn matches_entity_by_name() {
     };
     let entity = CanonEntity {
         id: EntityId::new(),
+        project_id: ProjectId::new(),
         branch_id: "main".into(),
         kind: EntityKind::Character,
         canonical_name: "沈雾".into(),
@@ -46,6 +47,7 @@ fn matches_entity_by_alias() {
     };
     let entity = CanonEntity {
         id: EntityId::new(),
+        project_id: ProjectId::new(),
         branch_id: "main".into(),
         kind: EntityKind::Character,
         canonical_name: "沈雾".into(),
@@ -101,6 +103,7 @@ fn result_limit_respected() {
     let entities: Vec<CanonEntity> = (0..10)
         .map(|i| CanonEntity {
             id: EntityId::new(),
+            project_id: ProjectId::new(),
             branch_id: "main".into(),
             kind: EntityKind::Character,
             canonical_name: format!("角色{i}"),

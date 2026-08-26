@@ -11,6 +11,7 @@ import {
   PenLine,
   Plus,
   Settings,
+  ScrollText,
   Sparkles,
   Terminal,
 } from "lucide-react";
@@ -20,6 +21,7 @@ import { Editor, AIPreview } from "./components/Editor";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ContextRail } from "./components/ContextRail";
 import { WorkflowPanel } from "./components/WorkflowPanel";
+import { CanonPanel } from "./components/CanonPanel";
 import { SettingsModal } from "./components/SettingsModal";
 import { LogPanel } from "./components/LogPanel";
 import { CreateDialog } from "./components/CreateDialog";
@@ -28,9 +30,10 @@ import { logger } from "./logger";
 import { useLibrary } from "./hooks/useLibrary";
 import { useQueue } from "./hooks/useQueue";
 import { useEditorSession } from "./hooks/useEditorSession";
+import { useCanon } from "./hooks/useCanon";
 
 export function App() {
-  const [sidebarTab, setSidebarTab] = useState<"context" | "workflow" | "agent">("context");
+  const [sidebarTab, setSidebarTab] = useState<"context" | "canon" | "workflow" | "agent">("context");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [logPanelOpen, setLogPanelOpen] = useState(false);
   const library = useLibrary();
@@ -77,6 +80,7 @@ export function App() {
     handleAccept,
     handleReject,
   } = session;
+  const canon = useCanon(project, activeChapter);
 
   const activeChapterRecord = chapters.find((chapter) => chapter.id === activeChapter);
   const promptCopy = prompt
@@ -330,6 +334,13 @@ export function App() {
             上下文
           </button>
           <button
+            className={sidebarTab === "canon" ? "active" : ""}
+            onClick={() => setSidebarTab("canon")}
+          >
+            <ScrollText size={14} />
+            正史
+          </button>
+          <button
             className={sidebarTab === "workflow" ? "active" : ""}
             onClick={() => setSidebarTab("workflow")}
           >
@@ -363,6 +374,18 @@ export function App() {
               <p>作品 → 书 → 章。每本书可以独立增删，章节挂在当前选中的书下。</p>
             </div>
           </div>
+        )}
+
+        {sidebarTab === "canon" && (
+          <CanonPanel
+            chapterReady={Boolean(activeChapter && chapterReady)}
+            busy={canon.busy}
+            error={canon.error}
+            candidates={canon.candidates}
+            accepted={canon.accepted}
+            onExtract={() => void canon.proposeFromChapter()}
+            onReview={(factId, accept) => void canon.review(factId, accept)}
+          />
         )}
 
         {sidebarTab === "workflow" && (
