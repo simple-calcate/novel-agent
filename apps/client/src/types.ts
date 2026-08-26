@@ -46,6 +46,7 @@ export interface ChapterBody {
 export type BlockKind = "body" | "thinking";
 
 export type MarkupRef =
+  | { type: "tag"; id?: string; kind: string; label: string; note?: string }
   | { type: "task"; id: string; label: string; status: string }
   | { type: "setting"; entityPath: string; field: string; value: string }
   | { type: "custom"; tag: string; body: string };

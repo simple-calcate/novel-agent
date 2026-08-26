@@ -94,6 +94,14 @@ export function editorToBlocks(editor: Editor): ContentBlock[] {
 
 function markupToAttrs(ref: MarkupRef): Record<string, string> {
   switch (ref.type) {
+    case "tag":
+      return {
+        kind: "tag",
+        id: ref.id ?? "",
+        tagKind: ref.kind,
+        label: ref.label,
+        note: ref.note ?? "",
+      };
     case "task":
       return { kind: "task", id: ref.id, label: ref.label, status: ref.status };
     case "setting":
@@ -140,6 +148,18 @@ export function blocksToDoc(blocks: ContentBlock[]): Record<string, unknown> {
 function markupFromAttrs(attrs: Record<string, unknown>): MarkupRef | null {
   const kind = String(attrs.kind ?? "");
   switch (kind) {
+    case "tag": {
+      const tagKind = String(attrs.tagKind ?? attrs.kindLabel ?? "");
+      const label = String(attrs.label ?? "");
+      if (!tagKind) return null;
+      return {
+        type: "tag",
+        id: String(attrs.id ?? ""),
+        kind: tagKind,
+        label,
+        note: String(attrs.note ?? ""),
+      };
+    }
     case "task": {
       const id = String(attrs.id ?? "");
       const label = String(attrs.label ?? "");
@@ -165,6 +185,8 @@ function markupFromAttrs(attrs: Record<string, unknown>): MarkupRef | null {
 /** 标记引用的可读标签（编辑器展示）。训练导出用 Rust 口径的摘要，见 protocol.ts。 */
 export function markupLabel(ref: MarkupRef): string {
   switch (ref.type) {
+    case "tag":
+      return ref.label ? `@${ref.kind}：${ref.label}` : `@${ref.kind}：`;
     case "task":
       return `任务[${ref.status}]: ${ref.label}`;
     case "setting":

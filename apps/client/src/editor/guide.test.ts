@@ -18,6 +18,7 @@ describe("guideCopy", () => {
     const copy = guideCopy({ mode: "thinking", missingThinkingBeats: 0 });
     expect(copy.title).toContain("思考");
     expect(copy.body).toContain("Tab");
+    expect(copy.body).toContain("@");
   });
 
   it("warns when body beats have no thinking", () => {

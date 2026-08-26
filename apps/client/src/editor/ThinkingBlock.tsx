@@ -163,7 +163,7 @@ function ThinkingBlockView({ node, updateAttributes }: ReactNodeViewProps) {
   );
 }
 
-/** 标记引用 mark：思考块内 `@` 触发的结构化引用（任务/设定/自定义） */
+/** 标记引用：思考里点书中预设标签（人物、伏笔等），不等于正史库条目。 */
 export const MarkupRef = Mark.create({
   name: "markupRef",
 
@@ -180,8 +180,10 @@ export const MarkupRef = Mark.create({
       entityPath: { default: "" },
       field: { default: "" },
       value: { default: "" },
+      tagKind: { default: "" },
       tag: { default: "" },
       body: { default: "" },
+      note: { default: "" },
     };
   },
 

@@ -23,7 +23,7 @@ export function guideCopy(opts: {
   if (opts.mode === "thinking") {
     return {
       title: "思考 · 读者看不到",
-      body: "写一句这段要干什么。写完空行按 Tab，回去写读者看到的句子。",
+      body: "写一句这段要干什么。用 @ 点人物、伏笔——这是写作标签，先不必对上设定库。写完空行按 Tab 回去写正文。",
     };
   }
   if (opts.missingThinkingBeats > 0) {

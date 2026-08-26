@@ -24,4 +24,25 @@ describe("blocksToDoc", () => {
     expect(content[0].attrs?.blockId).toBe("11111111-1111-4111-8111-111111111111");
     expect(content[1].type).toBe("paragraph");
   });
+
+  it("stores story tags with tagKind, not a canon entity id", () => {
+    const doc = blocksToDoc([
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        kind: "thinking",
+        text: "@人物：林默",
+        position: 0,
+        markup: [{ type: "tag", id: "", kind: "人物", label: "林默", note: "" }],
+      },
+    ]);
+    const content =
+      (doc.content as Array<{
+        content?: Array<{ marks?: Array<{ attrs?: Record<string, string> }> }>;
+      }>) ?? [];
+    const attrs = content[0]?.content?.[0]?.marks?.[0]?.attrs;
+    expect(attrs?.kind).toBe("tag");
+    expect(attrs?.tagKind).toBe("人物");
+    expect(attrs?.label).toBe("林默");
+    expect(attrs?.id).toBe("");
+  });
 });

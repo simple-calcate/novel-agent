@@ -10,9 +10,12 @@ import {
   RotateCcw,
   Download,
   Brain,
-  ListChecks,
-  BookMarked,
-  Tag,
+  User,
+  Flame,
+  MapPin,
+  Package,
+  Users,
+  Scale,
 } from "lucide-react";
 import { ThinkingBlock, MarkupRef } from "../editor/ThinkingBlock";
 import { ModeSwitch, ModeChangeInfo } from "../editor/ModeSwitch";
@@ -26,7 +29,6 @@ import {
   formatFilename,
   downloadText,
   ExportFormat,
-  MarkupRef as MarkupRefType,
 } from "../editor/blocks";
 import { WritingGuide } from "./WritingGuide";
 import {
@@ -60,7 +62,7 @@ interface MentionMenuState {
 }
 
 const MENTION_ITEMS: Array<{
-  kind: MarkupRefType["type"];
+  kind: "tag";
   icon: React.ReactNode;
   label: string;
   desc: string;
@@ -68,33 +70,52 @@ const MENTION_ITEMS: Array<{
   text: string;
 }> = [
   {
-    kind: "task",
-    icon: <ListChecks size={13} />,
-    label: "任务",
-    desc: "关联创作任务",
-    attrs: { kind: "task", id: "", label: "新任务", status: "todo" },
-    text: "[任务: 新任务]",
+    kind: "tag",
+    icon: <User size={13} />,
+    label: "人物",
+    desc: "点名角色。写作标签，以后再拆成工具",
+    attrs: { kind: "tag", tagKind: "人物", id: "", label: "", note: "" },
+    text: "@人物：",
   },
   {
-    kind: "setting",
-    icon: <BookMarked size={13} />,
-    label: "设定",
-    desc: "引用自定义设定",
-    attrs: {
-      kind: "setting",
-      entityPath: "自定义设定",
-      field: "条目",
-      value: "",
-    },
-    text: "[设定: 自定义设定.条目]",
+    kind: "tag",
+    icon: <Flame size={13} />,
+    label: "伏笔",
+    desc: "点一条伏笔。先当标签，不必对上正史库",
+    attrs: { kind: "tag", tagKind: "伏笔", id: "", label: "", note: "" },
+    text: "@伏笔：",
   },
   {
-    kind: "custom",
-    icon: <Tag size={13} />,
-    label: "标记",
-    desc: "自定义标记",
-    attrs: { kind: "custom", tag: "伏笔", body: "" },
-    text: "[@伏笔: ]",
+    kind: "tag",
+    icon: <MapPin size={13} />,
+    label: "地点",
+    desc: "点一个地点",
+    attrs: { kind: "tag", tagKind: "地点", id: "", label: "", note: "" },
+    text: "@地点：",
+  },
+  {
+    kind: "tag",
+    icon: <Package size={13} />,
+    label: "道具",
+    desc: "点一件物件",
+    attrs: { kind: "tag", tagKind: "道具", id: "", label: "", note: "" },
+    text: "@道具：",
+  },
+  {
+    kind: "tag",
+    icon: <Users size={13} />,
+    label: "势力",
+    desc: "点一个组织或势力",
+    attrs: { kind: "tag", tagKind: "势力", id: "", label: "", note: "" },
+    text: "@势力：",
+  },
+  {
+    kind: "tag",
+    icon: <Scale size={13} />,
+    label: "规则",
+    desc: "点一条世界规则",
+    attrs: { kind: "tag", tagKind: "规则", id: "", label: "", note: "" },
+    text: "@规则：",
   },
 ];
 
@@ -399,7 +420,7 @@ export function Editor({
             onMouseDown={(e) => e.preventDefault()}
           >
             {MENTION_ITEMS.map((item) => (
-              <button key={item.kind} className="mention-item" onClick={() => insertMention(item)}>
+              <button key={item.label} className="mention-item" onClick={() => insertMention(item)}>
                 <span className="mention-icon">{item.icon}</span>
                 <span className="mention-meta">
                   <span className="mention-label">{item.label}</span>

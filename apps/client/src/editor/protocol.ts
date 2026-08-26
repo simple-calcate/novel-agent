@@ -1,16 +1,18 @@
 /**
- * 墨枢写作协议 v1 的前端镜像。权威实现：`crates/domain/src/protocol.rs`
- * 规范：`docs/writing-protocol.md`
+ * 墨枢写作协议 v2 的前端镜像。权威实现：`crates/domain/src/protocol.rs`
+ * 每条样本上文从章首排到本拍之前，思考和正文都保留。
  */
 
 import type { ContentBlock, MarkupRef } from "../types";
 
-export const WRITING_PROTOCOL_VERSION = 1 as const;
+export const WRITING_PROTOCOL_VERSION = 2 as const;
 
 export const WRITING_PROTOCOL_SYSTEM =
-  "你按墨枢写作协议写网文：先思考本拍决策，再写读者可见正文。思考不是人物内心独白，正文不含作者备注。";
+  "你按墨枢写作协议写网文：先思考本拍决策，再写读者可见正文。思考不是人物内心独白，正文不含作者备注。思考里的 @人物/@伏笔 是写作标签，不必当成数据库实体。";
 
-const CONTEXT_CHAR_LIMIT = 600;
+export const STORY_TAG_KINDS = ["人物", "伏笔", "地点", "道具", "势力", "规则"] as const;
+
+const THINKING_PREFIX = "【思考】";
 const GOLD_THINKING_MIN = 16;
 const GOLD_BODY_MIN = 40;
 const USABLE_THINKING_MIN = 8;
@@ -57,20 +59,6 @@ type SlotKind = "intent" | "constraints" | "technique" | "mustShow" | "mustNot";
 
 function charCount(text: string): number {
   return [...text].length;
-}
-
-function takeContextExcerpt(preceding: string): string {
-  const trimmed = preceding.trim();
-  if (!trimmed) return "";
-  const chars = [...trimmed];
-  if (chars.length <= CONTEXT_CHAR_LIMIT) return trimmed;
-  const slice = chars.slice(-CONTEXT_CHAR_LIMIT).join("");
-  const newline = slice.indexOf("\n");
-  if (newline >= 0) {
-    const after = slice.slice(newline).trim();
-    if (after) return after;
-  }
-  return slice.trim();
 }
 
 function beatInstruction(context: string, chapterTitle?: string): string {
@@ -198,7 +186,7 @@ export function assistantR1(example: Pick<TrainingExample, "thinking" | "content
 function finishExample(
   thinking: string,
   content: string,
-  precedingBody: string,
+  preceding: string,
   chapterTitle: string | undefined,
   beatIndex: number,
 ): TrainingExample {
@@ -206,7 +194,7 @@ function finishExample(
   const trimmedContent = content.trim();
   const slots = parseThinkingSlots(trimmedThinking);
   const { quality, skipReasons } = gradeExample(trimmedThinking, trimmedContent, slots);
-  const context = takeContextExcerpt(precedingBody);
+  const context = preceding.trim();
   return {
     protocolVersion: WRITING_PROTOCOL_VERSION,
     beatIndex,
@@ -220,8 +208,14 @@ function finishExample(
   };
 }
 
+function foldColons(text: string): string {
+  return text.replace(/：/g, ":");
+}
+
 function markupSummary(ref: MarkupRef): string {
   switch (ref.type) {
+    case "tag":
+      return ref.label ? `@${ref.kind}：${ref.label}` : `@${ref.kind}`;
     case "task":
       return `任务[${ref.status}]: ${ref.label}`;
     case "setting":
@@ -232,14 +226,26 @@ function markupSummary(ref: MarkupRef): string {
 }
 
 function appendMarkup(thinking: string, markup: MarkupRef[]): string {
-  if (markup.length === 0) return thinking;
-  const extra = markup.map((ref) => `[${markupSummary(ref)}]`).join("\n");
-  return thinking ? `${thinking}\n${extra}` : extra;
+  let next = thinking;
+  for (const ref of markup) {
+    const summary = markupSummary(ref);
+    if (foldColons(next).includes(foldColons(summary))) continue;
+    next = next ? `${next}\n[${summary}]` : `[${summary}]`;
+  }
+  return next;
+}
+
+function appendBeatToTranscript(preceding: string, thinking: string, content: string): string {
+  let out = preceding;
+  const think = thinking.trim();
+  const body = content.trim();
+  if (think) out = out ? `${out}\n${THINKING_PREFIX}${think}` : `${THINKING_PREFIX}${think}`;
+  if (body) out = out ? `${out}\n${body}` : body;
+  return out;
 }
 
 /**
- * 按「思考 -> 正文」切拍。连续 thinking 合并；连续 body 累积到下一拍思考出现。
- * 与 Rust `build_training_examples_from_blocks` 一致。
+ * 按「思考 -> 正文」切拍。上文从章首累积，思考和正文都保留。
  */
 export function buildTrainingExamples(
   blocks: ContentBlock[],
@@ -249,13 +255,11 @@ export function buildTrainingExamples(
   const examples: TrainingExample[] = [];
   let thinking = "";
   let content = "";
-  let precedingBody = "";
+  let preceding = "";
 
   const flush = () => {
-    examples.push(
-      finishExample(thinking, content, precedingBody, chapterTitle, examples.length),
-    );
-    precedingBody = precedingBody ? `${precedingBody}\n${content}` : content;
+    examples.push(finishExample(thinking, content, preceding, chapterTitle, examples.length));
+    preceding = appendBeatToTranscript(preceding, thinking, content);
     thinking = "";
     content = "";
   };
@@ -263,9 +267,7 @@ export function buildTrainingExamples(
   for (const block of blocks) {
     if (block.kind === "thinking") {
       if (content) flush();
-      thinking = thinking
-        ? `${thinking}\n${block.text}`
-        : block.text;
+      thinking = thinking ? `${thinking}\n${block.text}` : block.text;
       if (includeMarkup) thinking = appendMarkup(thinking, block.markup);
     } else {
       content = content ? `${content}\n${block.text}` : block.text;

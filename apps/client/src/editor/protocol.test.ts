@@ -4,6 +4,7 @@ import {
   filterExamples,
   parseThinkingSlots,
   serializeExamples,
+  STORY_TAG_KINDS,
   WRITING_PROTOCOL_SYSTEM,
 } from "./protocol";
 import type { ContentBlock } from "../types";
@@ -38,7 +39,9 @@ describe("buildTrainingExamples", () => {
     expect(examples[0].context).toBe("");
     expect(examples[0].quality).toBe("gold");
     expect(examples[1].instruction).toBe("续写下一段。");
+    expect(examples[1].context).toContain("【思考】意图：让读者感到怀表有秘密");
     expect(examples[1].context).toContain("林默站在窗前。");
+    expect(examples[1].context).not.toContain("表盖掀开");
   });
 
   it("merges consecutive thinking blocks into one beat", () => {
@@ -67,6 +70,45 @@ describe("buildTrainingExamples", () => {
     expect(examples[0].quality).toBe("skip");
     expect(examples[0].skipReasons).toContain("emptyThinking");
     expect(filterExamples(examples, "usable")).toHaveLength(1);
+  });
+
+  it("keeps chapter-start thinking and does not truncate long body", () => {
+    const longBody = `${"雾已经漫过码头的铁索".repeat(40)}。`;
+    const examples = buildTrainingExamples(
+      [
+        block("thinking", "意图：铺一整段冷开场，让雾先压住港口"),
+        block("body", longBody),
+        block("thinking", "意图：再写人影，但不让读者看清脸"),
+        block("body", "远处有人把灯笼从帆布里掏出来，光却到不了这边。石阶湿了一圈。"),
+      ],
+      false,
+      "雾港来客",
+    );
+    expect(examples[1].context.startsWith("【思考】意图：铺一整段冷开场")).toBe(true);
+    expect(examples[1].context).toContain(longBody);
+    expect(examples[1].context).not.toContain("灯笼从帆布");
+  });
+
+  it("treats story tags as labels and does not duplicate typed text", () => {
+    expect(STORY_TAG_KINDS).toEqual(["人物", "伏笔", "地点", "道具", "势力", "规则"]);
+    const tagged = block("thinking", "意图：让林默出场\n@人物:林默", [
+      { type: "tag", id: "", kind: "人物", label: "林默", note: "" },
+    ]);
+    const examples = buildTrainingExamples(
+      [tagged, block("body", "林默站在窗前。雾已经漫过码头的铁索，潮声一下一下敲着船帮。")],
+      true,
+    );
+    expect(examples[0].thinking).toContain("@人物:林默");
+    expect(examples[0].thinking).not.toContain("[@人物：林默]");
+
+    const missing = block("thinking", "意图：让林默出场", [
+      { type: "tag", id: "", kind: "人物", label: "林默", note: "" },
+    ]);
+    const appended = buildTrainingExamples(
+      [missing, block("body", "林默站在窗前。雾已经漫过码头的铁索，潮声一下一下敲着船帮。")],
+      true,
+    );
+    expect(appended[0].thinking).toContain("[@人物：林默]");
   });
 });
 

@@ -117,7 +117,7 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 | `context_hints` | 见 `HintRequest` | `ContextHint[]` |
 | `generate_continuation` | 章、修订、prompt、config | `ContentPatch` |
 
-`training.export` 额外字段：`format`（jsonl/sharegpt/alpaca/r1）、`includeMarkup`（默认 true）、`minQuality`（默认 `usable`，丢弃 skip）。返回 `examples`、`dropped`、`qualityCounts`、`protocolVersion`。写作约定见 [writing-protocol.md](writing-protocol.md)。
+`training.export` 额外字段：`format`（jsonl/sharegpt/alpaca/r1）、`includeMarkup`（默认 true）、`minQuality`（默认 `usable`，丢弃 skip）。返回 `examples`、`dropped`、`qualityCounts`、`protocolVersion`（当前为 2）。每条样本的 `context` 从章首累积思考+正文，不截断。思考里的 `@` 是写作标签（`MarkupRef::Tag`），不是正史实体。写作约定见 [writing-protocol.md](writing-protocol.md)。
 
 前端**只通过** `apps/client/src/api.ts` 的 `libraryApi` 访问作品库。浏览器预览无 Tauri 时使用内存实现，契约与上表相同。作品库 / 队列 / 编辑会话状态分别在 `hooks/useLibrary.ts`、`hooks/useQueue.ts`、`hooks/useEditorSession.ts`。
 

@@ -1,19 +1,19 @@
-//! 墨枢写作协议 v1：把块序列变成可训练的拍级样本。
+//! 墨枢写作协议 v2：把块序列变成可训练的拍级样本。
 //!
-//! 规范文本：`docs/writing-protocol.md`。本模块是导出与分级的权威实现。
+//! 每条样本的上文默认从**本章开头**排到本拍之前，思考和正文都保留。
+//! 规范文本：`docs/writing-protocol.md`。
 
 use crate::{BlockKind, BlockSequence, ContentBlock};
 use serde::{Deserialize, Serialize};
 
 /// 协议版本。导出文件带上，避免旧转换脚本误读新字段。
-pub const WRITING_PROTOCOL_VERSION: u32 = 1;
+pub const WRITING_PROTOCOL_VERSION: u32 = 2;
 
-/// 写入 ShareGPT / Alpaca 的稳定系统短指令。改措辞必须同步协议文档 §11。
+/// 写入 ShareGPT / Alpaca 的稳定系统短指令。改措辞必须同步协议文档。
 pub const WRITING_PROTOCOL_SYSTEM: &str =
-    "你按墨枢写作协议写网文：先思考本拍决策，再写读者可见正文。思考不是人物内心独白，正文不含作者备注。";
+    "你按墨枢写作协议写网文：先思考本拍决策，再写读者可见正文。思考不是人物内心独白，正文不含作者备注。思考里的 @人物/@伏笔 是写作标签，不必当成数据库实体。";
 
-/// 上文摘录上限（汉字按字符计）。
-const CONTEXT_CHAR_LIMIT: usize = 600;
+const THINKING_PREFIX: &str = "【思考】";
 
 const GOLD_THINKING_MIN: usize = 16;
 const GOLD_BODY_MIN: usize = 40;
@@ -81,7 +81,7 @@ pub struct TrainingExample {
     pub quality: ExampleQuality,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub skip_reasons: Vec<String>,
-    /// 本拍之前的正文摘录。开篇可为空。
+    /// 本拍之前、从章首排下来的全部内容（思考 + 正文）。开篇可为空。
     pub context: String,
     /// 短任务句，不含本拍思考。
     pub instruction: String,
@@ -126,7 +126,7 @@ pub fn build_training_examples_from_blocks(
     let mut examples = Vec::new();
     let mut thinking = String::new();
     let mut content = String::new();
-    let mut preceding_body = String::new();
+    let mut preceding = String::new();
 
     for block in blocks {
         match block.kind {
@@ -135,11 +135,11 @@ pub fn build_training_examples_from_blocks(
                     examples.push(finish_example(
                         &thinking,
                         &content,
-                        &preceding_body,
+                        &preceding,
                         chapter_title,
                         examples.len() as u32,
                     ));
-                    push_body(&mut preceding_body, &content);
+                    append_beat_to_transcript(&mut preceding, &thinking, &content);
                     thinking.clear();
                     content.clear();
                 }
@@ -148,12 +148,7 @@ pub fn build_training_examples_from_blocks(
                 }
                 thinking.push_str(&block.text);
                 if include_markup {
-                    for markup in &block.markup {
-                        thinking.push('\n');
-                        thinking.push('[');
-                        thinking.push_str(&markup.summary());
-                        thinking.push(']');
-                    }
+                    append_markup_if_missing(&mut thinking, &block.markup);
                 }
             }
             BlockKind::Body => {
@@ -169,7 +164,7 @@ pub fn build_training_examples_from_blocks(
         examples.push(finish_example(
             &thinking,
             &content,
-            &preceding_body,
+            &preceding,
             chapter_title,
             examples.len() as u32,
         ));
@@ -181,7 +176,7 @@ pub fn build_training_examples_from_blocks(
 fn finish_example(
     thinking: &str,
     content: &str,
-    preceding_body: &str,
+    preceding: &str,
     chapter_title: Option<&str>,
     beat_index: u32,
 ) -> TrainingExample {
@@ -189,7 +184,7 @@ fn finish_example(
     let content = content.trim().to_owned();
     let slots = parse_thinking_slots(&thinking);
     let (quality, skip_reasons) = grade_example(&thinking, &content, &slots);
-    let context = take_context_excerpt(preceding_body);
+    let context = preceding.trim().to_owned();
     let instruction = beat_instruction(&context, chapter_title);
     TrainingExample {
         protocol_version: WRITING_PROTOCOL_VERSION,
@@ -204,11 +199,41 @@ fn finish_example(
     }
 }
 
-fn push_body(preceding: &mut String, content: &str) {
-    if !preceding.is_empty() {
-        preceding.push('\n');
+fn fold_colons(text: &str) -> String {
+    text.replace('：', ":")
+}
+
+fn append_markup_if_missing(thinking: &mut String, markup: &[crate::MarkupRef]) {
+    for item in markup {
+        let summary = item.summary();
+        if fold_colons(thinking).contains(&fold_colons(&summary)) {
+            continue;
+        }
+        if !thinking.is_empty() {
+            thinking.push('\n');
+        }
+        thinking.push('[');
+        thinking.push_str(&summary);
+        thinking.push(']');
     }
-    preceding.push_str(content);
+}
+
+fn append_beat_to_transcript(out: &mut String, thinking: &str, content: &str) {
+    let thinking = thinking.trim();
+    let content = content.trim();
+    if !thinking.is_empty() {
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(THINKING_PREFIX);
+        out.push_str(thinking);
+    }
+    if !content.is_empty() {
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(content);
+    }
 }
 
 fn beat_instruction(context: &str, chapter_title: Option<&str>) -> String {
@@ -223,25 +248,6 @@ fn beat_instruction(context: &str, chapter_title: Option<&str>) -> String {
     } else {
         "续写下一段。".into()
     }
-}
-
-fn take_context_excerpt(preceding: &str) -> String {
-    let trimmed = preceding.trim();
-    if trimmed.is_empty() {
-        return String::new();
-    }
-    let chars: Vec<char> = trimmed.chars().collect();
-    if chars.len() <= CONTEXT_CHAR_LIMIT {
-        return trimmed.to_owned();
-    }
-    let slice: String = chars[chars.len() - CONTEXT_CHAR_LIMIT..].iter().collect();
-    if let Some(offset) = slice.find('\n') {
-        let after = slice[offset..].trim();
-        if !after.is_empty() {
-            return after.to_owned();
-        }
-    }
-    slice.trim().to_owned()
 }
 
 /// 解析思考槽位。同行 `标签：内容`；连续无标签行并入当前槽或 notes。
@@ -552,7 +558,9 @@ mod tests {
         assert_eq!(examples[0].instruction, "写下《雾港来客》的开篇。");
         assert_eq!(examples[0].context, "");
         assert_eq!(examples[1].instruction, "续写下一段。");
+        assert!(examples[1].context.contains("【思考】意图：让读者感到怀表有秘密"));
         assert!(examples[1].context.contains("林默站在窗前。"));
+        assert!(!examples[1].context.contains("表盖掀开"));
         assert_eq!(examples[0].quality, ExampleQuality::Gold);
         assert_eq!(examples[1].quality, ExampleQuality::Gold);
     }
@@ -646,9 +654,69 @@ mod tests {
     }
 
     #[test]
+    fn story_tag_is_author_label_not_canon_row() {
+        let tag = MarkupRef::Tag {
+            id: String::new(),
+            kind: "人物".into(),
+            label: "林默".into(),
+            note: String::new(),
+        };
+        assert_eq!(tag.summary(), "@人物：林默");
+        let mut thinking = block("t1", BlockKind::Thinking, "意图：让林默出场\n@人物:林默");
+        thinking.markup = vec![tag.clone()];
+        let seq = sequence(vec![
+            thinking,
+            block(
+                "b1",
+                BlockKind::Body,
+                "林默站在窗前。雾已经漫过码头的铁索，潮声一下一下敲着船帮。",
+            ),
+        ]);
+        let examples = build_training_examples(&seq, true, None);
+        assert!(examples[0].thinking.contains("@人物:林默"));
+        assert!(
+            !examples[0].thinking.contains("[@人物：林默]"),
+            "思考里已经写了标签，不要再贴一份摘要"
+        );
+
+        let mut untitled = block("t2", BlockKind::Thinking, "意图：让林默出场");
+        untitled.markup = vec![tag];
+        let seq = sequence(vec![
+            untitled,
+            block(
+                "b2",
+                BlockKind::Body,
+                "林默站在窗前。雾已经漫过码头的铁索，潮声一下一下敲着船帮。",
+            ),
+        ]);
+        let examples = build_training_examples(&seq, true, None);
+        assert!(examples[0].thinking.contains("[@人物：林默]"));
+    }
+
+    #[test]
+    fn context_from_chapter_start_keeps_all_thinking_and_body() {
+        let long_body = format!("{}。", "雾已经漫过码头的铁索".repeat(40));
+        let seq = sequence(vec![
+            block("t1", BlockKind::Thinking, "意图：铺一整段冷开场，让雾先压住港口"),
+            block("b1", BlockKind::Body, &long_body),
+            block("t2", BlockKind::Thinking, "意图：再写人影，但不让读者看清脸"),
+            block(
+                "b2",
+                BlockKind::Body,
+                "远处有人把灯笼从帆布里掏出来，光却到不了这边。石阶湿了一圈。",
+            ),
+        ]);
+        let examples = build_training_examples(&seq, false, Some("雾港来客"));
+        assert_eq!(examples.len(), 2);
+        assert!(examples[1].context.starts_with("【思考】意图：铺一整段冷开场"));
+        assert!(examples[1].context.contains(&long_body));
+        assert!(!examples[1].context.contains("灯笼从帆布"));
+    }
+
+    #[test]
     fn serialize_never_uses_dummy_continue_prompt() {
         let example = TrainingExample {
-            protocol_version: 1,
+            protocol_version: 2,
             beat_index: 0,
             quality: ExampleQuality::Gold,
             skip_reasons: vec![],
@@ -673,13 +741,5 @@ mod tests {
         let r1 = serialize_examples(&[example], "r1").unwrap();
         assert!(r1.starts_with("<think>\n意图：冷开场\n</think>\n\n雾先于脚步声漫进港口。"));
         assert!(serialize_examples(&[], "unknown").is_err());
-    }
-
-    #[test]
-    fn context_excerpt_keeps_tail() {
-        let long = "甲\n".repeat(400);
-        let excerpt = take_context_excerpt(&long);
-        assert!(excerpt.chars().count() <= CONTEXT_CHAR_LIMIT);
-        assert!(!excerpt.is_empty());
     }
 }

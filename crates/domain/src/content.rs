@@ -96,10 +96,22 @@ pub enum BlockKind {
     Thinking,
 }
 
-/// 思考块内的标记引用：调用系统中的任务、设定或自定义功能。
+/// 思考块内的标记。
+///
+/// `Tag` 是书里预先设好的写作标签（人物、伏笔等）。它不等于正史实体：
+/// 作者点的是词表，数据库里以后怎么拆成工具调用可以再变。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum MarkupRef {
+    Tag {
+        #[serde(default)]
+        id: String,
+        kind: String,
+        #[serde(default)]
+        label: String,
+        #[serde(default)]
+        note: String,
+    },
     Task {
         id: String,
         label: String,
@@ -116,10 +128,20 @@ pub enum MarkupRef {
     },
 }
 
+/// 书中默认可点的标签种类。实例名（林默、怀表）由作者填写，不预绑实体 id。
+pub const STORY_TAG_KINDS: &[&str] = &["人物", "伏笔", "地点", "道具", "势力", "规则"];
+
 impl MarkupRef {
     /// 标记的纯文本摘要（导出训练数据时嵌入思考过程）。
     pub fn summary(&self) -> String {
         match self {
+            MarkupRef::Tag { kind, label, .. } => {
+                if label.is_empty() {
+                    format!("@{kind}")
+                } else {
+                    format!("@{kind}：{label}")
+                }
+            }
             MarkupRef::Task { label, status, .. } => format!("任务[{status}]: {label}"),
             MarkupRef::Setting {
                 entity_path,
