@@ -4,9 +4,9 @@
 use chrono::Duration;
 use novel_extensions::{QueueExtension, QueuePolicy};
 use novel_kernel::{Kernel, Tool};
-use novel_storage::Repository;
+use novel_storage::StorageHandle;
 use serde_json::json;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 struct OkSaveTool;
 
@@ -25,9 +25,9 @@ impl Tool for OkSaveTool {
     }
 }
 
-fn build_kernel(repository: Arc<Mutex<Repository>>) -> Kernel {
+fn build_kernel(storage: Arc<StorageHandle>) -> Kernel {
     Kernel::builder()
-        .service(repository)
+        .service(storage)
         .service(Arc::new(QueuePolicy {
             stale_running_after: Duration::minutes(10),
             backoff_base: Duration::zero(),
@@ -41,14 +41,12 @@ fn build_kernel(repository: Arc<Mutex<Repository>>) -> Kernel {
 
 #[tokio::test]
 async fn manual_enqueue_runs_and_succeeds() {
-    let repository = Arc::new(Mutex::new(Repository::open_in_memory().unwrap()));
-    let project_id = repository
-        .lock()
-        .unwrap()
-        .create_project("测试作品")
+    let storage = Arc::new(StorageHandle::open_in_memory().unwrap());
+    let project_id = storage
+        .execute(|repository| repository.create_project("测试作品"))
         .unwrap()
         .id;
-    let kernel = build_kernel(repository.clone());
+    let kernel = build_kernel(storage.clone());
 
     // 模拟前端 enqueue_job：直接构造 Job 入队（跳过工作流匹配）
     let now = chrono::Utc::now();
@@ -71,10 +69,14 @@ async fn manual_enqueue_runs_and_succeeds() {
         created_at: now,
         updated_at: now,
     };
-    assert!(repository.lock().unwrap().enqueue_job(&job).unwrap());
+    assert!(storage
+        .execute(|repository| repository.enqueue_job(&job))
+        .unwrap());
 
     // 入队后 list_jobs 显示 pending
-    let pending = repository.lock().unwrap().list_jobs(10).unwrap();
+    let pending = storage
+        .execute(|repository| repository.list_jobs(10))
+        .unwrap();
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].status, novel_domain::JobStatus::Pending);
 
@@ -84,7 +86,9 @@ async fn manual_enqueue_runs_and_succeeds() {
     assert_eq!(result["status"], "succeeded");
 
     // list_jobs 显示 succeeded
-    let done = repository.lock().unwrap().list_jobs(10).unwrap();
+    let done = storage
+        .execute(|repository| repository.list_jobs(10))
+        .unwrap();
     assert_eq!(done[0].status, novel_domain::JobStatus::Succeeded);
     assert_eq!(done[0].attempts, 1);
 

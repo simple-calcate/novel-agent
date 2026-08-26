@@ -12,7 +12,7 @@
 ```
 apps/client/          Tauri 2 + React 桌面/Android 客户端
 crates/kernel/        最小内核：Provider/Tool/事件总线 + 预算硬约束的 Agent 循环
-crates/extensions/    内置扩展集：模型提供方、工作流引擎、队列、上下文、插件宿主
+crates/extensions/    内置扩展集 + Workspace 应用层（作品库编排、队列入口）
 crates/domain/        领域模型（Project、Chapter、Revision、Event、Job、Story）
 crates/storage/       SQLite 持久化、迁移、单写者仓库
 crates/automation/    信号检测、工作流匹配、持久化操作队列
@@ -36,9 +36,10 @@ docs/architecture/adr/ 架构决策记录
 
 ```rust
 let kernel = Kernel::builder()
-    .service(Arc::new(Mutex::new(repository))) // 注入 SQLite 仓库
+    .service(Arc::new(StorageHandle::open(database)?))
     .extension(BuiltinsExtension)?             // 或逐个挑选内置扩展
     .build()?;
+let workspace = Workspace::new(&kernel);
 ```
 
 ## 开发

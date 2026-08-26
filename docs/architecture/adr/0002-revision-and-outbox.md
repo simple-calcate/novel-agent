@@ -8,7 +8,7 @@
 
 ## 决策
 - 每章使用单调递增的 Revision。
-- 所有写操作经过 Rust 单写者 actor。
+- 所有写操作经过 `StorageHandle`（同线程禁止重入，见 [ADR 0008](0008-workspace-storage-handle.md)）。
 - 业务状态、operation log、任务和 outbox 在同一事务内提交。
 - 同步传输幂等 outbox 变更，冲突时保留冲突副本。
 

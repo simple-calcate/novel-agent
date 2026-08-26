@@ -31,6 +31,38 @@ pub struct DomainEvent {
     pub payload: Value,
 }
 
+impl DomainEvent {
+    /// 编辑器/用户操作发出的领域事件。应用层在写库结束之后再 dispatch。
+    pub fn user(
+        event_type: impl Into<String>,
+        project_id: ProjectId,
+        book_id: Option<BookId>,
+        chapter_id: Option<ChapterId>,
+        payload: Value,
+    ) -> Self {
+        Self {
+            event_id: EventId::new(),
+            event_type: event_type.into(),
+            schema_version: EVENT_SCHEMA_VERSION,
+            occurred_at: Utc::now(),
+            project_id,
+            book_id,
+            chapter_id,
+            scene_id: None,
+            block_id: None,
+            actor: Actor::User { user_id: None },
+            source: EventSource::Editor,
+            platform: Platform::Unknown,
+            transaction_id: EventId::new().to_string(),
+            correlation_id: None,
+            causation_id: None,
+            revision_before: Revision::INITIAL,
+            revision_after: Revision::INITIAL,
+            payload,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Platform {
