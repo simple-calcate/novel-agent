@@ -4,6 +4,7 @@ import { Pencil, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 interface Props {
   disableUp?: boolean;
   disableDown?: boolean;
+  deleteTitle?: string;
   onRename: () => void;
   onDelete: () => void;
   onMoveUp: () => void;
@@ -13,6 +14,7 @@ interface Props {
 export function TreeItemActions({
   disableUp,
   disableDown,
+  deleteTitle = "删除",
   onRename,
   onDelete,
   onMoveUp,
@@ -25,7 +27,7 @@ export function TreeItemActions({
   };
 
   return (
-    <span className="tree-actions">
+    <span className="tree-actions" onClick={(event) => event.stopPropagation()}>
       <button type="button" title="上移" disabled={disableUp} onClick={(event) => stop(event, onMoveUp)}>
         <ChevronUp size={12} />
       </button>
@@ -35,7 +37,7 @@ export function TreeItemActions({
       <button type="button" title="重命名" onClick={(event) => stop(event, onRename)}>
         <Pencil size={12} />
       </button>
-      <button type="button" title="删除" onClick={(event) => stop(event, onDelete)}>
+      <button type="button" title={deleteTitle} onClick={(event) => stop(event, onDelete)}>
         <Trash2 size={12} />
       </button>
     </span>

@@ -215,6 +215,7 @@ export function App() {
                   <TreeItemActions
                     disableUp={chapterIndex === 0}
                     disableDown={chapterIndex === list.length - 1}
+                    deleteTitle="删除章节"
                     onRename={() =>
                       setPrompt({
                         mode: "rename",
@@ -245,6 +246,7 @@ export function App() {
                   <TreeItemActions
                     disableUp={bookIndex === 0}
                     disableDown={bookIndex === books.length - 1}
+                    deleteTitle="删除书"
                     onRename={() =>
                       setPrompt({ mode: "rename", target: "book", id: book.id, title: book.title })
                     }
@@ -256,7 +258,7 @@ export function App() {
                 {bookVolumes.map((volume, volumeIndex) => {
                   const volumeChapters = chapters.filter((chapter) => chapter.volumeId === volume.id);
                   return (
-                    <div key={volume.id}>
+                    <div key={volume.id} className="tree-volume">
                       <div
                         className={`tree-section volume ${activeVolumeId === volume.id ? "current" : ""}`}
                         onClick={() => {
@@ -269,6 +271,7 @@ export function App() {
                         <TreeItemActions
                           disableUp={volumeIndex === 0}
                           disableDown={volumeIndex === bookVolumes.length - 1}
+                          deleteTitle="删除卷"
                           onRename={() =>
                             setPrompt({
                               mode: "rename",

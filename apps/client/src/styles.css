@@ -120,6 +120,7 @@ body {
 
 .project-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-top: 10px;
 }
@@ -133,8 +134,14 @@ body {
   padding: 0;
 }
 
-.text-button:hover {
+.text-button:hover:not(:disabled) {
   text-decoration: underline;
+}
+
+.text-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  text-decoration: none;
 }
 
 .tree-empty {
@@ -200,6 +207,12 @@ body {
   color: var(--text-dim);
 }
 
+.tree-volume {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .tree-section.current {
   color: var(--text);
 }
@@ -208,8 +221,8 @@ body {
   padding-left: 36px;
 }
 
-.tree-section span,
-.tree-item span {
+.tree-section > span:not(.tree-actions),
+.tree-item > span:not(.tree-actions) {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -222,9 +235,13 @@ body {
   align-items: center;
   gap: 2px;
   margin-left: auto;
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 2;
 }
 
 .tree-section:hover .tree-actions,
+.tree-section.current .tree-actions,
 .tree-item:hover .tree-actions,
 .tree-item.active .tree-actions {
   display: flex;
