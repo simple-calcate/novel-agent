@@ -47,3 +47,21 @@ fn designed_story_entries_are_independent_of_canon_extract() {
     assert_eq!(leftover.len(), 1);
     assert_eq!(leftover[0].title, "雾中灯塔");
 }
+
+#[test]
+fn splits_aliases_from_title() {
+    let repository = Repository::open_in_memory().unwrap();
+    let project = repository.create_project("夜航星图").unwrap();
+    let entry = repository
+        .create_story_entry(
+            &project.id,
+            StoryEntryKind::Character,
+            "林晚、雾儿",
+            "雾港来的刀客",
+        )
+        .unwrap();
+    assert_eq!(entry.title, "林晚");
+    assert_eq!(entry.aliases, vec!["雾儿".to_string()]);
+    let listed = repository.list_story_entries(&project.id).unwrap();
+    assert_eq!(listed[0].aliases, vec!["雾儿".to_string()]);
+}

@@ -1,4 +1,8 @@
-//! 写作时的上下文浮带：按附近文本匹配人物状态、世界规则与未兑现伏笔。
+//! 写作时的上下文浮带：按当前段落多信号匹配预先设计的人物 / 设定 / 伏笔。
+
+mod entry_match;
+
+pub use entry_match::{match_story_entry, EntryMatch};
 
 use novel_domain::{
     CanonEntity, CanonFact, ContextHint, EntityKind, HintAction, HintKind, PlotThread,
@@ -11,6 +15,8 @@ use serde::{Deserialize, Serialize};
 pub struct HintQuery {
     pub work_ref: WorkContextRef,
     pub nearby_text: String,
+    #[serde(default)]
+    pub lookback_text: String,
     pub generation: u64,
     pub limit: usize,
 }
@@ -111,9 +117,13 @@ impl HintEngine {
     pub fn rank_entries(&self, query: &HintQuery, entries: &[StoryEntry]) -> Vec<ContextHint> {
         let mut hints = Vec::new();
         for entry in entries {
-            let Some(score) = entry_score(query, entry) else {
+            let Some(hit) = match_story_entry(&query.nearby_text, &query.lookback_text, entry)
+            else {
                 continue;
             };
+            if hit.score < self.minimum_dwell_score {
+                continue;
+            }
             let (kind, source) = match entry.kind {
                 StoryEntryKind::Character => (HintKind::CharacterState, "人物"),
                 StoryEntryKind::Setting => (HintKind::WorldRule, "设定"),
@@ -129,8 +139,8 @@ impl HintEngine {
                 &entry.title,
                 &summary,
                 source,
-                "当前段落匹配到该结构",
-                score,
+                &hit.reason,
+                hit.score,
                 query,
             ));
         }
@@ -190,15 +200,6 @@ fn name_score(query: &HintQuery, entity: &CanonEntity) -> f32 {
 
 fn fact_relevant(query: &HintQuery, predicate: &str, value: &str) -> bool {
     query.nearby_text.contains(predicate) || query.nearby_text.contains(value)
-}
-
-fn entry_score(query: &HintQuery, entry: &StoryEntry) -> Option<f32> {
-    if entry.title.chars().count() < 2 {
-        return None;
-    }
-    let index = query.nearby_text.find(&entry.title)?;
-    let length = query.nearby_text.len().max(1) as f32;
-    Some((1.0 - (index as f32 / length) * 0.2).clamp(0.8, 1.0))
 }
 
 fn kind_rank(kind: HintKind) -> u8 {

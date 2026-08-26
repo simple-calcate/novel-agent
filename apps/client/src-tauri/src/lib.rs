@@ -142,6 +142,8 @@ pub struct HintRequest {
     pub chapter_id: String,
     pub revision: u64,
     pub nearby_text: String,
+    #[serde(default)]
+    pub lookback_text: String,
     pub generation: u64,
 }
 

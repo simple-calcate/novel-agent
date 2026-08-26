@@ -40,6 +40,7 @@ export function ContextRail({ hints }: Props) {
             </div>
             <h4>{hint.title}</h4>
             <p>{hint.summary}</p>
+            {hint.matchReason && <span className="hint-source">{hint.matchReason}</span>}
           </article>
         );
       })}

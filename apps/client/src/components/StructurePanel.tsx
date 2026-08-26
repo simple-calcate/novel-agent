@@ -35,7 +35,7 @@ export function StructurePanel({ disabled, busy, error, entries, onCreate, onDel
     <div className="panel-content">
       <h3>结构</h3>
       <p className="canon-lead">
-        预先写好人物、设定和伏笔。写作时，当前段落匹配到的会排在编辑器上方。
+        预先写好人物、设定和伏笔。写作时按名称、别名和设定关键词匹配当前段落。
       </p>
       {error && <div className="tree-empty">{error}</div>}
 
@@ -56,7 +56,7 @@ export function StructurePanel({ disabled, busy, error, entries, onCreate, onDel
           className="structure-input"
           placeholder={
             kind === "character"
-              ? "人名，例如：林晚"
+              ? "人名，可写别名：林晚、雾儿"
               : kind === "foreshadow"
                 ? "伏笔名称，例如：雾中灯塔"
                 : "设定名称，例如：雾港"
@@ -92,6 +92,9 @@ export function StructurePanel({ disabled, busy, error, entries, onCreate, onDel
               <div key={entry.id} className="context-card canon-card">
                 <div className="context-card-title">
                   {entry.title}
+                  {entry.aliases?.length > 0 && (
+                    <span className="canon-kind">{entry.aliases.join("、")}</span>
+                  )}
                   <button className="icon-button" title="删除" onClick={() => onDelete(entry)}>
                     <X size={12} />
                   </button>

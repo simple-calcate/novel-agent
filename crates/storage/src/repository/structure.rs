@@ -1,6 +1,6 @@
 use super::{parse_project_id, Repository};
 use crate::StorageError;
-use novel_domain::{DomainError, ProjectId, StoryEntry, StoryEntryKind};
+use novel_domain::{split_title_and_aliases, DomainError, ProjectId, StoryEntry, StoryEntryKind};
 use rusqlite::params;
 use uuid::Uuid;
 
@@ -12,7 +12,7 @@ impl Repository {
         title: &str,
         summary: &str,
     ) -> Result<StoryEntry, StorageError> {
-        let title = title.trim();
+        let (title, aliases) = split_title_and_aliases(title);
         if title.is_empty() {
             return Err(DomainError::Validation("title required".into()).into());
         }
@@ -21,18 +21,20 @@ impl Repository {
             id: Uuid::new_v4().to_string(),
             project_id: project_id.clone(),
             kind,
-            title: title.to_owned(),
+            title: title.clone(),
             summary,
+            aliases,
         };
         let inserted = self.connection.execute(
-            "INSERT OR IGNORE INTO story_entries(id, project_id, kind, title, summary)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT OR IGNORE INTO story_entries(id, project_id, kind, title, summary, aliases_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 entry.id,
                 project_id.to_string(),
                 kind_name(kind),
                 entry.title,
                 entry.summary,
+                serde_json::to_string(&entry.aliases)?,
             ],
         )?;
         if inserted == 0 {
@@ -49,7 +51,7 @@ impl Repository {
         project_id: &ProjectId,
     ) -> Result<Vec<StoryEntry>, StorageError> {
         let mut statement = self.connection.prepare(
-            "SELECT id, project_id, kind, title, summary
+            "SELECT id, project_id, kind, title, summary, aliases_json
              FROM story_entries
              WHERE project_id = ?1
              ORDER BY CASE kind
@@ -66,12 +68,14 @@ impl Repository {
                 continue;
             };
             let project: String = row.get(1)?;
+            let aliases_json: String = row.get(5)?;
             entries.push(StoryEntry {
                 id: row.get(0)?,
                 project_id: parse_project_id(&project)?,
                 kind,
                 title: row.get(3)?,
                 summary: row.get(4)?,
+                aliases: serde_json::from_str(&aliases_json).unwrap_or_default(),
             });
         }
         Ok(entries)

@@ -124,12 +124,12 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 | `run_queue_step` | — | `{ executed, ... }` |
 | `list_jobs` | — | `JobView[]` |
 | `kernel_tools` | — | 工具自描述列表 |
-| `context_hints` | 见 `HintRequest` | `ContextHint[]` |
+| `context_hints` | `projectId`, `chapterId`, `revision`, `nearbyText`, `lookbackText?`, `generation` | `ContextHint[]`（多信号匹配预先结构） |
 | `generate_continuation` | 章、修订、prompt、config | `ContentPatch` |
 | `propose_canon` | `chapterId` | `CanonProposal[]`（启发式抽取，非主路径） |
 | `list_canon` | `projectId`, `status?` | `CanonProposal[]` |
 | `review_canon_fact` | `factId`, `accept` | 更新后的 `CanonProposal` |
-| `create_story_entry` | `projectId`, `kind`, `title`, `summary?` | `StoryEntry`（`character` / `setting` / `foreshadow`） |
+| `create_story_entry` | `projectId`, `kind`, `title`, `summary?` | `StoryEntry`；`title` 可写 `林晚、雾儿`，别名拆进 `aliases` |
 | `list_story_entries` | `projectId` | `StoryEntry[]` |
 | `delete_story_entry` | `projectId`, `id`, `kind` | — |
 

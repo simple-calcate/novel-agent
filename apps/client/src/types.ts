@@ -126,4 +126,5 @@ export interface StoryEntry {
   kind: StoryEntryKind;
   title: string;
   summary: string;
+  aliases: string[];
 }

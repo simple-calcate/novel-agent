@@ -60,10 +60,14 @@ describe("memory library", () => {
     await libraryApi.createStoryEntry(project.id, "foreshadow", "雾中灯塔", "里面还有旧王玺");
     const entries = await libraryApi.listStoryEntries(project.id);
     expect(entries.map((item) => item.title)).toEqual(["林晚", "雾中灯塔"]);
+    expect(entries[0].aliases).toEqual([]);
     await libraryApi.deleteStoryEntry(project.id, entries[0].id, entries[0].kind);
     const leftover = await libraryApi.listStoryEntries(project.id);
     expect(leftover).toHaveLength(1);
     expect(leftover[0].title).toBe("雾中灯塔");
+    const withAlias = await libraryApi.createStoryEntry(project.id, "character", "沈雾、雾儿", "");
+    expect(withAlias.title).toBe("沈雾");
+    expect(withAlias.aliases).toEqual(["雾儿"]);
     await expect(
       libraryApi.createStoryEntry(project.id, "foreshadow", "雾中灯塔", "重复"),
     ).rejects.toThrow();

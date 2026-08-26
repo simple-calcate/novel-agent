@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { libraryApi, isTauriRuntime } from "../api";
+import { matchStoryEntries } from "../structure/match";
 import { Chapter, CommandResult, ContentBlock, ContextHint, Project, StoryEntry } from "../types";
 import { logger } from "../logger";
 import { ModelConfig } from "../components/SettingsModal";
@@ -22,7 +23,7 @@ export function useEditorSession(options: {
   const [modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
   const draftText = useRef("");
   const draftBlocks = useRef<ContentBlock[]>([]);
-  const nearbyRef = useRef("");
+  const nearbyRef = useRef({ current: "", previous: "" });
 
   useEffect(() => {
     invoke<ModelConfig | null>("load_model_config")
@@ -86,14 +87,14 @@ export function useEditorSession(options: {
   }, [activeChapter]);
 
   const refreshHints = useCallback(
-    async (nearbyText: string) => {
-      nearbyRef.current = nearbyText;
+    async (nearbyText: string, lookbackText = "") => {
+      nearbyRef.current = { current: nearbyText, previous: lookbackText };
       if (!activeChapter) {
         setHints([]);
         return;
       }
       if (!project || !isTauriRuntime()) {
-        setHints(matchStoryEntries(nearbyText, storyEntries, revision));
+        setHints(matchStoryEntries(nearbyText, lookbackText, storyEntries, revision));
         return;
       }
       logger.debug("刷新上下文提示", { revision, textLength: nearbyText.length });
@@ -104,6 +105,7 @@ export function useEditorSession(options: {
             chapterId: activeChapter,
             revision,
             nearbyText,
+            lookbackText,
             generation: Date.now(),
           },
         });
@@ -115,13 +117,15 @@ export function useEditorSession(options: {
       } catch (e) {
         logger.warn("上下文提示走本地匹配", { error: String(e) });
       }
-      setHints(matchStoryEntries(nearbyText, storyEntries, revision));
+      setHints(matchStoryEntries(nearbyText, lookbackText, storyEntries, revision));
     },
     [project, activeChapter, revision, storyEntries],
   );
 
   useEffect(() => {
-    void refreshHints(nearbyRef.current || nearbyFromText(draftText.current));
+    const nearby = nearbyRef.current.current || nearbyFromText(draftText.current);
+    const lookback = nearbyRef.current.previous;
+    void refreshHints(nearby, lookback);
   }, [refreshHints, chapterReady]);
 
   const handleGenerate = useCallback(async () => {
@@ -194,45 +198,4 @@ function nearbyFromText(text: string): string {
     .map((item) => item.trim())
     .filter(Boolean);
   return parts[0] ?? "";
-}
-
-function matchStoryEntries(nearby: string, entries: StoryEntry[], revision: number): ContextHint[] {
-  if (!nearby) return [];
-  const hints: ContextHint[] = [];
-  for (const entry of entries) {
-    if (entry.title.length < 2 || !nearby.includes(entry.title)) {
-      continue;
-    }
-    const kind =
-      entry.kind === "character"
-        ? "characterState"
-        : entry.kind === "foreshadow"
-          ? "openForeshadowing"
-          : "worldRule";
-    const index = nearby.indexOf(entry.title);
-    hints.push({
-      id: entry.id,
-      kind,
-      title: entry.title,
-      summary: entry.summary || `${entry.title} · 预先设定`,
-      sourceLabel: entry.kind,
-      matchReason: "当前段落匹配到该结构",
-      confidence: 0.9,
-      score: Math.max(0.8, 1 - (index / Math.max(nearby.length, 1)) * 0.2),
-      generation: revision,
-      revision,
-    });
-  }
-  const kindRank: Record<ContextHint["kind"], number> = {
-    characterState: 0,
-    worldRule: 1,
-    timelineConstraint: 1,
-    openForeshadowing: 2,
-    plotHook: 2,
-    preference: 1,
-    continuityRisk: 1,
-  };
-  return hints
-    .sort((left, right) => right.score - left.score || kindRank[left.kind] - kindRank[right.kind])
-    .slice(0, 6);
 }

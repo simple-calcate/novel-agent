@@ -305,7 +305,7 @@ export function App() {
                     draftText.current = text;
                   }}
                   onNearbyChange={(nearby) => {
-                    refreshHints(nearby);
+                    refreshHints(nearby.current, nearby.previous);
                   }}
                   onBlocksChange={(blocks) => {
                     draftBlocks.current = blocks;

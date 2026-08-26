@@ -32,8 +32,8 @@ import { logger } from "../logger";
 
 interface EditorProps {
   onTextChange: (text: string) => void;
-  /** 当前光标所在段落，用于匹配预先设计的结构。 */
-  onNearbyChange?: (nearby: string) => void;
+  /** 当前光标所在段落，以及上一段（用于人物短暂停留）。 */
+  onNearbyChange?: (nearby: { current: string; previous: string }) => void;
   onIdle: () => void;
   onInsertText?: (text: string) => void;
   /** 领域事件定位：用于模式切换信号发射（浏览器模式自动降级） */
@@ -168,9 +168,10 @@ export function Editor({
 
   const reportNearby = useCallback((ed: NonNullable<ReturnType<typeof useEditor>>) => {
     if (!ed) return;
-    const nearby = currentParagraphText(ed);
-    if (lastNearby.current === nearby) return;
-    lastNearby.current = nearby;
+    const nearby = paragraphWindow(ed);
+    const key = `${nearby.current}\n${nearby.previous}`;
+    if (lastNearby.current === key) return;
+    lastNearby.current = key;
     onNearbyChangeRef.current?.(nearby);
   }, []);
 
@@ -369,25 +370,44 @@ export function Editor({
   );
 }
 
-function currentParagraphText(editor: {
+function paragraphWindow(editor: {
   state: {
-    selection: { $from: { parent: { textContent: string } } };
+    selection: { from: number };
     doc: {
-      descendants: (fn: (node: { isTextblock: boolean; textContent: string }) => boolean) => void;
+      descendants: (
+        fn: (node: { isTextblock: boolean; textContent: string; nodeSize: number }, pos: number) => boolean,
+      ) => void;
     };
   };
-}): string {
-  const current = editor.state.selection.$from.parent.textContent.trim();
-  if (current) return current;
-  let fallback = "";
-  editor.state.doc.descendants((node) => {
+}): { current: string; previous: string } {
+  const from = editor.state.selection.from;
+  const blocks: Array<{ text: string; pos: number; size: number }> = [];
+  editor.state.doc.descendants((node, pos) => {
     if (node.isTextblock) {
-      const text = node.textContent.trim();
-      if (text) fallback = text;
+      blocks.push({ text: node.textContent.trim(), pos, size: node.nodeSize });
     }
     return true;
   });
-  return fallback;
+  let index = blocks.findIndex((block) => from >= block.pos && from <= block.pos + block.size);
+  if (index < 0) index = blocks.length - 1;
+  let current = blocks[index]?.text ?? "";
+  if (!current) {
+    for (let i = index - 1; i >= 0; i -= 1) {
+      if (blocks[i]?.text) {
+        current = blocks[i].text;
+        index = i;
+        break;
+      }
+    }
+  }
+  let previous = "";
+  for (let i = index - 1; i >= 0; i -= 1) {
+    if (blocks[i]?.text) {
+      previous = blocks[i].text;
+      break;
+    }
+  }
+  return { current, previous };
 }
 
 // AI 生成内容预览组件 - 内联显示在编辑器中

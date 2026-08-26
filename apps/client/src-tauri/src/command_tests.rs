@@ -301,6 +301,7 @@ async fn context_hints_rejects_invalid_project() {
             chapter_id: "c1".into(),
             revision: 3,
             nearby_text: "雾港".into(),
+            lookback_text: String::new(),
             generation: 1,
         },
     )
@@ -330,6 +331,7 @@ async fn context_hints_accepts_valid_project() {
             chapter_id: "c1".into(),
             revision: 3,
             nearby_text: "雾港".into(),
+            lookback_text: String::new(),
             generation: 1,
         },
     )
@@ -400,6 +402,7 @@ async fn canon_accept_does_not_appear_in_structure_rail() {
             chapter_id: chapter_id.clone(),
             revision: 1,
             nearby_text: "林晚走进雾港".into(),
+            lookback_text: String::new(),
             generation: 1,
         },
     )
@@ -425,6 +428,7 @@ async fn canon_accept_does_not_appear_in_structure_rail() {
             chapter_id,
             revision: 1,
             nearby_text: "林晚走进雾港".into(),
+            lookback_text: String::new(),
             generation: 2,
         },
     )
@@ -465,10 +469,11 @@ async fn designed_story_entry_matches_nearby_paragraph() {
     let hints = context_hints(
         state(),
         HintRequest {
-            project_id,
+            project_id: project_id.clone(),
             chapter_id: "c1".into(),
             revision: 1,
             nearby_text: "林晚走进雾港".into(),
+            lookback_text: String::new(),
             generation: 1,
         },
     )
@@ -495,6 +500,37 @@ async fn designed_story_entry_matches_nearby_paragraph() {
         .and_then(|hint| hint.get("summary").and_then(|value| value.as_str()))
         .unwrap_or_default();
     assert_eq!(summary, "雾港来的刀客");
+
+    let by_keyword = context_hints(
+        state(),
+        HintRequest {
+            project_id: project_id.clone(),
+            chapter_id: "c1".into(),
+            revision: 1,
+            nearby_text: "那个刀客转过身".into(),
+            lookback_text: String::new(),
+            generation: 3,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(by_keyword.ok, "{by_keyword:?}");
+    let keyword_titles: Vec<String> = by_keyword
+        .data
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|hint| {
+            hint.get("title")
+                .and_then(|value| value.as_str())
+                .map(str::to_owned)
+        })
+        .collect();
+    assert!(
+        keyword_titles.iter().any(|title| title == "林晚"),
+        "{keyword_titles:?}"
+    );
 }
 
 #[tokio::test]

@@ -185,4 +185,20 @@ pub struct StoryEntry {
     pub kind: StoryEntryKind,
     pub title: String,
     pub summary: String,
+    #[serde(default)]
+    pub aliases: Vec<String>,
+}
+
+/// 名称里用顿号/斜线写下的别名：`林晚、雾儿` → 标题林晚，别名雾儿。
+pub fn split_title_and_aliases(raw: &str) -> (String, Vec<String>) {
+    let parts: Vec<String> = raw
+        .split(['、', ',', '，', '/', '／', ';', '；'])
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .map(ToOwned::to_owned)
+        .collect();
+    match parts.split_first() {
+        Some((title, rest)) => (title.clone(), rest.to_vec()),
+        None => (String::new(), Vec::new()),
+    }
 }

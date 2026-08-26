@@ -19,6 +19,7 @@ import {
   StoryEntryKind,
 } from "./types";
 import { extractMentions } from "./canon/extract";
+import { splitTitleAndAliases } from "./structure/match";
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -355,16 +356,23 @@ export const libraryApi = {
     if (isTauriRuntime()) {
       return command<StoryEntry>("create_story_entry", { projectId, kind, title, summary });
     }
-    const trimmed = title.trim();
-    if (!trimmed) throw new Error("请填写名称");
+    const parsed = splitTitleAndAliases(title);
+    if (!parsed.title) throw new Error("请填写名称");
     if (
       memory.story.some(
-        (item) => item.projectId === projectId && item.kind === kind && item.title === trimmed,
+        (item) => item.projectId === projectId && item.kind === kind && item.title === parsed.title,
       )
     ) {
       throw new Error("该结构已存在");
     }
-    const entry: StoryEntry = { id: newId(), projectId, kind, title: trimmed, summary };
+    const entry: StoryEntry = {
+      id: newId(),
+      projectId,
+      kind,
+      title: parsed.title,
+      summary,
+      aliases: parsed.aliases,
+    };
     memory.story.push(entry);
     return entry;
   },

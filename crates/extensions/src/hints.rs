@@ -17,6 +17,8 @@ struct HintsInput {
     chapter_id: String,
     revision: u64,
     nearby_text: String,
+    #[serde(default)]
+    lookback_text: String,
     generation: u64,
     #[serde(default = "default_limit")]
     limit: usize,
@@ -65,6 +67,7 @@ impl Tool for ContextHintsTool {
                 pov_entity_id: None,
             },
             nearby_text: parsed.nearby_text,
+            lookback_text: parsed.lookback_text,
             generation: parsed.generation,
             limit: parsed.limit.clamp(1, 6),
         };
