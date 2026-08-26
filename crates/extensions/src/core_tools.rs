@@ -234,20 +234,7 @@ async fn run_agent_tool(
 
 /// 从 app_settings.model_config 读取模型配置；缺失时回退 echo。
 pub fn load_provider_config(ctx: &ToolContext<'_>) -> Result<ProviderConfig, KernelError> {
-    let raw = with_repository(ctx.kernel(), |repository| {
-        repository.get_setting("model_config")
-    })?;
-    let mut config = ProviderConfig::default();
-    if let Some(raw) = raw {
-        if let Ok(value) = serde_json::from_str::<Value>(&raw) {
-            config.provider = string_field(&value, "provider").unwrap_or_default();
-            config.api_key = string_field(&value, "apiKey").unwrap_or_default();
-            config.base_url = string_field(&value, "baseUrl").unwrap_or_default();
-            config.model = string_field(&value, "model").unwrap_or_default();
-        }
-    }
-    config.provider = crate::providers::resolve_provider_name(&config);
-    Ok(config)
+    crate::workspace::load_provider_config_from_kernel(ctx.kernel())
 }
 
 /// 核心工具扩展。

@@ -11,6 +11,27 @@ pub struct Project {
     pub updated_at: DateTime<Utc>,
 }
 
+/// 作品库快照：当前作品下的书与章，供 IPC / UI 一次拉取。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct LibrarySnapshot {
+    pub projects: Vec<Project>,
+    pub active_project_id: Option<String>,
+    pub books: Vec<Book>,
+    pub chapters: Vec<Chapter>,
+}
+
+/// 章节正文 + 块序列，对应 `load_chapter` / `save_chapter`。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChapterBody {
+    pub chapter_id: String,
+    pub revision: u64,
+    pub text: String,
+    #[serde(default)]
+    pub blocks: Vec<ContentBlock>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Book {

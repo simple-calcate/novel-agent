@@ -28,7 +28,7 @@ DeepSeek 公开分享过的 agent harness 设计思想给了可借鉴的骨架�
     同名注册可覆盖内置实现；
   - `EventBus` + `EventSubscriber`：领域事件按类型路由，单订阅者失败不阻断其他；
   - `Services` 类型注册表：依赖倒置，内核不依赖 storage，宿主注入
-    `Arc<Mutex<Repository>>`，扩展按类型取回；
+    `Arc<StorageHandle>`，扩展按类型取回；
   - `BudgetGuard` + `run_continuation`：时间与输出 token 预算硬约束，
     超限截断并标记 `truncated`，可选发布 `agent.finished` 事件。
 - `crates/extensions`（内置扩展集，实现 `Extension` trait）：
@@ -48,8 +48,8 @@ let kernel = Kernel::builder()
     .build()?;
 ```
 
-Tauri 命令层只做参数翻译，业务全部走 `kernel.call_tool` / `kernel.dispatch`
-/ `kernel.run_continuation`。
+Tauri 命令层只做参数翻译，作品库走 `Workspace`，Agent/队列走 `kernel.call_tool` /
+`kernel.dispatch` / `kernel.run_continuation`。见 [ADR 0008](0008-workspace-storage-handle.md)。
 
 ## 修复的缺陷
 

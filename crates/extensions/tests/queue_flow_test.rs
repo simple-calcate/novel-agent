@@ -9,9 +9,9 @@ use novel_domain::{
 };
 use novel_extensions::{QueueExtension, QueuePolicy, WorkflowEngineExtension};
 use novel_kernel::{Kernel, KernelError, Tool, ToolContext};
-use novel_storage::Repository;
+use novel_storage::StorageHandle;
 use serde_json::{json, Value};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use uuid::Uuid;
 
 struct OkSaveTool;
@@ -86,11 +86,11 @@ fn event(project_id: ProjectId, event_type: &str) -> DomainEvent {
 }
 
 fn build_kernel(
-    repository: Arc<Mutex<Repository>>,
+    storage: Arc<StorageHandle>,
     extra_tool: Option<Box<dyn Tool + 'static>>,
 ) -> Kernel {
     let mut builder = Kernel::builder()
-        .service(repository)
+        .service(storage)
         .service(Arc::new(QueuePolicy {
             stale_running_after: Duration::minutes(10),
             backoff_base: Duration::zero(),
@@ -106,17 +106,7 @@ fn build_kernel(
 }
 
 fn queued_count(summary: &novel_kernel::DispatchSummary) -> u64 {
-    summary
-        .outcomes
-        .iter()
-        .filter_map(|outcome| {
-            outcome
-                .output
-                .as_ref()
-                .and_then(|output| output.get("queued"))
-                .and_then(Value::as_u64)
-        })
-        .sum()
+    summary.queued_count()
 }
 
 fn skipped_count(summary: &novel_kernel::DispatchSummary) -> u64 {
@@ -135,25 +125,21 @@ fn skipped_count(summary: &novel_kernel::DispatchSummary) -> u64 {
 
 #[tokio::test]
 async fn event_to_queue_to_success() {
-    let repository = Arc::new(Mutex::new(Repository::open_in_memory().unwrap()));
-    let project_id = repository
-        .lock()
-        .unwrap()
-        .create_project("测试作品")
-        .unwrap()
-        .id;
-    repository
-        .lock()
-        .unwrap()
-        .save_workflow(&rule(
-            project_id.clone(),
-            "editor.idle",
-            WorkflowAction::SaveDocument,
-            0,
-        ))
+    let storage = Arc::new(StorageHandle::open_in_memory().unwrap());
+    let project_id = storage
+        .execute(|repository| {
+            let project = repository.create_project("测试作品")?;
+            repository.save_workflow(&rule(
+                project.id.clone(),
+                "editor.idle",
+                WorkflowAction::SaveDocument,
+                0,
+            ))?;
+            Ok(project.id)
+        })
         .unwrap();
 
-    let kernel = build_kernel(repository.clone(), Some(Box::new(OkSaveTool)));
+    let kernel = build_kernel(storage.clone(), Some(Box::new(OkSaveTool)));
 
     let summary = kernel.dispatch(&event(project_id.clone(), "editor.idle"));
     assert!(!summary.has_error(), "{summary:?}");
@@ -165,7 +151,9 @@ async fn event_to_queue_to_success() {
     assert_eq!(result["operation"], "document.save");
     assert_eq!(result["status"], "succeeded");
 
-    let jobs = repository.lock().unwrap().list_jobs(10).unwrap();
+    let jobs = storage
+        .execute(|repository| repository.list_jobs(10))
+        .unwrap();
     assert_eq!(jobs.len(), 1);
     assert_eq!(jobs[0].status, novel_domain::JobStatus::Succeeded);
     assert_eq!(jobs[0].attempts, 1);
@@ -177,25 +165,21 @@ async fn event_to_queue_to_success() {
 
 #[tokio::test]
 async fn failing_tool_retries_then_dead_letters() {
-    let repository = Arc::new(Mutex::new(Repository::open_in_memory().unwrap()));
-    let project_id = repository
-        .lock()
-        .unwrap()
-        .create_project("测试作品")
-        .unwrap()
-        .id;
-    repository
-        .lock()
-        .unwrap()
-        .save_workflow(&rule(
-            project_id.clone(),
-            "editor.idle",
-            WorkflowAction::RebuildIndex,
-            0,
-        ))
+    let storage = Arc::new(StorageHandle::open_in_memory().unwrap());
+    let project_id = storage
+        .execute(|repository| {
+            let project = repository.create_project("测试作品")?;
+            repository.save_workflow(&rule(
+                project.id.clone(),
+                "editor.idle",
+                WorkflowAction::RebuildIndex,
+                0,
+            ))?;
+            Ok(project.id)
+        })
         .unwrap();
 
-    let kernel = build_kernel(repository.clone(), Some(Box::new(FailingTool)));
+    let kernel = build_kernel(storage.clone(), Some(Box::new(FailingTool)));
     kernel.dispatch(&event(project_id.clone(), "editor.idle"));
 
     // max_attempts = 3：两次失败回到 pending，第三次进死信
@@ -211,32 +195,30 @@ async fn failing_tool_retries_then_dead_letters() {
         assert_eq!(result["status"], expected_status, "第 {attempt} 次尝试");
     }
 
-    let jobs = repository.lock().unwrap().list_jobs(10).unwrap();
+    let jobs = storage
+        .execute(|repository| repository.list_jobs(10))
+        .unwrap();
     assert_eq!(jobs[0].status, novel_domain::JobStatus::DeadLetter);
     assert_eq!(jobs[0].attempts, 3);
 }
 
 #[tokio::test]
 async fn cooldown_blocks_repeat_firing() {
-    let repository = Arc::new(Mutex::new(Repository::open_in_memory().unwrap()));
-    let project_id = repository
-        .lock()
-        .unwrap()
-        .create_project("测试作品")
-        .unwrap()
-        .id;
-    repository
-        .lock()
-        .unwrap()
-        .save_workflow(&rule(
-            project_id.clone(),
-            "editor.idle",
-            WorkflowAction::SaveDocument,
-            3_600_000, // 1 小时冷却
-        ))
+    let storage = Arc::new(StorageHandle::open_in_memory().unwrap());
+    let project_id = storage
+        .execute(|repository| {
+            let project = repository.create_project("测试作品")?;
+            repository.save_workflow(&rule(
+                project.id.clone(),
+                "editor.idle",
+                WorkflowAction::SaveDocument,
+                3_600_000, // 1 小时冷却
+            ))?;
+            Ok(project.id)
+        })
         .unwrap();
 
-    let kernel = build_kernel(repository.clone(), Some(Box::new(OkSaveTool)));
+    let kernel = build_kernel(storage.clone(), Some(Box::new(OkSaveTool)));
 
     let first = kernel.dispatch(&event(project_id.clone(), "editor.idle"));
     assert_eq!(queued_count(&first), 1);
@@ -248,30 +230,32 @@ async fn cooldown_blocks_repeat_firing() {
     assert_eq!(queued_count(&second), 0);
     assert_eq!(skipped_count(&second), 1);
 
-    assert_eq!(repository.lock().unwrap().list_jobs(10).unwrap().len(), 1);
+    assert_eq!(
+        storage
+            .execute(|repository| repository.list_jobs(10))
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
 async fn unknown_operation_is_recorded_as_failure() {
-    let repository = Arc::new(Mutex::new(Repository::open_in_memory().unwrap()));
-    let project_id = repository
-        .lock()
-        .unwrap()
-        .create_project("测试作品")
-        .unwrap()
-        .id;
-    repository
-        .lock()
-        .unwrap()
-        .save_workflow(&rule(
-            project_id.clone(),
-            "editor.idle",
-            WorkflowAction::CheckContinuity, // 未注册对应工具
-            0,
-        ))
+    let storage = Arc::new(StorageHandle::open_in_memory().unwrap());
+    let project_id = storage
+        .execute(|repository| {
+            let project = repository.create_project("测试作品")?;
+            repository.save_workflow(&rule(
+                project.id.clone(),
+                "editor.idle",
+                WorkflowAction::CheckContinuity, // 未注册对应工具
+                0,
+            ))?;
+            Ok(project.id)
+        })
         .unwrap();
 
-    let kernel = build_kernel(repository, None);
+    let kernel = build_kernel(storage, None);
     kernel.dispatch(&event(project_id.clone(), "editor.idle"));
 
     let result = kernel.call_tool("queue.tick", json!({})).await.unwrap();
