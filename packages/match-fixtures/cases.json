@@ -1,0 +1,38 @@
+[
+  {
+    "id": "full-name-ranks-above-place",
+    "current": "林晚走进雾港",
+    "lookback": "",
+    "expectedTitles": ["林晚", "雾港"]
+  },
+  {
+    "id": "alias",
+    "current": "雾儿没有回头",
+    "lookback": "",
+    "expectedTitles": ["林晚"]
+  },
+  {
+    "id": "summary-keyword",
+    "current": "那个刀客转过身",
+    "lookback": "",
+    "expectedTitles": ["林晚"]
+  },
+  {
+    "id": "title-core",
+    "current": "那座灯塔夜里忽然亮了",
+    "lookback": "",
+    "expectedTitles": ["雾中灯塔"]
+  },
+  {
+    "id": "lookback-dwell",
+    "current": "她没有回头",
+    "lookback": "林晚走进雾港",
+    "expectedTitles": ["林晚"]
+  },
+  {
+    "id": "unrelated-hidden",
+    "current": "夜晚的海面",
+    "lookback": "",
+    "expectedTitles": []
+  }
+]

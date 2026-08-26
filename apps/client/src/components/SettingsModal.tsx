@@ -1,12 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Key, Cpu, Globe, Server } from "lucide-react";
 
-export interface ModelConfig {
-  provider: "openai" | "anthropic" | "deepseek" | "ollama" | "custom";
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-}
+import { ModelConfig } from "../types";
+
+export type { ModelConfig };
 
 interface Props {
   open: boolean;
@@ -45,9 +42,18 @@ const providerPresets: Record<string, { label: string; baseUrl: string; models: 
 
 export function SettingsModal({ open, onClose, initialConfig, onSave }: Props) {
   const [provider, setProvider] = useState<ModelConfig["provider"]>(initialConfig?.provider ?? "openai");
-  const [apiKey, setApiKey] = useState(initialConfig?.apiKey ?? "");
+  const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState(initialConfig?.baseUrl ?? providerPresets.openai.baseUrl);
   const [model, setModel] = useState(initialConfig?.model ?? providerPresets.openai.models[0]);
+
+  useEffect(() => {
+    if (!open) return;
+    const next = initialConfig?.provider ?? "openai";
+    setProvider(next);
+    setApiKey("");
+    setBaseUrl(initialConfig?.baseUrl ?? providerPresets[next].baseUrl);
+    setModel(initialConfig?.model ?? providerPresets[next].models[0] ?? "");
+  }, [open, initialConfig]);
 
   if (!open) return null;
 
@@ -94,7 +100,13 @@ export function SettingsModal({ open, onClose, initialConfig, onSave }: Props) {
             <input
               type="password"
               className="text-input"
-              placeholder={provider === "ollama" ? "本地模型无需 Key" : "sk-..."}
+              placeholder={
+                initialConfig?.apiKeySet
+                  ? "已保存在系统密钥链，留空则保持不变"
+                  : provider === "ollama"
+                    ? "本地模型无需 Key"
+                    : "sk-..."
+              }
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
             />
@@ -150,7 +162,13 @@ export function SettingsModal({ open, onClose, initialConfig, onSave }: Props) {
           <button
             className="action-button primary"
             onClick={() => {
-              onSave({ provider, apiKey, baseUrl, model });
+              onSave({
+                provider,
+                apiKey,
+                baseUrl,
+                model,
+                apiKeySet: Boolean(apiKey) || Boolean(initialConfig?.apiKeySet),
+              });
               onClose();
             }}
           >

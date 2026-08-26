@@ -13,6 +13,7 @@ novel-context-engine = { path = "../context-engine" }
 novel-context-hints = { path = "../context-hints" }
 novel-plugin-host = { path = "../plugin-host" }
 novel-story-model = { path = "../story-model" }
+novel-feedback-memory = { path = "../feedback-memory" }
 async-trait.workspace = true
 chrono.workspace = true
 futures.workspace = true
@@ -23,6 +24,8 @@ thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 uuid.workspace = true
+keyring = "3"
 
 [dev-dependencies]
 wiremock = "0.6.5"
+tempfile = "3"

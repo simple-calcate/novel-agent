@@ -33,4 +33,93 @@ describe("memory library", () => {
     expect(after.chapters).toHaveLength(0);
     expect(after.books).toHaveLength(1);
   });
+
+  it("groups chapters under a volume and ungroups on delete", async () => {
+    const project = await libraryApi.createProject("夜航星图");
+    const book = await libraryApi.createBook(project.id, "雾港纪事");
+    const volume = await libraryApi.createVolume(project.id, book.id, "卷一");
+    await libraryApi.createChapter(project.id, book.id, "第一章", volume.id);
+    const library = await libraryApi.loadLibrary(project.id);
+    expect(library.volumes?.map((item) => item.title)).toEqual(["卷一"]);
+    expect(library.chapters[0].volumeId).toBe(volume.id);
+
+    await libraryApi.renameVolume(project.id, volume.id, "上卷");
+    await libraryApi.createVolume(project.id, book.id, "卷二");
+    await libraryApi.moveVolume(project.id, volume.id, 1);
+    const ordered = await libraryApi.loadLibrary(project.id);
+    expect(ordered.volumes?.map((item) => item.title)).toEqual(["卷二", "上卷"]);
+
+    await libraryApi.deleteVolume(project.id, volume.id);
+    const after = await libraryApi.loadLibrary(project.id);
+    expect(after.volumes).toHaveLength(1);
+    expect(after.chapters[0].volumeId).toBeNull();
+  });
+
+  it("extracts canon candidates and accepts them", async () => {
+    const project = await libraryApi.createProject("夜航星图");
+    const book = await libraryApi.createBook(project.id, "卷一");
+    const chapter = await libraryApi.createChapter(project.id, book.id, "第一章");
+    await libraryApi.saveChapter(chapter.id, "林晚说道：「今夜雾很重。」走进雾港码头。");
+
+    const created = await libraryApi.proposeCanon(chapter.id);
+    expect(created.some((item) => item.entityName === "林晚")).toBe(true);
+    const again = await libraryApi.proposeCanon(chapter.id);
+    expect(again).toHaveLength(0);
+
+    const candidates = await libraryApi.listCanon(project.id, "candidate");
+    expect(candidates.length).toBeGreaterThan(0);
+    await libraryApi.reviewCanonFact(candidates[0].factId, true);
+    const accepted = await libraryApi.listCanon(project.id, "accepted");
+    expect(accepted).toHaveLength(1);
+    const leftover = await libraryApi.listCanon(project.id, "candidate");
+    expect(leftover.every((item) => item.factId !== accepted[0].factId)).toBe(true);
+  });
+
+  it("stores designed story structure and lists it", async () => {
+    const project = await libraryApi.createProject("夜航星图");
+    await libraryApi.createStoryEntry(project.id, "character", "林晚", "雾港来的刀客");
+    await libraryApi.createStoryEntry(project.id, "foreshadow", "雾中灯塔", "里面还有旧王玺");
+    const entries = await libraryApi.listStoryEntries(project.id);
+    expect(entries.map((item) => item.title)).toEqual(["林晚", "雾中灯塔"]);
+    expect(entries[0].aliases).toEqual([]);
+    await libraryApi.deleteStoryEntry(project.id, entries[0].id, entries[0].kind);
+    const leftover = await libraryApi.listStoryEntries(project.id);
+    expect(leftover).toHaveLength(1);
+    expect(leftover[0].title).toBe("雾中灯塔");
+    const withAlias = await libraryApi.createStoryEntry(project.id, "character", "沈雾、雾儿", "");
+    expect(withAlias.title).toBe("沈雾");
+    expect(withAlias.aliases).toEqual(["雾儿"]);
+    await expect(
+      libraryApi.createStoryEntry(project.id, "foreshadow", "雾中灯塔", "重复"),
+    ).rejects.toThrow();
+  });
+
+  it("outlines scenes under a chapter without deleting text", async () => {
+    const project = await libraryApi.createProject("夜航星图");
+    const book = await libraryApi.createBook(project.id, "雾港纪事");
+    const chapter = await libraryApi.createChapter(project.id, book.id, "第一章");
+    await libraryApi.saveChapter(chapter.id, "雾港来客。");
+    const scene = await libraryApi.createScene(project.id, chapter.id, "码头夜谈");
+    const library = await libraryApi.loadLibrary(project.id);
+    expect(library.scenes?.map((item) => item.title)).toEqual(["码头夜谈"]);
+    await libraryApi.renameScene(project.id, scene.id, "码头雨夜");
+    await libraryApi.createScene(project.id, chapter.id, "离开");
+    await libraryApi.moveScene(project.id, scene.id, 1);
+    const ordered = await libraryApi.loadLibrary(project.id);
+    expect(ordered.scenes?.map((item) => item.title)).toEqual(["离开", "码头雨夜"]);
+    await libraryApi.deleteScene(project.id, scene.id);
+    const after = await libraryApi.loadLibrary(project.id);
+    expect(after.scenes).toHaveLength(1);
+    expect((await libraryApi.loadChapter(chapter.id)).text).toBe("雾港来客。");
+  });
+
+  it("records and disables writing preferences", async () => {
+    const project = await libraryApi.createProject("夜航星图");
+    const first = await libraryApi.recordGenerationFeedback(project.id, false, "AI 草稿");
+    expect(first).toHaveLength(1);
+    const again = await libraryApi.recordGenerationFeedback(project.id, false, "另一段");
+    expect(again[0].status).toBe("confirmed");
+    const disabled = await libraryApi.setPreferenceStatus(project.id, again[0].id, true);
+    expect(disabled[0].status).toBe("disabled");
+  });
 });

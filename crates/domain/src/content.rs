@@ -18,7 +18,11 @@ pub struct LibrarySnapshot {
     pub projects: Vec<Project>,
     pub active_project_id: Option<String>,
     pub books: Vec<Book>,
+    #[serde(default)]
+    pub volumes: Vec<Volume>,
     pub chapters: Vec<Chapter>,
+    #[serde(default)]
+    pub scenes: Vec<Scene>,
 }
 
 /// 章节正文 + 块序列，对应 `load_chapter` / `save_chapter`。
@@ -71,6 +75,8 @@ pub enum ChapterStatus {
     Archived,
 }
 
+/// 章内场次：作者预先写的一场戏标题，不替代正文。
+/// `pov_entry_id` 可选，指向人物结构条目 id（不是启发式正史实体）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Scene {
@@ -78,7 +84,8 @@ pub struct Scene {
     pub chapter_id: ChapterId,
     pub title: String,
     pub position: u32,
-    pub pov_entity_id: Option<crate::EntityId>,
+    #[serde(default)]
+    pub pov_entry_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

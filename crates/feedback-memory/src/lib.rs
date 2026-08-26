@@ -1,37 +1,12 @@
 //! 人类纠正记录与可晋升的偏好规则。
+//!
+//! 这一层没有 IO：仓储负责落库，应用层在拒绝续写时调用这里生成规则，
+//! 并在下次续写时把规则拼进 system prompt。
 
 use chrono::Utc;
 use novel_domain::{CorrectionRecord, PreferenceRuleId, ProposalId, RejectionReason};
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum PreferenceScope {
-    Proposal,
-    Character { entity_id: String },
-    Project { project_id: String },
-    GlobalAuthor,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum PreferenceStatus {
-    Candidate,
-    Confirmed,
-    Disabled,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PreferenceRule {
-    pub id: PreferenceRuleId,
-    pub scope: PreferenceScope,
-    pub rule: String,
-    pub status: PreferenceStatus,
-    pub evidence_proposals: Vec<ProposalId>,
-    pub created_at: chrono::DateTime<Utc>,
-    pub updated_at: chrono::DateTime<Utc>,
-}
+pub use novel_domain::{PreferenceRule, PreferenceScope, PreferenceStatus};
 
 pub fn correction_from_edit(
     proposal_id: ProposalId,
@@ -76,6 +51,22 @@ pub fn rejection_rule(
         created_at: now,
         updated_at: now,
     }
+}
+
+/// 把未停用的偏好规则写成续写 system prompt 前缀。
+pub fn prompt_prefix(rules: &[PreferenceRule]) -> Option<String> {
+    let lines: Vec<&str> = rules
+        .iter()
+        .filter(|rule| rule.status != PreferenceStatus::Disabled)
+        .map(|rule| rule.rule.as_str())
+        .collect();
+    if lines.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "你是网文续写助手，必须遵守给定设定。作者偏好：\n- {}",
+        lines.join("\n- ")
+    ))
 }
 
 fn summarize_diff(ai: &str, human: &str) -> String {

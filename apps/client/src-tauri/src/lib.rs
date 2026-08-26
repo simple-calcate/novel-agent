@@ -1,10 +1,11 @@
 use novel_automation::TypingSession;
 use novel_domain::{
-    Annotation, BlockId, Book, BookId, Chapter, ChapterBody, ChapterId, ContentBlock, ContentPatch,
-    DomainEvent, EventId, EventSource, JobView, LibrarySnapshot, Project, ProjectId, Revision,
-    EVENT_SCHEMA_VERSION,
+    Annotation, BlockId, Book, BookId, CanonProposal, Chapter, ChapterBody, ChapterId,
+    ContentBlock, ContentPatch, DomainEvent, EventId, EventSource, FactId, FactStatus, JobView,
+    LibrarySnapshot, PluginSummary, Project, ProjectId, Revision, Scene, SceneId, StoryEntry,
+    StoryEntryKind, Volume, VolumeId, EVENT_SCHEMA_VERSION,
 };
-use novel_extensions::{BuiltinsExtension, Workspace};
+use novel_extensions::{BuiltinsExtension, SecretVault, Workspace};
 use novel_kernel::{Kernel, ProviderConfig, ToolDescriptor};
 use novel_storage::StorageHandle;
 use serde::{Deserialize, Serialize};
@@ -108,6 +109,30 @@ pub struct NewChapterInput {
     pub title: String,
     #[serde(default)]
     pub position: u32,
+    #[serde(default)]
+    pub volume_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewVolumeInput {
+    pub project_id: String,
+    pub book_id: String,
+    pub title: String,
+    #[serde(default)]
+    pub position: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewSceneInput {
+    pub project_id: String,
+    pub chapter_id: String,
+    pub title: String,
+    #[serde(default)]
+    pub position: u32,
+    #[serde(default)]
+    pub pov_entry_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -141,6 +166,8 @@ pub struct HintRequest {
     pub chapter_id: String,
     pub revision: u64,
     pub nearby_text: String,
+    #[serde(default)]
+    pub lookback_text: String,
     pub generation: u64,
 }
 
@@ -156,10 +183,48 @@ fn parse_book_id(value: &str) -> Result<BookId, String> {
         .map_err(|_| format!("invalid book id: {value}"))
 }
 
+fn parse_volume_id(value: &str) -> Result<VolumeId, String> {
+    value
+        .parse()
+        .map_err(|_| format!("invalid volume id: {value}"))
+}
+
+fn parse_scene_id(value: &str) -> Result<SceneId, String> {
+    value
+        .parse()
+        .map_err(|_| format!("invalid scene id: {value}"))
+}
+
 fn parse_chapter_id(value: &str) -> Result<ChapterId, String> {
     value
         .parse()
         .map_err(|_| format!("invalid chapter id: {value}"))
+}
+
+fn parse_fact_id(value: &str) -> Result<FactId, String> {
+    value
+        .parse()
+        .map_err(|_| format!("invalid fact id: {value}"))
+}
+
+fn parse_fact_status(value: Option<&str>) -> Result<Option<FactStatus>, String> {
+    match value {
+        None | Some("") => Ok(None),
+        Some("candidate") => Ok(Some(FactStatus::Candidate)),
+        Some("accepted") => Ok(Some(FactStatus::Accepted)),
+        Some("rejected") => Ok(Some(FactStatus::Rejected)),
+        Some("superseded") => Ok(Some(FactStatus::Superseded)),
+        Some(other) => Err(format!("invalid fact status: {other}")),
+    }
+}
+
+fn parse_story_kind(value: &str) -> Result<StoryEntryKind, String> {
+    match value {
+        "character" => Ok(StoryEntryKind::Character),
+        "setting" => Ok(StoryEntryKind::Setting),
+        "foreshadow" => Ok(StoryEntryKind::Foreshadow),
+        other => Err(format!("invalid story entry kind: {other}")),
+    }
 }
 
 #[tauri::command]
@@ -201,7 +266,114 @@ fn create_chapter(state: State<'_, AppState>, input: NewChapterInput) -> Command
         &input.book_id,
         &input.title,
         input.position,
+        input.volume_id.as_deref(),
     ))
+}
+
+#[tauri::command]
+fn create_volume(state: State<'_, AppState>, input: NewVolumeInput) -> CommandResult<Volume> {
+    let project_id = match parse_project_id(&input.project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    if parse_book_id(&input.book_id).is_err() {
+        return CommandResult::error("invalid book id");
+    }
+    CommandResult::from_result(workspace(&state).create_volume(
+        &project_id,
+        &input.book_id,
+        &input.title,
+        input.position,
+    ))
+}
+
+#[tauri::command]
+fn create_scene(state: State<'_, AppState>, input: NewSceneInput) -> CommandResult<Scene> {
+    let project_id = match parse_project_id(&input.project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    if parse_chapter_id(&input.chapter_id).is_err() {
+        return CommandResult::error("invalid chapter id");
+    }
+    CommandResult::from_result(workspace(&state).create_scene(
+        &project_id,
+        &input.chapter_id,
+        &input.title,
+        input.position,
+        input.pov_entry_id.as_deref(),
+    ))
+}
+
+#[tauri::command]
+fn rename_scene(
+    state: State<'_, AppState>,
+    project_id: String,
+    scene_id: String,
+    title: String,
+) -> CommandResult<LibrarySnapshot> {
+    let pid = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let sid = match parse_scene_id(&scene_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).rename_scene(&pid, &sid, &title))
+}
+
+#[tauri::command]
+fn set_scene_pov(
+    state: State<'_, AppState>,
+    project_id: String,
+    scene_id: String,
+    pov_entry_id: Option<String>,
+) -> CommandResult<LibrarySnapshot> {
+    let pid = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let sid = match parse_scene_id(&scene_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).set_scene_pov(&pid, &sid, pov_entry_id.as_deref()))
+}
+
+#[tauri::command]
+fn delete_scene(
+    state: State<'_, AppState>,
+    project_id: String,
+    scene_id: String,
+) -> CommandResult<LibrarySnapshot> {
+    let pid = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let sid = match parse_scene_id(&scene_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).delete_scene(&pid, &sid))
+}
+
+#[tauri::command]
+fn move_scene(
+    state: State<'_, AppState>,
+    project_id: String,
+    scene_id: String,
+    delta: i32,
+) -> CommandResult<LibrarySnapshot> {
+    let pid = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let sid = match parse_scene_id(&scene_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).move_scene(&pid, &sid, delta))
 }
 
 #[tauri::command]
@@ -333,6 +505,59 @@ fn move_book(
 }
 
 #[tauri::command]
+fn rename_volume(
+    state: State<'_, AppState>,
+    project_id: String,
+    volume_id: String,
+    title: String,
+) -> CommandResult<LibrarySnapshot> {
+    let pid = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let vid = match parse_volume_id(&volume_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).rename_volume(&pid, &vid, &title))
+}
+
+#[tauri::command]
+fn delete_volume(
+    state: State<'_, AppState>,
+    project_id: String,
+    volume_id: String,
+) -> CommandResult<LibrarySnapshot> {
+    let pid = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let vid = match parse_volume_id(&volume_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).delete_volume(&pid, &vid))
+}
+
+#[tauri::command]
+fn move_volume(
+    state: State<'_, AppState>,
+    project_id: String,
+    volume_id: String,
+    delta: i32,
+) -> CommandResult<LibrarySnapshot> {
+    let pid = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let vid = match parse_volume_id(&volume_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).move_volume(&pid, &vid, delta))
+}
+
+#[tauri::command]
 fn rename_chapter(
     state: State<'_, AppState>,
     project_id: String,
@@ -446,14 +671,18 @@ async fn save_model_config(
         base_url = %config.base_url,
         "save_model_config 保存配置"
     );
-    let json_value = serde_json::to_string(&config).map_err(|e| e.to_string())?;
     workspace(&state)
-        .save_setting("model_config", &json_value)
+        .save_model_config(
+            &config.provider,
+            &config.api_key,
+            &config.base_url,
+            &config.model,
+        )
         .map_err(|e| {
-            error!(error = %e, "保存配置到数据库失败");
+            error!(error = %e, "保存配置失败");
             e.to_string()
         })?;
-    info!("模型配置已保存到数据库");
+    info!("模型配置已保存；API Key 不写入 SQLite");
     Ok(json!({ "saved": true }))
 }
 
@@ -461,16 +690,15 @@ async fn save_model_config(
 fn load_model_config(state: State<'_, AppState>) -> Result<Value, String> {
     debug!("load_model_config 加载配置");
     match workspace(&state)
-        .get_setting("model_config")
+        .load_model_config()
         .map_err(|e| e.to_string())?
     {
-        Some(json_str) => {
-            let config: ModelConfigInput =
-                serde_json::from_str(&json_str).map_err(|e| e.to_string())?;
+        Some(config) => {
             info!(
                 provider = %config.provider,
                 model = %config.model,
-                "从数据库加载模型配置"
+                api_key_set = config.api_key_set,
+                "加载模型配置（不含密钥明文）"
             );
             Ok(json!(config))
         }
@@ -479,6 +707,67 @@ fn load_model_config(state: State<'_, AppState>) -> Result<Value, String> {
             Ok(json!(null))
         }
     }
+}
+
+#[tauri::command]
+fn record_generation_feedback(
+    state: State<'_, AppState>,
+    project_id: String,
+    accepted: bool,
+    ai_text: String,
+    human_text: Option<String>,
+    context_excerpt: Option<String>,
+) -> CommandResult<Vec<novel_domain::PreferenceRule>> {
+    let project_id = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).record_generation_feedback(
+        &project_id,
+        accepted,
+        &ai_text,
+        human_text.as_deref().unwrap_or(""),
+        context_excerpt.as_deref().unwrap_or(""),
+    ))
+}
+
+#[tauri::command]
+fn list_preferences(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> CommandResult<Vec<novel_domain::PreferenceRule>> {
+    let project_id = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).list_preference_rules(&project_id))
+}
+
+#[tauri::command]
+fn set_preference_status(
+    state: State<'_, AppState>,
+    project_id: String,
+    rule_id: String,
+    disabled: bool,
+) -> CommandResult<Vec<novel_domain::PreferenceRule>> {
+    let project_id = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let rule_id = match rule_id.parse() {
+        Ok(id) => id,
+        Err(_) => return CommandResult::error(format!("invalid preference id: {rule_id}")),
+    };
+    CommandResult::from_result(workspace(&state).set_preference_status(
+        &project_id,
+        &rule_id,
+        disabled,
+    ))
+}
+
+#[tauri::command]
+fn list_plugins(state: State<'_, AppState>) -> CommandResult<Vec<PluginSummary>> {
+    CommandResult::ok(workspace(&state).list_plugins())
 }
 
 #[tauri::command]
@@ -776,6 +1065,102 @@ fn list_jobs(state: State<'_, AppState>) -> CommandResult<Vec<JobView>> {
     CommandResult::from_result(workspace(&state).list_jobs(30))
 }
 
+#[tauri::command]
+fn propose_canon(
+    state: State<'_, AppState>,
+    chapter_id: String,
+) -> CommandResult<Vec<CanonProposal>> {
+    let chapter_id = match parse_chapter_id(&chapter_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).propose_canon_from_chapter(&chapter_id))
+}
+
+#[tauri::command]
+fn list_canon(
+    state: State<'_, AppState>,
+    project_id: String,
+    status: Option<String>,
+) -> CommandResult<Vec<CanonProposal>> {
+    let project_id = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let status = match parse_fact_status(status.as_deref()) {
+        Ok(status) => status,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).list_canon(&project_id, status))
+}
+
+#[tauri::command]
+fn review_canon_fact(
+    state: State<'_, AppState>,
+    fact_id: String,
+    accept: bool,
+) -> CommandResult<CanonProposal> {
+    let fact_id = match parse_fact_id(&fact_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).review_canon_fact(&fact_id, accept))
+}
+
+#[tauri::command]
+fn create_story_entry(
+    state: State<'_, AppState>,
+    project_id: String,
+    kind: String,
+    title: String,
+    summary: String,
+) -> CommandResult<StoryEntry> {
+    let project_id = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let kind = match parse_story_kind(&kind) {
+        Ok(kind) => kind,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).create_story_entry(
+        &project_id,
+        kind,
+        &title,
+        &summary,
+    ))
+}
+
+#[tauri::command]
+fn list_story_entries(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> CommandResult<Vec<StoryEntry>> {
+    let project_id = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).list_story_entries(&project_id))
+}
+
+#[tauri::command]
+fn delete_story_entry(
+    state: State<'_, AppState>,
+    project_id: String,
+    id: String,
+    kind: String,
+) -> CommandResult<()> {
+    let project_id = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let kind = match parse_story_kind(&kind) {
+        Ok(kind) => kind,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).delete_story_entry(&project_id, &id, kind))
+}
+
 #[cfg(test)]
 mod command_tests;
 
@@ -799,9 +1184,11 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let database = data_dir.join("novel-agent.sqlite3");
             let storage = Arc::new(StorageHandle::open(database)?);
+            let secrets = Arc::new(SecretVault::open(&data_dir));
 
             let kernel = Kernel::builder()
                 .service(storage)
+                .service(secrets)
                 .extension(BuiltinsExtension)?
                 .build()?;
             app.manage(AppState {
@@ -823,6 +1210,15 @@ pub fn run() {
             rename_book,
             delete_book,
             move_book,
+            create_volume,
+            create_scene,
+            rename_scene,
+            set_scene_pov,
+            delete_scene,
+            move_scene,
+            rename_volume,
+            delete_volume,
+            move_volume,
             rename_chapter,
             delete_chapter,
             move_chapter,
@@ -840,6 +1236,16 @@ pub fn run() {
             kernel_tools,
             enqueue_job,
             list_jobs,
+            propose_canon,
+            list_canon,
+            review_canon_fact,
+            create_story_entry,
+            list_story_entries,
+            delete_story_entry,
+            record_generation_feedback,
+            list_preferences,
+            set_preference_status,
+            list_plugins,
         ])
         .run(tauri::generate_context!())
         .expect("error while running novel agent");

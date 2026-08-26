@@ -33,3 +33,16 @@ fn rejection_creates_candidate_rule() {
     assert_eq!(rule.status, PreferenceStatus::Candidate);
     assert!(rule.rule.contains("口吻"));
 }
+
+#[test]
+fn prompt_prefix_lists_active_rules() {
+    use novel_feedback_memory::prompt_prefix;
+    let rule = rejection_rule(
+        RejectionReason::Style,
+        PreferenceScope::GlobalAuthor,
+        ProposalId::new(),
+    );
+    let prefix = prompt_prefix(&[rule]).unwrap();
+    assert!(prefix.contains("作者偏好"));
+    assert!(prefix.contains("文风"));
+}

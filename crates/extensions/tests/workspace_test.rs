@@ -1,7 +1,7 @@
 //! 应用层作品库：写库结束后才 dispatch，订阅者可以再次进入单写者。
 
 use novel_domain::{DomainEvent, EventKind};
-use novel_extensions::{BuiltinsExtension, Workspace};
+use novel_extensions::{BuiltinsExtension, SecretVault, Workspace};
 use novel_kernel::{EventSubscriber, Kernel, KernelError};
 use novel_storage::StorageHandle;
 use serde_json::{json, Value};
@@ -27,6 +27,7 @@ impl EventSubscriber for TouchStorage {
 fn kernel_with_touch() -> Kernel {
     Kernel::builder()
         .service(Arc::new(StorageHandle::open_in_memory().unwrap()))
+        .service(Arc::new(SecretVault::memory()))
         .subscriber(TouchStorage)
         .extension(BuiltinsExtension)
         .expect("内置扩展")
@@ -55,7 +56,7 @@ fn book_and_chapter_roundtrip() {
     let project = workspace.create_project("作品").unwrap();
     let book = workspace.create_book(&project.id, "卷一", "", 0).unwrap();
     let chapter = workspace
-        .create_chapter(&project.id, &book.id.to_string(), "第一章", 0)
+        .create_chapter(&project.id, &book.id.to_string(), "第一章", 0, None)
         .unwrap();
     workspace
         .save_chapter(&chapter.id, "雾港来客。", None)
@@ -66,8 +67,198 @@ fn book_and_chapter_roundtrip() {
 }
 
 #[test]
+fn volume_groups_chapters_in_snapshot() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let project = workspace.create_project("作品").unwrap();
+    let book = workspace.create_book(&project.id, "卷一", "", 0).unwrap();
+    let volume = workspace
+        .create_volume(&project.id, &book.id.to_string(), "上卷", 0)
+        .unwrap();
+    let chapter = workspace
+        .create_chapter(
+            &project.id,
+            &book.id.to_string(),
+            "第一章",
+            0,
+            Some(&volume.id.to_string()),
+        )
+        .unwrap();
+    assert_eq!(chapter.volume_id.as_ref(), Some(&volume.id));
+    let snapshot = workspace.load_library(Some(project.id.clone())).unwrap();
+    assert_eq!(snapshot.volumes.len(), 1);
+    assert_eq!(snapshot.volumes[0].title, "上卷");
+    assert_eq!(
+        snapshot.chapters[0]
+            .volume_id
+            .as_ref()
+            .map(ToString::to_string),
+        Some(volume.id.to_string())
+    );
+    workspace.delete_volume(&project.id, &volume.id).unwrap();
+    let after = workspace.load_library(Some(project.id.clone())).unwrap();
+    assert!(after.volumes.is_empty());
+    assert!(after.chapters[0].volume_id.is_none());
+}
+
+#[test]
+fn create_designed_story_entries() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let project = workspace.create_project("作品").unwrap();
+    workspace
+        .create_story_entry(
+            &project.id,
+            novel_domain::StoryEntryKind::Character,
+            "林晚",
+            "雾港来的刀客",
+        )
+        .unwrap();
+    workspace
+        .create_story_entry(
+            &project.id,
+            novel_domain::StoryEntryKind::Foreshadow,
+            "雾中灯塔",
+            "灯塔里还藏着旧王玺",
+        )
+        .unwrap();
+    let entries = workspace.list_story_entries(&project.id).unwrap();
+    assert_eq!(entries.len(), 2);
+    assert!(entries.iter().any(|entry| entry.title == "林晚"));
+    assert!(entries
+        .iter()
+        .any(|entry| entry.kind == novel_domain::StoryEntryKind::Foreshadow));
+}
+
+#[test]
+fn propose_and_review_canon_from_chapter() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let project = workspace.create_project("作品").unwrap();
+    let book = workspace.create_book(&project.id, "卷一", "", 0).unwrap();
+    let chapter = workspace
+        .create_chapter(&project.id, &book.id.to_string(), "第一章", 0, None)
+        .unwrap();
+    workspace
+        .save_chapter(&chapter.id, "林晚说道：「今夜雾很重。」", None)
+        .unwrap();
+    let created = workspace.propose_canon_from_chapter(&chapter.id).unwrap();
+    assert!(!created.is_empty());
+    let candidates = workspace
+        .list_canon(&project.id, Some(novel_domain::FactStatus::Candidate))
+        .unwrap();
+    assert_eq!(candidates.len(), created.len());
+    let reviewed = workspace
+        .review_canon_fact(&candidates[0].fact_id, true)
+        .unwrap();
+    assert_eq!(reviewed.status, novel_domain::FactStatus::Accepted);
+    assert!(workspace
+        .list_canon(&project.id, Some(novel_domain::FactStatus::Candidate))
+        .unwrap()
+        .iter()
+        .all(|item| item.fact_id != reviewed.fact_id));
+}
+
+#[test]
 fn user_event_kind_matches_library_ops() {
     assert_eq!(EventKind::ProjectCreated.as_str(), "project.created");
     assert_eq!(EventKind::BookCreated.as_str(), "book.created");
     assert_eq!(EventKind::ChapterCreated.as_str(), "chapter.created");
+    assert_eq!(EventKind::CanonProposed.as_str(), "canon.proposed");
+    assert_eq!(EventKind::CanonAccepted.as_str(), "canon.accepted");
+    assert_eq!(EventKind::VolumeCreated.as_str(), "volume.created");
+    assert_eq!(EventKind::SceneCreated.as_str(), "scene.created");
+    assert_eq!(EventKind::SceneDeleted.as_str(), "scene.deleted");
+}
+
+#[test]
+fn model_key_stays_out_of_sqlite() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    workspace
+        .save_model_config("deepseek", "sk-secret", "https://api.deepseek.com", "chat")
+        .unwrap();
+    let view = workspace.load_model_config().unwrap().unwrap();
+    assert!(view.api_key.is_empty());
+    assert!(view.api_key_set);
+    let stored = workspace.get_setting("model_config").unwrap().unwrap();
+    assert!(!stored.contains("sk-secret"), "{stored}");
+    let loaded = novel_extensions::load_provider_config_from_kernel(&kernel).unwrap();
+    assert_eq!(loaded.api_key, "sk-secret");
+}
+
+#[test]
+fn rejecting_continuation_records_preference() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let project = workspace.create_project("作品").unwrap();
+    let rules = workspace
+        .record_generation_feedback(&project.id, false, "AI 草稿", "", "上下文")
+        .unwrap();
+    assert_eq!(rules.len(), 1);
+    assert!(rules[0].rule.contains("拒绝"));
+    let again = workspace
+        .record_generation_feedback(&project.id, false, "另一段", "", "")
+        .unwrap();
+    assert_eq!(again.len(), 1);
+    assert_eq!(again[0].status, novel_domain::PreferenceStatus::Confirmed);
+}
+
+#[test]
+fn scene_outlines_chapter_without_touching_text() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let project = workspace.create_project("作品").unwrap();
+    let book = workspace.create_book(&project.id, "卷一", "", 0).unwrap();
+    let chapter = workspace
+        .create_chapter(&project.id, &book.id.to_string(), "第一章", 0, None)
+        .unwrap();
+    workspace
+        .save_chapter(&chapter.id, "雾港来客。", None)
+        .unwrap();
+    let scene = workspace
+        .create_scene(&project.id, &chapter.id.to_string(), "码头夜谈", 0, None)
+        .unwrap();
+    let snapshot = workspace.load_library(Some(project.id.clone())).unwrap();
+    assert_eq!(snapshot.scenes.len(), 1);
+    assert_eq!(snapshot.scenes[0].title, "码头夜谈");
+    workspace
+        .rename_scene(&project.id, &scene.id, "码头雨夜")
+        .unwrap();
+    workspace.delete_scene(&project.id, &scene.id).unwrap();
+    let after = workspace.load_library(Some(project.id.clone())).unwrap();
+    assert!(after.scenes.is_empty());
+    assert_eq!(
+        workspace.load_chapter(&chapter.id).unwrap().text,
+        "雾港来客。"
+    );
+}
+
+#[test]
+fn disabling_preference_drops_it_from_prompt() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let project = workspace.create_project("作品").unwrap();
+    let rules = workspace
+        .record_generation_feedback(&project.id, false, "AI 草稿", "", "")
+        .unwrap();
+    let disabled = workspace
+        .set_preference_status(&project.id, &rules[0].id, true)
+        .unwrap();
+    assert_eq!(disabled[0].status, novel_domain::PreferenceStatus::Disabled);
+    assert!(novel_feedback_memory::prompt_prefix(&disabled).is_none());
+}
+
+#[test]
+fn list_plugins_reads_bundled_manifests() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let plugins = workspace.list_plugins();
+    assert!(
+        plugins
+            .iter()
+            .any(|plugin| plugin.id == "continuity-checker"),
+        "{plugins:?}"
+    );
+    assert!(plugins.iter().all(|plugin| plugin.runtime == "builtin"));
 }
