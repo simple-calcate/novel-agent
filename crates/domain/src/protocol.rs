@@ -754,4 +754,50 @@ mod tests {
         assert!(r1.starts_with("<think>\n意图：冷开场\n</think>\n\n雾先于脚步声漫进港口。"));
         assert!(serialize_examples(&[], "unknown").is_err());
     }
+
+    #[test]
+    fn fog_harbor_sample_exports_three_gold_beats() {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct SampleChapterFile {
+            chapter_title: String,
+            blocks: Vec<ContentBlock>,
+        }
+
+        let sample: SampleChapterFile = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../apps/client/src/editor/examples/fog-harbor.json"
+        )))
+        .expect("fog-harbor sample should parse");
+
+        let examples = build_training_examples_from_blocks(
+            &sample.blocks,
+            true,
+            Some(sample.chapter_title.as_str()),
+        );
+        assert_eq!(examples.len(), 3);
+        assert!(examples
+            .iter()
+            .all(|example| example.quality == ExampleQuality::Gold));
+        assert_eq!(examples[0].context, "");
+        assert_eq!(
+            examples[0].instruction,
+            format!("写下《{}》的开篇。", sample.chapter_title)
+        );
+        assert!(examples[0].thinking.contains("@人物：林默"));
+        assert!(
+            !examples[0].thinking.contains("[@人物：林默]"),
+            "样章思考里已经写了标签，不要再贴摘要"
+        );
+        assert!(examples[1]
+            .context
+            .contains("【思考】意图：港口第一眼就要冷"));
+        assert!(examples[1].context.contains("雾先于潮声漫进港口。"));
+        assert!(!examples[1].context.contains("表盖掀开"));
+        assert!(examples[1].thinking.contains("@伏笔：怀表来历"));
+        assert!(examples[2].context.contains("他把表盖掀开一条缝。"));
+        let sharegpt = serialize_examples(&examples, "sharegpt").unwrap();
+        assert!(sharegpt.contains(WRITING_PROTOCOL_SYSTEM));
+        assert!(!sharegpt.contains("继续写作"));
+    }
 }

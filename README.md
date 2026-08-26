@@ -66,7 +66,7 @@ cd apps/client && pnpm tauri dev
 - **参数化信号**：`editor.idle`、`paragraph.created`、`chapter.created` 等携带完整上下文。
 - **持久化队列状态机**：原子领取 + 指数退避重试 + 死信 + 崩溃后陈旧任务回收。
 - **正史模型**：人物、事件、关系、知识、伏笔均带有效时间、来源和审核状态。
-- **写作协议**：思考 / 正文分层，拍为训练原子；导出按协议分级，默认丢掉无思考和串层样本。见 [docs/writing-protocol.md](docs/writing-protocol.md)。
+- **写作协议**：思考是写给自己看的便签，正文是写给读者看的小说。空行 `Tab` 切到思考，思考里 `@` 点人物/伏笔。约定见 [docs/writing-protocol.md](docs/writing-protocol.md)，完整样章见 [docs/examples/fog-harbor.md](docs/examples/fog-harbor.md)；软件里点「打开示例章节」可装进作品库。
 - **上下文浮带**：写作时持续匹配设定/钩子，三级预算，不阻塞输入。
 - **分层插件**：声明式工作流 → 可信 Rust 操作 → 桌面 WASM 沙箱插件。
 

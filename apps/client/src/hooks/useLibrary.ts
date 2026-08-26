@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { libraryApi } from "../api";
 import { Book, Chapter, LibrarySnapshot, Project } from "../types";
 import { logger } from "../logger";
+import { installSampleChapter } from "../editor/sampleChapter";
 
 export type PromptKind =
   | { mode: "create" | "rename"; target: "project" | "book" | "chapter"; id?: string; title?: string }
@@ -139,6 +140,20 @@ export function useLibrary() {
     [project, applyLibrary],
   );
 
+  const openSampleChapter = useCallback(async () => {
+    try {
+      const installed = await installSampleChapter();
+      const snapshot = await libraryApi.setActiveProject(installed.projectId);
+      applyLibrary(snapshot);
+      setActiveBookId(installed.bookId);
+      setActiveChapter(installed.chapterId);
+      setLibraryError(null);
+    } catch (error) {
+      logger.error("打开示例章节失败", { error: String(error) });
+      setLibraryError(String(error));
+    }
+  }, [applyLibrary]);
+
   return {
     projects,
     project,
@@ -159,5 +174,6 @@ export function useLibrary() {
     handleDelete,
     mutateBook,
     mutateChapter,
+    openSampleChapter,
   };
 }

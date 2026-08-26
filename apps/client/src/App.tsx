@@ -52,6 +52,7 @@ export function App() {
     handleDelete,
     mutateBook,
     mutateChapter,
+    openSampleChapter,
   } = library;
   const { jobs, queueReady, enqueue } = useQueue(project);
   const session = useEditorSession({
@@ -164,7 +165,7 @@ export function App() {
         <nav className="tree">
           {libraryError && <div className="tree-empty">{libraryError}</div>}
           {books.length === 0 && (
-            <div className="tree-empty">还没有书。点上方「新书」创建第一本。</div>
+            <div className="tree-empty">还没有书。点上方「新书」，或点下方「打开示例章节」。</div>
           )}
           {books.map((book, bookIndex) => {
             const bookChapters = chapters.filter((chapter) => chapter.bookId === book.id);
@@ -226,6 +227,15 @@ export function App() {
             <Plus size={14} />
             <span>新章节</span>
           </button>
+          <button
+            className="tree-item add"
+            onClick={() => {
+              void persistChapter().then(() => openSampleChapter());
+            }}
+          >
+            <BookOpen size={14} />
+            <span>打开示例章节</span>
+          </button>
         </nav>
 
         <div className="sidebar-footer">
@@ -276,7 +286,10 @@ export function App() {
             <div className="workspace-empty">
               <p>从左侧创建作品、书和章节，即可开始写作。</p>
               <div className="workspace-empty-actions">
-                <button className="btn primary" onClick={() => setPrompt({ mode: "create", target: "book" })}>
+                <button className="btn primary" onClick={() => void openSampleChapter()}>
+                  打开示例章节
+                </button>
+                <button className="btn" onClick={() => setPrompt({ mode: "create", target: "book" })}>
                   创建书籍
                 </button>
                 <button className="btn" onClick={() => setPrompt({ mode: "create", target: "project" })}>
