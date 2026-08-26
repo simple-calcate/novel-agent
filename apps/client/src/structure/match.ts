@@ -120,12 +120,11 @@ function matchEntry(
   lookback: string,
   entry: StoryEntry,
 ): { score: number; reason: string } | null {
-  const title = entry.title.trim();
+  const rawTitle = entry.title.trim();
+  const parsed = splitTitleAndAliases(rawTitle);
+  const title = [...parsed.title].length >= 2 ? parsed.title : rawTitle;
   if ([...title].length < 2) return null;
-  const aliases = [
-    ...(entry.aliases ?? []),
-    ...splitTitleAndAliases(title).aliases,
-  ]
+  const aliases = [...(entry.aliases ?? []), ...parsed.aliases]
     .map((alias) => alias.trim())
     .filter((alias) => [...alias].length >= 2 && alias !== title);
   const currentL = normalize(current);

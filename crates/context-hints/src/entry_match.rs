@@ -23,25 +23,28 @@ const SPLITTERS: &[char] = &[
 ];
 
 pub fn match_story_entry(current: &str, lookback: &str, entry: &StoryEntry) -> Option<EntryMatch> {
-    let title = entry.title.trim();
+    let raw_title = entry.title.trim();
+    let (canonical, extra) = novel_domain::split_title_and_aliases(raw_title);
+    let title_owned = if canonical.chars().count() >= 2 {
+        canonical
+    } else {
+        raw_title.to_string()
+    };
+    let title = title_owned.as_str();
     if title.chars().count() < 2 {
         return None;
     }
-    let aliases: Vec<String> = {
-        let mut aliases: Vec<String> = entry
-            .aliases
-            .iter()
-            .map(|alias| alias.trim().to_string())
-            .filter(|alias| alias.chars().count() >= 2 && alias.as_str() != title)
-            .collect();
-        let (_, extra) = novel_domain::split_title_and_aliases(title);
-        for alias in extra {
-            if alias.chars().count() >= 2 && alias != title && !aliases.contains(&alias) {
-                aliases.push(alias);
-            }
+    let mut aliases: Vec<String> = entry
+        .aliases
+        .iter()
+        .map(|alias| alias.trim().to_string())
+        .filter(|alias| alias.chars().count() >= 2 && alias.as_str() != title)
+        .collect();
+    for alias in extra {
+        if alias.chars().count() >= 2 && alias != title && !aliases.contains(&alias) {
+            aliases.push(alias);
         }
-        aliases
-    };
+    }
     let current_l = normalize(current);
     let lookback_l = normalize(lookback);
 
