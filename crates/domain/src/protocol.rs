@@ -558,7 +558,9 @@ mod tests {
         assert_eq!(examples[0].instruction, "写下《雾港来客》的开篇。");
         assert_eq!(examples[0].context, "");
         assert_eq!(examples[1].instruction, "续写下一段。");
-        assert!(examples[1].context.contains("【思考】意图：让读者感到怀表有秘密"));
+        assert!(examples[1]
+            .context
+            .contains("【思考】意图：让读者感到怀表有秘密"));
         assert!(examples[1].context.contains("林默站在窗前。"));
         assert!(!examples[1].context.contains("表盖掀开"));
         assert_eq!(examples[0].quality, ExampleQuality::Gold);
@@ -697,9 +699,17 @@ mod tests {
     fn context_from_chapter_start_keeps_all_thinking_and_body() {
         let long_body = format!("{}。", "雾已经漫过码头的铁索".repeat(40));
         let seq = sequence(vec![
-            block("t1", BlockKind::Thinking, "意图：铺一整段冷开场，让雾先压住港口"),
+            block(
+                "t1",
+                BlockKind::Thinking,
+                "意图：铺一整段冷开场，让雾先压住港口",
+            ),
             block("b1", BlockKind::Body, &long_body),
-            block("t2", BlockKind::Thinking, "意图：再写人影，但不让读者看清脸"),
+            block(
+                "t2",
+                BlockKind::Thinking,
+                "意图：再写人影，但不让读者看清脸",
+            ),
             block(
                 "b2",
                 BlockKind::Body,
@@ -708,7 +718,9 @@ mod tests {
         ]);
         let examples = build_training_examples(&seq, false, Some("雾港来客"));
         assert_eq!(examples.len(), 2);
-        assert!(examples[1].context.starts_with("【思考】意图：铺一整段冷开场"));
+        assert!(examples[1]
+            .context
+            .starts_with("【思考】意图：铺一整段冷开场"));
         assert!(examples[1].context.contains(&long_body));
         assert!(!examples[1].context.contains("灯笼从帆布"));
     }
