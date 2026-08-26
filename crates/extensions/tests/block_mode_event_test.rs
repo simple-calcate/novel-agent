@@ -10,9 +10,9 @@ use novel_domain::{
 };
 use novel_extensions::{QueueExtension, QueuePolicy, WorkflowEngineExtension};
 use novel_kernel::{Kernel, Tool};
-use novel_storage::Repository;
+use novel_storage::StorageHandle;
 use serde_json::json;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 struct RebuildIndexTool;
 
@@ -31,9 +31,9 @@ impl Tool for RebuildIndexTool {
     }
 }
 
-fn build_kernel(repository: Arc<Mutex<Repository>>) -> Kernel {
+fn build_kernel(storage: Arc<StorageHandle>) -> Kernel {
     Kernel::builder()
-        .service(repository)
+        .service(storage)
         .service(Arc::new(QueuePolicy {
             stale_running_after: Duration::minutes(10),
             backoff_base: Duration::zero(),
@@ -49,11 +49,9 @@ fn build_kernel(repository: Arc<Mutex<Repository>>) -> Kernel {
 
 #[tokio::test]
 async fn block_mode_changed_queues_workflow_sequence() {
-    let repository = Arc::new(Mutex::new(Repository::open_in_memory().unwrap()));
-    let project_id = repository
-        .lock()
-        .unwrap()
-        .create_project("测试作品")
+    let storage = Arc::new(StorageHandle::open_in_memory().unwrap());
+    let project_id = storage
+        .execute(|repository| repository.create_project("测试作品"))
         .unwrap()
         .id;
 
@@ -71,9 +69,11 @@ async fn block_mode_changed_queues_workflow_sequence() {
         priority: 0,
         cooldown_ms: 0,
     };
-    repository.lock().unwrap().save_workflow(&rule).unwrap();
+    storage
+        .execute(|repository| repository.save_workflow(&rule))
+        .unwrap();
 
-    let kernel = build_kernel(repository.clone());
+    let kernel = build_kernel(storage.clone());
 
     // 构造前端 Tab 切换信号（对应 emit_block_mode_changed 的 dispatch 部分）
     let event = DomainEvent {
@@ -105,21 +105,13 @@ async fn block_mode_changed_queues_workflow_sequence() {
     // 信号量触发：dispatch -> 工作流匹配 -> 入队
     let summary = kernel.dispatch(&event);
     assert!(summary.first_error().is_none());
-    let queued: u64 = summary
-        .outcomes
-        .iter()
-        .filter_map(|outcome| {
-            outcome
-                .output
-                .as_ref()
-                .and_then(|output| output.get("queued"))
-                .and_then(serde_json::Value::as_u64)
-        })
-        .sum();
+    let queued = summary.queued_count();
     assert_eq!(queued, 1, "规则应入队 1 个任务");
 
     // 任务在队列中，携带规则与事件载荷
-    let jobs = repository.lock().unwrap().list_jobs(10).unwrap();
+    let jobs = storage
+        .execute(|repository| repository.list_jobs(10))
+        .unwrap();
     assert_eq!(jobs.len(), 1);
     assert_eq!(jobs[0].operation, "index.rebuild");
     assert_eq!(jobs[0].status, novel_domain::JobStatus::Pending);
@@ -134,7 +126,9 @@ async fn block_mode_changed_queues_workflow_sequence() {
     assert_eq!(result["executed"], true);
     assert_eq!(result["status"], "succeeded");
 
-    let done = repository.lock().unwrap().list_jobs(10).unwrap();
+    let done = storage
+        .execute(|repository| repository.list_jobs(10))
+        .unwrap();
     assert_eq!(done[0].status, novel_domain::JobStatus::Succeeded);
     assert_eq!(done[0].attempts, 1);
 }

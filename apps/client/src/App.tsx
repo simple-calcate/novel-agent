@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   BookOpen,
   Brain,
@@ -15,397 +15,68 @@ import {
   Terminal,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { libraryApi } from "./api";
-import { Book, Chapter, CommandResult, ContentBlock, ContextHint, JobView, Project } from "./types";
 import { Editor, AIPreview } from "./components/Editor";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ContextRail } from "./components/ContextRail";
 import { WorkflowPanel } from "./components/WorkflowPanel";
-import { SettingsModal, ModelConfig } from "./components/SettingsModal";
+import { SettingsModal } from "./components/SettingsModal";
 import { LogPanel } from "./components/LogPanel";
 import { CreateDialog } from "./components/CreateDialog";
 import { ConfirmDialog, TreeItemActions } from "./components/LibraryActions";
 import { logger } from "./logger";
-
-type PromptKind =
-  | { mode: "create" | "rename"; target: "project" | "book" | "chapter"; id?: string; title?: string }
-  | null;
-type DeleteKind = { target: "project" | "book" | "chapter"; id: string; title: string } | null;
+import { useLibrary } from "./hooks/useLibrary";
+import { useQueue } from "./hooks/useQueue";
+import { useEditorSession } from "./hooks/useEditorSession";
 
 export function App() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [project, setProject] = useState<Project | null>(null);
-  const [books, setBooks] = useState<Book[]>([]);
-  const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [activeChapter, setActiveChapter] = useState<string | null>(null);
-  const [activeBookId, setActiveBookId] = useState<string | null>(null);
-  const [chapterText, setChapterText] = useState("");
-  const [chapterBlocks, setChapterBlocks] = useState<ContentBlock[]>([]);
-  const [chapterReady, setChapterReady] = useState(false);
-  const [hints, setHints] = useState<ContextHint[]>([]);
-  const [aiPreview, setAiPreview] = useState("");
   const [sidebarTab, setSidebarTab] = useState<"context" | "workflow" | "agent">("context");
-  const [jobs, setJobs] = useState<Array<{ id: string; label: string; status: string }>>([]);
-  const [revision, setRevision] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [logPanelOpen, setLogPanelOpen] = useState(false);
-  const [_modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
-  const [queueReady, setQueueReady] = useState(false);
-  const [prompt, setPrompt] = useState<PromptKind>(null);
-  const [pendingDelete, setPendingDelete] = useState<DeleteKind>(null);
-  const [libraryError, setLibraryError] = useState<string | null>(null);
-
-  const draftText = useRef("");
-  const draftBlocks = useRef<ContentBlock[]>([]);
-
-  const applyLibrary = useCallback(
-    (snapshot: {
-      projects: Project[];
-      activeProjectId?: string | null;
-      books: Book[];
-      chapters: Chapter[];
-    }) => {
-      setProjects(snapshot.projects);
-      const current =
-        snapshot.projects.find((item) => item.id === snapshot.activeProjectId) ??
-        snapshot.projects[0] ??
-        null;
-      setProject(current);
-      setBooks(snapshot.books);
-      setChapters(snapshot.chapters);
-      setActiveChapter((previous) => {
-        if (previous && snapshot.chapters.some((chapter) => chapter.id === previous)) {
-          return previous;
-        }
-        return snapshot.chapters[0]?.id ?? null;
-      });
-      setActiveBookId((previous) => {
-        if (previous && snapshot.books.some((book) => book.id === previous)) {
-          return previous;
-        }
-        return snapshot.books[0]?.id ?? snapshot.chapters[0]?.bookId ?? null;
-      });
-    },
-    [],
-  );
-
-  const refreshLibrary = useCallback(
-    async (projectId?: string) => {
-      try {
-        const snapshot = await libraryApi.loadLibrary(projectId);
-        applyLibrary(snapshot);
-        setLibraryError(null);
-      } catch (error) {
-        logger.error("加载作品库失败", { error: String(error) });
-        setLibraryError(String(error));
-      }
-    },
-    [applyLibrary],
-  );
-
-  useEffect(() => {
-    void refreshLibrary();
-  }, [refreshLibrary]);
-
-  useEffect(() => {
-    invoke<ModelConfig | null>("load_model_config")
-      .then((config) => {
-        if (config) {
-          logger.info("恢复模型配置", { provider: config.provider, model: config.model });
-          setModelConfig(config);
-        }
-      })
-      .catch((e) => logger.error("加载配置失败", { error: String(e) }));
-  }, []);
-
-  useEffect(() => {
-    if (!activeChapter) {
-      setChapterText("");
-      setChapterReady(false);
-      setRevision(0);
-      draftText.current = "";
-      return;
-    }
-    let cancelled = false;
-    setChapterReady(false);
-    libraryApi
-      .loadChapter(activeChapter)
-      .then((body) => {
-        if (cancelled) return;
-        setChapterText(body.text);
-        setChapterBlocks(body.blocks ?? []);
-        draftText.current = body.text;
-        draftBlocks.current = body.blocks ?? [];
-        setRevision(body.revision);
-        setChapterReady(true);
-        const chapter = chapters.find((item) => item.id === activeChapter);
-        if (chapter) setActiveBookId(chapter.bookId);
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        logger.error("加载章节失败", { error: String(error) });
-        setChapterText("");
-        setChapterReady(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeChapter]);
-
-  const jobsRef = useRef(jobs);
-  jobsRef.current = jobs;
-  const drainingRef = useRef(false);
-
-  const refreshJobs = useCallback(async () => {
-    try {
-      const result = await invoke<CommandResult<JobView[]>>("list_jobs");
-      if (result?.ok && result.data) {
-        setJobs(
-          result.data.map((job) => ({
-            id: job.id,
-            label: operationLabel(job.operation),
-            status: job.status,
-          })),
-        );
-        setQueueReady(true);
-      }
-    } catch (e) {
-      logger.warn("任务列表拉取失败（可能在纯浏览器预览中）", { error: String(e) });
-    }
-  }, []);
-
-  const drainQueue = useCallback(async () => {
-    if (drainingRef.current) return;
-    drainingRef.current = true;
-    try {
-      for (let i = 0; i < 50; i++) {
-        const step = await invoke<CommandResult<{ executed: boolean }>>("run_queue_step");
-        if (!step?.ok || !step.data?.executed) break;
-        await refreshJobs();
-      }
-    } catch (e) {
-      logger.warn("队列驱动失败（可能在纯浏览器预览中）", { error: String(e) });
-    } finally {
-      drainingRef.current = false;
-    }
-  }, [refreshJobs]);
-
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    listen("queue:changed", () => {
-      void drainQueue();
-    })
-      .then((fn) => {
-        unlisten = fn;
-      })
-      .catch((e) => logger.warn("队列事件监听不可用（纯浏览器预览）", { error: String(e) }));
-
-    void drainQueue();
-
-    const timer = setInterval(() => {
-      const hasWork = jobsRef.current.some(
-        (j) => j.status === "pending" || j.status === "running",
-      );
-      if (hasWork) void drainQueue();
-    }, 30_000);
-    return () => {
-      unlisten?.();
-      clearInterval(timer);
-    };
-  }, [drainQueue]);
-
-  const enqueue = useCallback(
-    async (operation: string, extraPayload?: Record<string, unknown>) => {
-      if (!project) {
-        logger.warn("未选择作品，跳过入队", { operation });
-        return;
-      }
-      logger.info("入队任务", { operation });
-      const payload = { projectId: project.id, ...extraPayload };
-      try {
-        const result = await invoke<CommandResult<{ jobId: string }>>("enqueue_job", {
-          input: { projectId: project.id, operation, payload, priority: 0 },
-        });
-        if (!result.ok) {
-          logger.error("入队失败", { operation, error: result.error });
-        } else {
-          void drainQueue();
-        }
-      } catch (e) {
-        logger.error("入队异常", { operation, error: String(e) });
-      }
-    },
-    [project, drainQueue],
-  );
-
-  const persistChapter = useCallback(async () => {
-    if (!activeChapter) return;
-    try {
-      const saved = await libraryApi.saveChapter(
-        activeChapter,
-        draftText.current,
-        draftBlocks.current,
-      );
-      setRevision(saved.revision);
-    } catch (error) {
-      logger.warn("保存章节失败", { error: String(error) });
-    }
-  }, [activeChapter]);
-
-  const refreshHints = useCallback(
-    async (nearbyText: string) => {
-      if (!project || !activeChapter) return;
-      logger.debug("刷新上下文提示", { revision, textLength: nearbyText.length });
-      try {
-        const result = await invoke<CommandResult<ContextHint[]>>("context_hints", {
-          input: {
-            projectId: project.id,
-            chapterId: activeChapter,
-            revision,
-            nearbyText,
-            generation: Date.now(),
-          },
-        });
-        if (result.ok && result.data) {
-          logger.info("上下文提示更新", { count: result.data.length });
-          setHints(result.data);
-        }
-      } catch (e) {
-        logger.error("上下文提示失败", { error: String(e) });
-        setHints(buildLocalHints(nearbyText, revision));
-      }
-    },
-    [project, activeChapter, revision],
-  );
-
-  useEffect(() => {
-    setHints(buildLocalHints("", revision));
-  }, [revision]);
-
-  const handleGenerate = useCallback(async () => {
-    if (!_modelConfig) {
-      logger.warn("未配置模型");
-      setAiPreview("请先点击左下角「设置」配置 AI 模型");
-      return;
-    }
-    if (!activeChapter) {
-      setAiPreview("请先创建并打开一个章节");
-      return;
-    }
-    logger.info("开始 AI 续写", { provider: _modelConfig.provider, model: _modelConfig.model });
-    try {
-      const result = await invoke<{ operations: Array<{ text: string }> }>(
-        "generate_continuation",
-        {
-          chapterId: activeChapter,
-          revision,
-          prompt: "继续当前剧情",
-          contextText: draftText.current.slice(-800),
-          config: _modelConfig,
-        },
-      );
-      if (result?.operations?.[0]) {
-        logger.info("AI 续写成功", { length: result.operations[0].text.length });
-        setAiPreview(result.operations[0].text);
-      }
-    } catch (e) {
-      logger.error("AI 续写失败", { error: String(e) });
-      setAiPreview(`调用失败: ${e}`);
-    }
-  }, [_modelConfig, activeChapter, revision]);
-
-  const handleAccept = useCallback(() => {
-    if (aiPreview && (window as any).__editorInsert) {
-      (window as any).__editorInsert(aiPreview);
-      logger.info("接受 AI 续写");
-      setAiPreview("");
-    }
-  }, [aiPreview]);
-
-  const handleReject = useCallback(() => {
-    logger.info("拒绝 AI 续写");
-    setAiPreview("");
-  }, []);
-
-  const handlePrompt = useCallback(
-    async (title: string) => {
-      if (!prompt) return;
-      if (prompt.mode === "create") {
-        if (prompt.target === "project") {
-          const created = await libraryApi.createProject(title);
-          await refreshLibrary(created.id);
-          return;
-        }
-        if (prompt.target === "book") {
-          let owner = project;
-          if (!owner) {
-            owner = await libraryApi.createProject(title);
-          }
-          const book = await libraryApi.createBook(owner.id, title);
-          await refreshLibrary(owner.id);
-          setActiveBookId(book.id);
-          return;
-        }
-        if (!project) {
-          throw new Error("请先创建作品或书籍");
-        }
-        const bookId = activeBookId ?? books[0]?.id;
-        if (!bookId) {
-          throw new Error("请先创建一本书");
-        }
-        const chapter = await libraryApi.createChapter(project.id, bookId, title);
-        await refreshLibrary(project.id);
-        setActiveChapter(chapter.id);
-        setActiveBookId(bookId);
-        return;
-      }
-      if (!project && prompt.target !== "project") {
-        throw new Error("未选择作品");
-      }
-      if (prompt.target === "project" && prompt.id) {
-        applyLibrary(await libraryApi.renameProject(prompt.id, title));
-        return;
-      }
-      if (!project || !prompt.id) return;
-      if (prompt.target === "book") {
-        applyLibrary(await libraryApi.renameBook(project.id, prompt.id, title));
-        return;
-      }
-      applyLibrary(await libraryApi.renameChapter(project.id, prompt.id, title));
-    },
-    [prompt, project, activeBookId, books, refreshLibrary, applyLibrary],
-  );
-
-  const handleDelete = useCallback(async () => {
-    if (!pendingDelete) return;
-    if (pendingDelete.target === "project") {
-      applyLibrary(await libraryApi.deleteProject(pendingDelete.id));
-      return;
-    }
-    if (!project) return;
-    if (pendingDelete.target === "book") {
-      applyLibrary(await libraryApi.deleteBook(project.id, pendingDelete.id));
-      return;
-    }
-    applyLibrary(await libraryApi.deleteChapter(project.id, pendingDelete.id));
-  }, [pendingDelete, project, applyLibrary]);
-
-  const mutateBook = useCallback(
-    async (bookId: string, delta: number) => {
-      if (!project) return;
-      applyLibrary(await libraryApi.moveBook(project.id, bookId, delta));
-    },
-    [project, applyLibrary],
-  );
-
-  const mutateChapter = useCallback(
-    async (chapterId: string, delta: number) => {
-      if (!project) return;
-      applyLibrary(await libraryApi.moveChapter(project.id, chapterId, delta));
-    },
-    [project, applyLibrary],
-  );
+  const library = useLibrary();
+  const {
+    projects,
+    project,
+    books,
+    chapters,
+    activeChapter,
+    setActiveChapter,
+    setActiveBookId,
+    libraryError,
+    prompt,
+    setPrompt,
+    pendingDelete,
+    setPendingDelete,
+    applyLibrary,
+    handlePrompt,
+    handleDelete,
+    mutateBook,
+    mutateChapter,
+  } = library;
+  const { jobs, queueReady, enqueue } = useQueue(project);
+  const session = useEditorSession({
+    project,
+    chapters,
+    activeChapter,
+    setActiveBookId,
+  });
+  const {
+    chapterText,
+    chapterBlocks,
+    chapterReady,
+    hints,
+    aiPreview,
+    revision,
+    modelConfig,
+    setModelConfig,
+    draftText,
+    draftBlocks,
+    persistChapter,
+    refreshHints,
+    handleGenerate,
+    handleAccept,
+    handleReject,
+  } = session;
 
   const activeChapterRecord = chapters.find((chapter) => chapter.id === activeChapter);
   const promptCopy = prompt
@@ -737,7 +408,7 @@ export function App() {
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        initialConfig={_modelConfig}
+        initialConfig={modelConfig}
         onSave={async (config) => {
           logger.info("保存模型配置", { provider: config.provider, model: config.model });
           setModelConfig(config);
@@ -777,40 +448,4 @@ export function App() {
       />
     </div>
   );
-}
-
-const OPERATION_LABELS: Record<string, string> = {
-  "document.save": "保存文档",
-  "index.rebuild": "刷新索引",
-  "continuity.check": "连续性检查",
-  "backup.create": "创建备份",
-  "agent.continuation": "AI 续写",
-  "agent.run": "运行 Agent",
-  "plugin.operation": "插件操作",
-  "block.save": "保存块",
-  "block.edit": "编辑块",
-  "training.export": "导出训练数据",
-};
-
-function operationLabel(operation: string): string {
-  return OPERATION_LABELS[operation] ?? operation;
-}
-
-function buildLocalHints(nearby: string, revision: number): ContextHint[] {
-  const base: ContextHint[] = [];
-  if (nearby.includes("玺")) {
-    base.push({
-      id: "h0",
-      kind: "plotHook",
-      title: "旧王玺",
-      summary: "沈雾不知道它已在船长手中；避免提前揭示",
-      sourceLabel: "正史",
-      matchReason: "当前文字包含「玺」",
-      confidence: 0.98,
-      score: 1,
-      generation: revision,
-      revision,
-    });
-  }
-  return base.slice(0, 5);
 }

@@ -1,12 +1,12 @@
 use novel_automation::TypingSession;
 use novel_domain::{
-    Actor, Annotation, BlockId, BlockKind, Book, BookId, Chapter, ChapterId, ContentBlock,
-    ContentPatch, DomainEvent, EventId, EventSource, Job, JobId, JobStatus, Platform, Project,
-    ProjectId, Revision, EVENT_SCHEMA_VERSION,
+    Annotation, BlockId, Book, BookId, Chapter, ChapterBody, ChapterId, ContentBlock, ContentPatch,
+    DomainEvent, EventId, EventSource, JobView, LibrarySnapshot, Project, ProjectId, Revision,
+    EVENT_SCHEMA_VERSION,
 };
-use novel_extensions::BuiltinsExtension;
-use novel_kernel::{AgentSpec, Kernel, ProviderConfig, ToolDescriptor};
-use novel_storage::{Repository, SETTING_ACTIVE_PROJECT};
+use novel_extensions::{BuiltinsExtension, Workspace};
+use novel_kernel::{Kernel, ProviderConfig, ToolDescriptor};
+use novel_storage::StorageHandle;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::str::FromStr;
@@ -17,6 +17,10 @@ use tracing::{debug, error, info, warn};
 pub struct AppState {
     pub kernel: Arc<Kernel>,
     pub typing_session: Mutex<TypingSession>,
+}
+
+fn workspace(state: &AppState) -> Workspace<'_> {
+    Workspace::new(&state.kernel)
 }
 
 #[derive(Debug, Serialize)]
@@ -43,6 +47,13 @@ impl<T> CommandResult<T> {
             error: Some(error.to_string()),
         }
     }
+
+    fn from_result(result: Result<T, impl ToString>) -> Self {
+        match result {
+            Ok(data) => Self::ok(data),
+            Err(error) => Self::error(error),
+        }
+    }
 }
 
 /// 通知前端队列有活动（入队或任务执行完成），由前端接管后续 drain。
@@ -51,6 +62,12 @@ fn notify_queue_changed<R: tauri::Runtime>(app: &AppHandle<R>) {
     let payload = json!({ "at": chrono::Utc::now().to_rfc3339() });
     if let Err(err) = app.emit("queue:changed", payload) {
         warn!(error = %err, "通知前端队列事件失败");
+    }
+}
+
+fn notify_if_queued<R: tauri::Runtime>(app: &AppHandle<R>, queued: u64) {
+    if queued > 0 {
+        notify_queue_changed(app);
     }
 }
 
@@ -104,25 +121,6 @@ pub struct NewBookInput {
     pub position: u32,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LibrarySnapshot {
-    pub projects: Vec<Project>,
-    pub active_project_id: Option<String>,
-    pub books: Vec<Book>,
-    pub chapters: Vec<Chapter>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChapterBody {
-    pub chapter_id: String,
-    pub revision: u64,
-    pub text: String,
-    #[serde(default)]
-    pub blocks: Vec<ContentBlock>,
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EditorTickInput {
@@ -146,13 +144,6 @@ pub struct HintRequest {
     pub generation: u64,
 }
 
-fn repository(state: &AppState) -> Result<Arc<Mutex<Repository>>, String> {
-    state
-        .kernel
-        .service::<Mutex<Repository>>()
-        .map_err(|e| e.to_string())
-}
-
 fn parse_project_id(value: &str) -> Result<ProjectId, String> {
     value
         .parse()
@@ -171,102 +162,30 @@ fn parse_chapter_id(value: &str) -> Result<ChapterId, String> {
         .map_err(|_| format!("invalid chapter id: {value}"))
 }
 
-fn user_event(
-    event_type: &str,
-    project_id: ProjectId,
-    book_id: Option<BookId>,
-    chapter_id: Option<ChapterId>,
-    payload: Value,
-) -> DomainEvent {
-    DomainEvent {
-        event_id: EventId::new(),
-        event_type: event_type.into(),
-        schema_version: EVENT_SCHEMA_VERSION,
-        occurred_at: chrono::Utc::now(),
-        project_id,
-        book_id,
-        chapter_id,
-        scene_id: None,
-        block_id: None,
-        actor: Actor::User { user_id: None },
-        source: EventSource::Editor,
-        platform: Platform::Unknown,
-        transaction_id: EventId::new().to_string(),
-        correlation_id: None,
-        causation_id: None,
-        revision_before: Revision::INITIAL,
-        revision_after: Revision::INITIAL,
-        payload,
-    }
-}
-
 #[tauri::command]
 fn create_project(state: State<'_, AppState>, input: NewProjectInput) -> CommandResult<Project> {
     info!(title = %input.title, "create_project 调用");
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
-    let project = {
-        let guard = repository.lock().expect("repository poisoned");
-        match guard.create_project(&input.title) {
-            Ok(project) => {
-                let _ = guard.save_setting(SETTING_ACTIVE_PROJECT, &project.id.to_string());
-                project
-            }
-            Err(err) => {
-                error!(error = %err, "create_project 失败");
-                return CommandResult::error(err);
-            }
-        }
-    };
-    state.kernel.dispatch(&user_event(
-        "project.created",
-        project.id.clone(),
-        None,
-        None,
-        json!({ "title": project.title }),
-    ));
-    info!(project_id = %project.id, "create_project 成功");
-    CommandResult::ok(project)
+    CommandResult::from_result(workspace(&state).create_project(&input.title))
 }
 
 #[tauri::command]
 fn create_book(state: State<'_, AppState>, input: NewBookInput) -> CommandResult<Book> {
     info!(project_id = %input.project_id, title = %input.title, "create_book 调用");
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
     let project_id = match parse_project_id(&input.project_id) {
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
     };
-    let book = {
-        let guard = repository.lock().expect("repository poisoned");
-        match guard.create_book(&project_id, &input.title, &input.synopsis, input.position) {
-            Ok(book) => book,
-            Err(err) => {
-                error!(error = %err, "create_book 失败");
-                return CommandResult::error(err);
-            }
-        }
-    };
-    state.kernel.dispatch(&user_event(
-        "book.created",
-        project_id,
-        Some(book.id.clone()),
-        None,
-        json!({ "title": book.title, "position": book.position }),
-    ));
-    info!(book_id = %book.id, "create_book 成功");
-    CommandResult::ok(book)
+    CommandResult::from_result(workspace(&state).create_book(
+        &project_id,
+        &input.title,
+        &input.synopsis,
+        input.position,
+    ))
 }
 
 #[tauri::command]
 fn create_chapter(state: State<'_, AppState>, input: NewChapterInput) -> CommandResult<Chapter> {
     info!(project_id = %input.project_id, title = %input.title, "create_chapter 调用");
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
     let project_id = match parse_project_id(&input.project_id) {
         Ok(id) => id,
         Err(_) => {
@@ -277,29 +196,12 @@ fn create_chapter(state: State<'_, AppState>, input: NewChapterInput) -> Command
     if parse_book_id(&input.book_id).is_err() {
         return CommandResult::error("invalid book id");
     }
-    let chapter = {
-        let guard = repository.lock().expect("repository poisoned");
-        match guard.create_chapter(&project_id, &input.book_id, &input.title, input.position) {
-            Ok(chapter) => chapter,
-            Err(err) => {
-                error!(error = %err, "create_chapter 失败");
-                return CommandResult::error(err);
-            }
-        }
-    };
-    state.kernel.dispatch(&user_event(
-        "chapter.created",
-        project_id,
-        Some(chapter.book_id.clone()),
-        Some(chapter.id.clone()),
-        json!({
-            "title": chapter.title,
-            "bookId": chapter.book_id.to_string(),
-            "position": chapter.position,
-        }),
-    ));
-    info!(chapter_id = %chapter.id, "create_chapter 成功");
-    CommandResult::ok(chapter)
+    CommandResult::from_result(workspace(&state).create_chapter(
+        &project_id,
+        &input.book_id,
+        &input.title,
+        input.position,
+    ))
 }
 
 #[tauri::command]
@@ -307,38 +209,14 @@ fn load_library(
     state: State<'_, AppState>,
     project_id: Option<String>,
 ) -> CommandResult<LibrarySnapshot> {
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
-    let guard = repository.lock().expect("repository poisoned");
-    let projects = match guard.list_projects() {
-        Ok(value) => value,
-        Err(err) => return CommandResult::error(err),
-    };
-    let stored = guard.get_setting(SETTING_ACTIVE_PROJECT).ok().flatten();
-    let active = project_id
-        .or(stored)
-        .or_else(|| projects.first().map(|project| project.id.to_string()));
-    if let Some(id) = &active {
-        let _ = guard.save_setting(SETTING_ACTIVE_PROJECT, id);
-    }
-    let (books, chapters) = if let Some(id) = &active {
-        match parse_project_id(id) {
-            Ok(pid) => match (guard.list_books(&pid), guard.list_chapters(&pid)) {
-                (Ok(books), Ok(chapters)) => (books, chapters),
-                (Err(err), _) | (_, Err(err)) => return CommandResult::error(err),
-            },
+    let project_id = match project_id {
+        Some(id) => match parse_project_id(&id) {
+            Ok(id) => Some(id),
             Err(err) => return CommandResult::error(err),
-        }
-    } else {
-        (Vec::new(), Vec::new())
+        },
+        None => None,
     };
-    CommandResult::ok(LibrarySnapshot {
-        projects,
-        active_project_id: active,
-        books,
-        chapters,
-    })
+    CommandResult::from_result(workspace(&state).load_library(project_id))
 }
 
 #[tauri::command]
@@ -346,51 +224,20 @@ fn set_active_project(
     state: State<'_, AppState>,
     project_id: String,
 ) -> CommandResult<LibrarySnapshot> {
-    load_library(state, Some(project_id))
-}
-
-fn read_chapter_body(guard: &Repository, id: &ChapterId) -> Result<ChapterBody, String> {
-    let revision = guard.current_revision(id).map_err(|err| err.to_string())?;
-    let text = guard
-        .chapter_text(id, revision)
-        .map_err(|err| err.to_string())?
-        .unwrap_or_default();
-    let blocks = match guard
-        .block_sequence(id, revision)
-        .map_err(|err| err.to_string())?
-    {
-        Some(sequence) => sequence.blocks,
-        None if text.is_empty() => Vec::new(),
-        None => vec![ContentBlock {
-            id: BlockId::new(),
-            kind: BlockKind::Body,
-            text: text.clone(),
-            position: 0,
-            markup: Vec::new(),
-        }],
+    let project_id = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
     };
-    Ok(ChapterBody {
-        chapter_id: id.to_string(),
-        revision: revision.0,
-        text,
-        blocks,
-    })
+    CommandResult::from_result(workspace(&state).set_active_project(project_id))
 }
 
 #[tauri::command]
 fn load_chapter(state: State<'_, AppState>, chapter_id: String) -> CommandResult<ChapterBody> {
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
     let id = match parse_chapter_id(&chapter_id) {
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
     };
-    let guard = repository.lock().expect("repository poisoned");
-    match read_chapter_body(&guard, &id) {
-        Ok(body) => CommandResult::ok(body),
-        Err(err) => CommandResult::error(err),
-    }
+    CommandResult::from_result(workspace(&state).load_chapter(&id))
 }
 
 #[tauri::command]
@@ -400,32 +247,11 @@ fn save_chapter(
     text: String,
     blocks: Option<Vec<ContentBlock>>,
 ) -> CommandResult<ChapterBody> {
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
     let id = match parse_chapter_id(&chapter_id) {
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
     };
-    let mut guard = repository.lock().expect("repository poisoned");
-    let saved = if let Some(blocks) = blocks {
-        guard.save_block_sequence(&id, &blocks)
-    } else {
-        guard.save_chapter_snapshot(&id, &text, "user")
-    };
-    match saved {
-        Ok(_) => match read_chapter_body(&guard, &id) {
-            Ok(body) => {
-                info!(chapter_id = %chapter_id, revision = body.revision, "save_chapter 成功");
-                CommandResult::ok(body)
-            }
-            Err(err) => CommandResult::error(err),
-        },
-        Err(err) => {
-            error!(error = %err, "save_chapter 失败");
-            CommandResult::error(err)
-        }
-    }
+    CommandResult::from_result(workspace(&state).save_chapter(&id, &text, blocks))
 }
 
 #[tauri::command]
@@ -434,27 +260,11 @@ fn rename_project(
     project_id: String,
     title: String,
 ) -> CommandResult<LibrarySnapshot> {
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
     let id = match parse_project_id(&project_id) {
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
     };
-    {
-        let guard = repository.lock().expect("repository poisoned");
-        if let Err(err) = guard.rename_project(&id, &title) {
-            return CommandResult::error(err);
-        }
-    }
-    state.kernel.dispatch(&user_event(
-        "project.renamed",
-        id,
-        None,
-        None,
-        json!({ "title": title }),
-    ));
-    load_library(state, Some(project_id))
+    CommandResult::from_result(workspace(&state).rename_project(&id, &title))
 }
 
 #[tauri::command]
@@ -462,23 +272,11 @@ fn delete_project(
     state: State<'_, AppState>,
     project_id: String,
 ) -> CommandResult<LibrarySnapshot> {
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
     let id = match parse_project_id(&project_id) {
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
     };
-    {
-        let guard = repository.lock().expect("repository poisoned");
-        if let Err(err) = guard.delete_project(&id) {
-            return CommandResult::error(err);
-        }
-    }
-    state
-        .kernel
-        .dispatch(&user_event("project.deleted", id, None, None, json!({})));
-    load_library(state, None)
+    CommandResult::from_result(workspace(&state).delete_project(&id))
 }
 
 #[tauri::command]
@@ -488,9 +286,6 @@ fn rename_book(
     book_id: String,
     title: String,
 ) -> CommandResult<LibrarySnapshot> {
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
     let pid = match parse_project_id(&project_id) {
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
@@ -499,20 +294,7 @@ fn rename_book(
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
     };
-    {
-        let guard = repository.lock().expect("repository poisoned");
-        if let Err(err) = guard.rename_book(&pid, &bid, &title) {
-            return CommandResult::error(err);
-        }
-    }
-    state.kernel.dispatch(&user_event(
-        "book.renamed",
-        pid,
-        Some(bid),
-        None,
-        json!({ "title": title }),
-    ));
-    load_library(state, Some(project_id))
+    CommandResult::from_result(workspace(&state).rename_book(&pid, &bid, &title))
 }
 
 #[tauri::command]
@@ -521,9 +303,6 @@ fn delete_book(
     project_id: String,
     book_id: String,
 ) -> CommandResult<LibrarySnapshot> {
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
     let pid = match parse_project_id(&project_id) {
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
@@ -532,16 +311,7 @@ fn delete_book(
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
     };
-    {
-        let guard = repository.lock().expect("repository poisoned");
-        if let Err(err) = guard.delete_book(&pid, &bid) {
-            return CommandResult::error(err);
-        }
-    }
-    state
-        .kernel
-        .dispatch(&user_event("book.deleted", pid, Some(bid), None, json!({})));
-    load_library(state, Some(project_id))
+    CommandResult::from_result(workspace(&state).delete_book(&pid, &bid))
 }
 
 #[tauri::command]
@@ -551,9 +321,6 @@ fn move_book(
     book_id: String,
     delta: i32,
 ) -> CommandResult<LibrarySnapshot> {
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
     let pid = match parse_project_id(&project_id) {
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
@@ -562,20 +329,7 @@ fn move_book(
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
     };
-    {
-        let guard = repository.lock().expect("repository poisoned");
-        if let Err(err) = guard.move_book(&pid, &bid, delta) {
-            return CommandResult::error(err);
-        }
-    }
-    state.kernel.dispatch(&user_event(
-        "book.reordered",
-        pid,
-        Some(bid),
-        None,
-        json!({ "delta": delta }),
-    ));
-    load_library(state, Some(project_id))
+    CommandResult::from_result(workspace(&state).move_book(&pid, &bid, delta))
 }
 
 #[tauri::command]
@@ -585,9 +339,6 @@ fn rename_chapter(
     chapter_id: String,
     title: String,
 ) -> CommandResult<LibrarySnapshot> {
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
     let pid = match parse_project_id(&project_id) {
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
@@ -596,20 +347,7 @@ fn rename_chapter(
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
     };
-    {
-        let guard = repository.lock().expect("repository poisoned");
-        if let Err(err) = guard.rename_chapter(&pid, &cid, &title) {
-            return CommandResult::error(err);
-        }
-    }
-    state.kernel.dispatch(&user_event(
-        "chapter.renamed",
-        pid,
-        None,
-        Some(cid),
-        json!({ "title": title }),
-    ));
-    load_library(state, Some(project_id))
+    CommandResult::from_result(workspace(&state).rename_chapter(&pid, &cid, &title))
 }
 
 #[tauri::command]
@@ -618,9 +356,6 @@ fn delete_chapter(
     project_id: String,
     chapter_id: String,
 ) -> CommandResult<LibrarySnapshot> {
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
     let pid = match parse_project_id(&project_id) {
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
@@ -629,20 +364,7 @@ fn delete_chapter(
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
     };
-    {
-        let guard = repository.lock().expect("repository poisoned");
-        if let Err(err) = guard.delete_chapter(&pid, &cid) {
-            return CommandResult::error(err);
-        }
-    }
-    state.kernel.dispatch(&user_event(
-        "chapter.deleted",
-        pid,
-        None,
-        Some(cid),
-        json!({}),
-    ));
-    load_library(state, Some(project_id))
+    CommandResult::from_result(workspace(&state).delete_chapter(&pid, &cid))
 }
 
 #[tauri::command]
@@ -652,9 +374,6 @@ fn move_chapter(
     chapter_id: String,
     delta: i32,
 ) -> CommandResult<LibrarySnapshot> {
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
     let pid = match parse_project_id(&project_id) {
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
@@ -663,20 +382,7 @@ fn move_chapter(
         Ok(id) => id,
         Err(err) => return CommandResult::error(err),
     };
-    {
-        let guard = repository.lock().expect("repository poisoned");
-        if let Err(err) = guard.move_chapter(&pid, &cid, delta) {
-            return CommandResult::error(err);
-        }
-    }
-    state.kernel.dispatch(&user_event(
-        "chapter.reordered",
-        pid,
-        None,
-        Some(cid),
-        json!({ "delta": delta }),
-    ));
-    load_library(state, Some(project_id))
+    CommandResult::from_result(workspace(&state).move_chapter(&pid, &cid, delta))
 }
 
 #[tauri::command]
@@ -740,17 +446,13 @@ async fn save_model_config(
         base_url = %config.base_url,
         "save_model_config 保存配置"
     );
-
-    let repository = repository(&state)?;
     let json_value = serde_json::to_string(&config).map_err(|e| e.to_string())?;
-    let guard = repository.lock().map_err(|e| e.to_string())?;
-    guard
+    workspace(&state)
         .save_setting("model_config", &json_value)
         .map_err(|e| {
             error!(error = %e, "保存配置到数据库失败");
             e.to_string()
         })?;
-
     info!("模型配置已保存到数据库");
     Ok(json!({ "saved": true }))
 }
@@ -758,14 +460,10 @@ async fn save_model_config(
 #[tauri::command]
 fn load_model_config(state: State<'_, AppState>) -> Result<Value, String> {
     debug!("load_model_config 加载配置");
-
-    let repository = repository(&state)?;
-    let guard = repository.lock().map_err(|e| e.to_string())?;
-    let json_value = guard
+    match workspace(&state)
         .get_setting("model_config")
-        .map_err(|e| e.to_string())?;
-
-    match json_value {
+        .map_err(|e| e.to_string())?
+    {
         Some(json_str) => {
             let config: ModelConfigInput =
                 serde_json::from_str(&json_str).map_err(|e| e.to_string())?;
@@ -798,83 +496,18 @@ async fn generate_continuation(
         prompt_len = prompt.len(),
         "generate_continuation 调用"
     );
-
-    // 优先使用传入的配置，否则读取已保存的配置，最后回退 echo。
-    let config = match config {
-        Some(config) => Some(config),
-        None => load_saved_model_config(&state)?,
-    };
-    let provider_config = match &config {
-        Some(config) if !config.api_key.is_empty() => {
-            info!(
-                provider = %config.provider,
-                model = %config.model,
-                base_url = %config.base_url,
-                "使用 OpenAI 兼容 Provider"
-            );
-            config.provider_config()
-        }
-        _ => {
-            warn!("未配置模型，使用 EchoProvider 回退");
-            ProviderConfig {
-                provider: "echo".into(),
-                ..Default::default()
-            }
-        }
-    };
-
+    let override_config = config.map(|config| config.provider_config());
     let chapter = chapter_id.parse().unwrap_or_default();
-    let project_id = repository(&state)
-        .ok()
-        .and_then(|repository| {
-            repository
-                .lock()
-                .ok()
-                .and_then(|guard| guard.chapter_project_id(&chapter).ok().flatten())
-        })
-        .unwrap_or_default();
-
-    let spec = AgentSpec {
-        id: Default::default(),
-        project_id,
-        chapter_id: chapter,
-        base_revision: novel_domain::Revision(revision),
-        prompt,
-        context_text,
-        budget: Default::default(),
-        system_prompt: None,
-        temperature: 0.8,
-        emit_finish_event: true,
-    };
-
-    info!("开始调用模型生成续写...");
-    let result = state.kernel.run_continuation(&provider_config, spec).await;
-
-    match &result {
-        Ok(report) => info!(
-            operations = report.patch.operations.len(),
-            truncated = report.truncated,
-            elapsed_ms = report.elapsed_ms,
-            "generate_continuation 成功"
-        ),
-        Err(err) => error!(error = %err, "generate_continuation 失败"),
-    }
-
-    result.map(|report| report.patch).map_err(|e| e.to_string())
-}
-
-fn load_saved_model_config(state: &AppState) -> Result<Option<ModelConfigInput>, String> {
-    let repository = repository(state)?;
-    let guard = repository.lock().map_err(|e| e.to_string())?;
-    match guard
-        .get_setting("model_config")
-        .map_err(|e| e.to_string())?
-    {
-        Some(json_str) => Ok(Some(
-            serde_json::from_str(&json_str).map_err(|e| e.to_string())?,
-        )),
-        None => Ok(None),
-    }
+    workspace(&state)
+        .generate_continuation(
+            chapter,
+            Revision(revision),
+            prompt,
+            context_text,
+            override_config,
+        )
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -905,11 +538,7 @@ async fn install_plugin_manifest(
 #[tauri::command]
 fn commit_annotation(state: State<'_, AppState>, annotation: Annotation) -> CommandResult<Value> {
     info!(annotation_id = %annotation.id, "commit_annotation 保存批注");
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
-    let guard = repository.lock().expect("repository poisoned");
-    match guard.save_annotation(&annotation) {
+    match workspace(&state).save_annotation(&annotation) {
         Ok(()) => {
             info!("批注保存成功");
             CommandResult::ok(json!({ "saved": true }))
@@ -934,27 +563,15 @@ fn emit_domain_event<R: tauri::Runtime>(
         "emit_domain_event 触发领域事件"
     );
 
-    let summary = state.kernel.dispatch(&event);
+    let summary = workspace(&state).dispatch(&event);
     if let Some(err) = summary.first_error() {
         error!(error = err, "事件处理失败");
         return CommandResult::error(err);
     }
 
-    let queued: u64 = summary
-        .outcomes
-        .iter()
-        .filter_map(|outcome| {
-            outcome
-                .output
-                .as_ref()
-                .and_then(|output| output.get("queued"))
-                .and_then(Value::as_u64)
-        })
-        .sum();
+    let queued = summary.queued_count();
     info!(queued = queued, "领域事件处理完成");
-    if queued > 0 {
-        notify_queue_changed(&app);
-    }
+    notify_if_queued(&app, queued);
     CommandResult::ok(json!({ "recorded": true, "queued": queued }))
 }
 
@@ -988,52 +605,31 @@ fn emit_block_mode_changed<R: tauri::Runtime>(
     };
     let block = block_id.and_then(|id| BlockId::from_str(&id).ok());
 
-    let event = DomainEvent {
-        event_id: EventId::new(),
-        event_type: "block.mode.changed".into(),
-        schema_version: EVENT_SCHEMA_VERSION,
-        occurred_at: chrono::Utc::now(),
-        project_id: project,
-        book_id: None,
-        chapter_id: Some(chapter),
-        scene_id: None,
-        block_id: block.clone(),
-        actor: Actor::User { user_id: None },
-        source: EventSource::Editor,
-        platform: Platform::Unknown,
-        transaction_id: format!("mode:{}", EventId::new()),
-        correlation_id: None,
-        causation_id: None,
-        revision_before: Revision::INITIAL,
-        revision_after: Revision::INITIAL,
-        payload: json!({
+    let mut event = DomainEvent::user(
+        "block.mode.changed",
+        project,
+        None,
+        Some(chapter),
+        json!({
             "mode": mode,
             "previousMode": previous_mode,
-            "blockId": block.map(|b| b.to_string()),
+            "blockId": block.as_ref().map(ToString::to_string),
             "position": position,
         }),
-    };
+    );
+    event.block_id = block;
+    event.transaction_id = format!("mode:{}", EventId::new());
+    event.schema_version = EVENT_SCHEMA_VERSION;
+    event.source = EventSource::Editor;
 
-    let summary = state.kernel.dispatch(&event);
+    let summary = workspace(&state).dispatch(&event);
     if let Some(err) = summary.first_error() {
         error!(error = err, "模式切换事件处理失败");
         return CommandResult::error(err);
     }
-    let queued: u64 = summary
-        .outcomes
-        .iter()
-        .filter_map(|outcome| {
-            outcome
-                .output
-                .as_ref()
-                .and_then(|output| output.get("queued"))
-                .and_then(Value::as_u64)
-        })
-        .sum();
+    let queued = summary.queued_count();
     info!(queued = queued, "模式切换事件处理完成");
-    if queued > 0 {
-        notify_queue_changed(&app);
-    }
+    notify_if_queued(&app, queued);
     CommandResult::ok(json!({ "recorded": true, "queued": queued }))
 }
 
@@ -1107,7 +703,6 @@ async fn run_queue_step<R: tauri::Runtime>(
                         .unwrap_or(false),
                     "队列任务执行完成"
                 );
-                // 执行了一个任务：通知前端继续 drain（可能还有后续任务）
                 notify_queue_changed(&app);
             }
             Ok(CommandResult::ok(result))
@@ -1146,10 +741,6 @@ fn enqueue_job<R: tauri::Runtime>(
     input: EnqueueJobInput,
 ) -> CommandResult<Value> {
     info!(operation = %input.operation, "enqueue_job 手动入队");
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
-    let guard = repository.lock().expect("repository poisoned");
     let project_id = match input.project_id.parse() {
         Ok(id) => id,
         Err(_) => {
@@ -1157,33 +748,18 @@ fn enqueue_job<R: tauri::Runtime>(
             return CommandResult::error("invalid project id");
         }
     };
-    let now = chrono::Utc::now();
-    let job = Job {
-        id: JobId::new(),
+    match workspace(&state).enqueue_job(
         project_id,
-        workflow_id: None,
-        operation: input.operation.clone(),
-        payload: input.payload,
-        priority: input.priority,
-        status: JobStatus::Pending,
-        idempotency_key: format!("manual:{}", JobId::new()),
-        depends_on: Vec::new(),
-        attempts: 0,
-        max_attempts: 3,
-        run_at: now,
-        deadline: None,
-        causation_id: None,
-        causation_depth: 0,
-        created_at: now,
-        updated_at: now,
-    };
-    match guard.enqueue_job(&job) {
-        Ok(inserted) => {
-            info!(job_id = %job.id, inserted = inserted, "入队成功");
+        input.operation.clone(),
+        input.payload,
+        input.priority,
+    ) {
+        Ok((job_id, inserted)) => {
+            info!(job_id = %job_id, inserted = inserted, "入队成功");
             notify_queue_changed(&app);
             CommandResult::ok(json!({
-                "jobId": job.id.to_string(),
-                "operation": job.operation,
+                "jobId": job_id.to_string(),
+                "operation": input.operation,
                 "inserted": inserted,
             }))
         }
@@ -1196,33 +772,8 @@ fn enqueue_job<R: tauri::Runtime>(
 
 /// 查询最近队列任务（含状态），供前端刷新任务面板。
 #[tauri::command]
-fn list_jobs(state: State<'_, AppState>) -> CommandResult<Vec<Value>> {
-    let Ok(repository) = repository(&state) else {
-        return CommandResult::error("repository unavailable");
-    };
-    let guard = repository.lock().expect("repository poisoned");
-    match guard.list_jobs(30) {
-        Ok(jobs) => {
-            let values: Vec<Value> = jobs
-                .iter()
-                .map(|job| {
-                    json!({
-                        "id": job.id.to_string(),
-                        "operation": job.operation,
-                        "status": serde_json::to_value(job.status).unwrap_or(Value::Null),
-                        "attempts": job.attempts,
-                        "createdAt": job.created_at.to_rfc3339(),
-                        "updatedAt": job.updated_at.to_rfc3339(),
-                    })
-                })
-                .collect();
-            CommandResult::ok(values)
-        }
-        Err(err) => {
-            error!(error = %err, "查询任务列表失败");
-            CommandResult::error(err)
-        }
-    }
+fn list_jobs(state: State<'_, AppState>) -> CommandResult<Vec<JobView>> {
+    CommandResult::from_result(workspace(&state).list_jobs(30))
 }
 
 #[cfg(test)]
@@ -1247,10 +798,10 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let database = data_dir.join("novel-agent.sqlite3");
-            let repository = Arc::new(Mutex::new(Repository::open(database)?));
+            let storage = Arc::new(StorageHandle::open(database)?);
 
             let kernel = Kernel::builder()
-                .service(repository)
+                .service(storage)
                 .extension(BuiltinsExtension)?
                 .build()?;
             app.manage(AppState {

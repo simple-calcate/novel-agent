@@ -12,7 +12,7 @@
 - 右侧「这一段怎么写」是三步口令。
 - 点导出，会用白话告诉你带走了几段、哪几段因为没写思考而没带走。
 
-技术细节（导出格式、分级）见后文。决策记录：[ADR 0008](architecture/adr/0008-writing-protocol.md)。
+技术细节（导出格式、分级）见后文。决策记录：[ADR 0009](architecture/adr/0009-writing-protocol.md)。
 
 ## 作者怎么用
 

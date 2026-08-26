@@ -14,16 +14,16 @@ use novel_domain::{
 };
 use novel_extensions::BuiltinsExtension;
 use novel_kernel::Kernel;
-use novel_storage::Repository;
+use novel_storage::StorageHandle;
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 use tauri::test::{mock_app, MockRuntime};
 use tauri::Manager;
 
 fn mock_app_with_kernel() -> tauri::App<MockRuntime> {
-    let repository = Arc::new(Mutex::new(Repository::open_in_memory().unwrap()));
+    let storage = Arc::new(StorageHandle::open_in_memory().unwrap());
     let kernel = Kernel::builder()
-        .service(repository)
+        .service(storage)
         .extension(BuiltinsExtension)
         .expect("内置扩展注册失败")
         .build()
@@ -36,11 +36,11 @@ fn mock_app_with_kernel() -> tauri::App<MockRuntime> {
     app
 }
 
-fn repository_of(app: &tauri::App<MockRuntime>) -> Arc<Mutex<Repository>> {
+fn storage_of(app: &tauri::App<MockRuntime>) -> Arc<StorageHandle> {
     app.handle()
         .state::<AppState>()
         .kernel
-        .service::<Mutex<Repository>>()
+        .service::<StorageHandle>()
         .unwrap()
 }
 
@@ -243,10 +243,8 @@ async fn event_workflow_queue_end_to_end() {
         priority: 100,
         cooldown_ms: 0,
     };
-    repository_of(&app)
-        .lock()
-        .unwrap()
-        .save_workflow(&rule)
+    storage_of(&app)
+        .execute(|repository| repository.save_workflow(&rule))
         .unwrap();
 
     let event = DomainEvent {

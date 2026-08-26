@@ -39,7 +39,7 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 | `dispatch(event)` | 按 `event_type` 通知订阅者 |
 | `run_continuation(config, spec)` | 流式续写，预算硬截断 |
 | `provider(config)` | 按名字新建 Provider |
-| `service::<T>()` | 取注入服务（如 `Mutex<Repository>`） |
+| `service::<T>()` | 取注入服务（如 `StorageHandle`） |
 | `tool_registry().describe()` | 自描述：`id` + `summary` + `input_schema` |
 
 扩展实现 `Extension::setup(&mut KernelBuilder)`。同名 `Tool` / Provider 后注册覆盖前者。
@@ -62,7 +62,7 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 | `block.save` / `block.edit` / `training.export` | 块模型与按写作协议导出训练数据 |
 | `plugin.install` / `plugin.operation` | 插件 |
 
-## 4. 仓储：`Repository`
+## 4. 仓储：`StorageHandle` + `Repository`
 
 作品库：
 
@@ -78,7 +78,21 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 
 设置：`save_setting` / `get_setting`；当前作品键 `SETTING_ACTIVE_PROJECT`。
 
-单写者：调用方持 `Mutex<Repository>`。**先释放锁再 `kernel.dispatch`**，避免订阅者再次加锁死锁。
+单写者：宿主注入 `Arc<StorageHandle>`。所有 SQLite 访问走 `StorageHandle::with` /
+`execute`。**禁止在 `with` 闭包内 `kernel.dispatch`**：同线程嵌套访问返回
+`StorageError::Reentrancy`，而不是死锁。应用层 `Workspace` 保证先写完再派发事件。
+
+## 4b. 应用层：`Workspace`
+
+宿主只应通过 `Workspace::new(&kernel)` 做作品库、设置、手动入队和续写配置解析：
+
+- `create_project` / `create_book` / `create_chapter`
+- `load_library` / `set_active_project` / `load_chapter` / `save_chapter`
+- `rename_*` / `delete_*` / `move_*`
+- `enqueue_job` / `list_jobs` / `save_setting` / `get_setting`
+- `generate_continuation`
+
+`LibrarySnapshot`、`ChapterBody`、`JobView` 定义在 `novel-domain`。
 
 ## 5. 宿主 IPC（Tauri）
 
@@ -105,7 +119,7 @@ Project（作品） 1—n Book（书/卷） 1—n Chapter（章）
 
 `training.export` 额外字段：`format`（jsonl/sharegpt/alpaca/r1）、`includeMarkup`（默认 true）、`minQuality`（默认 `usable`，丢弃 skip）。返回 `examples`、`dropped`、`qualityCounts`、`protocolVersion`。写作约定见 [writing-protocol.md](writing-protocol.md)。
 
-前端**只通过** `apps/client/src/api.ts` 的 `libraryApi` 访问作品库。浏览器预览无 Tauri 时使用内存实现，契约与上表相同。
+前端**只通过** `apps/client/src/api.ts` 的 `libraryApi` 访问作品库。浏览器预览无 Tauri 时使用内存实现，契约与上表相同。作品库 / 队列 / 编辑会话状态分别在 `hooks/useLibrary.ts`、`hooks/useQueue.ts`、`hooks/useEditorSession.ts`。
 
 ## 6. 改接口时的检查表
 

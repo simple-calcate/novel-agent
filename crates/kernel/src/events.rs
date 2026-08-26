@@ -41,6 +41,20 @@ impl DispatchSummary {
             .find(|o| o.error.is_some())
             .and_then(|o| o.error.as_deref())
     }
+
+    /// 订阅者输出里 `queued` 字段之和（工作流入队数）。
+    pub fn queued_count(&self) -> u64 {
+        self.outcomes
+            .iter()
+            .filter_map(|outcome| {
+                outcome
+                    .output
+                    .as_ref()
+                    .and_then(|output| output.get("queued"))
+                    .and_then(Value::as_u64)
+            })
+            .sum()
+    }
 }
 
 #[derive(Default)]

@@ -37,6 +37,31 @@ pub enum JobStatus {
     DeadLetter,
 }
 
+/// 任务面板用的精简视图（IPC `list_jobs`）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobView {
+    pub id: String,
+    pub operation: String,
+    pub status: JobStatus,
+    pub attempts: u32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl JobView {
+    pub fn from_job(job: &Job) -> Self {
+        Self {
+            id: job.id.to_string(),
+            operation: job.operation.clone(),
+            status: job.status,
+            attempts: job.attempts,
+            created_at: job.created_at,
+            updated_at: job.updated_at,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkflowRule {

@@ -11,6 +11,7 @@ pub mod providers;
 pub mod queue;
 pub mod util;
 pub mod workflow;
+pub mod workspace;
 
 pub use blocks::{BlockEditTool, BlockSaveTool, BlocksExtension, TrainingExportTool};
 
@@ -26,6 +27,9 @@ pub use providers::{
 };
 pub use queue::{QueueExtension, QueuePolicy, QueueTickTool};
 pub use workflow::{WorkflowEngineExtension, WorkflowEngineSubscriber};
+pub use workspace::{
+    load_provider_config_from_kernel, read_chapter_body, Workspace, WorkspaceError,
+};
 
 use novel_kernel::{Extension, KernelBuilder, KernelError};
 
