@@ -117,8 +117,12 @@ impl HintEngine {
     pub fn rank_entries(&self, query: &HintQuery, entries: &[StoryEntry]) -> Vec<ContextHint> {
         let mut hints = Vec::new();
         for entry in entries {
-            let Some(hit) = match_story_entry(&query.nearby_text, &query.lookback_text, entry)
-            else {
+            let lookback = if entry.kind == StoryEntryKind::Character {
+                query.lookback_text.as_str()
+            } else {
+                ""
+            };
+            let Some(hit) = match_story_entry(&query.nearby_text, lookback, entry) else {
                 continue;
             };
             if hit.score < self.minimum_dwell_score {

@@ -3,12 +3,13 @@
 
 use crate::{
     build_context_package, context_hints, create_book, create_chapter, create_project,
-    create_story_entry, create_volume, create_scene, delete_book, delete_chapter, delete_volume, editor_tick,
-    emit_domain_event, generate_continuation, install_plugin_manifest, kernel_tools, list_canon,
-    list_story_entries, load_chapter, load_library, load_model_config, list_plugins, move_book, propose_canon,
-    rename_book, rename_chapter, rename_project, review_canon_fact, run_queue_step, save_chapter,
-    save_model_config, AppState, EditorTickInput, HintRequest, ModelConfigInput, NewBookInput,
-    NewChapterInput, NewProjectInput, NewSceneInput, NewVolumeInput,
+    create_scene, create_story_entry, create_volume, delete_book, delete_chapter, delete_volume,
+    editor_tick, emit_domain_event, generate_continuation, install_plugin_manifest, kernel_tools,
+    list_canon, list_plugins, list_story_entries, load_chapter, load_library, load_model_config,
+    move_book, propose_canon, rename_book, rename_chapter, rename_project, review_canon_fact,
+    run_queue_step, save_chapter, save_model_config, AppState, EditorTickInput, HintRequest,
+    ModelConfigInput, NewBookInput, NewChapterInput, NewProjectInput, NewSceneInput,
+    NewVolumeInput,
 };
 use novel_domain::{
     Actor, BlockKind, ContentBlock, DomainEvent, EventId, EventSource, Platform, Revision,

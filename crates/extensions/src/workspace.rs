@@ -660,9 +660,8 @@ impl<'a> Workspace<'a> {
         } else {
             PreferenceStatus::Confirmed
         };
-        self.handle()?.execute(|repository| {
-            repository.set_preference_status(project_id, rule_id, status)
-        })?;
+        self.handle()?
+            .execute(|repository| repository.set_preference_status(project_id, rule_id, status))?;
         self.list_preference_rules(project_id)
     }
 

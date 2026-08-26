@@ -217,13 +217,7 @@ fn scene_outlines_chapter_without_touching_text() {
         .save_chapter(&chapter.id, "雾港来客。", None)
         .unwrap();
     let scene = workspace
-        .create_scene(
-            &project.id,
-            &chapter.id.to_string(),
-            "码头夜谈",
-            0,
-            None,
-        )
+        .create_scene(&project.id, &chapter.id.to_string(), "码头夜谈", 0, None)
         .unwrap();
     let snapshot = workspace.load_library(Some(project.id.clone())).unwrap();
     assert_eq!(snapshot.scenes.len(), 1);
@@ -234,7 +228,10 @@ fn scene_outlines_chapter_without_touching_text() {
     workspace.delete_scene(&project.id, &scene.id).unwrap();
     let after = workspace.load_library(Some(project.id.clone())).unwrap();
     assert!(after.scenes.is_empty());
-    assert_eq!(workspace.load_chapter(&chapter.id).unwrap().text, "雾港来客。");
+    assert_eq!(
+        workspace.load_chapter(&chapter.id).unwrap().text,
+        "雾港来客。"
+    );
 }
 
 #[test]
@@ -258,7 +255,9 @@ fn list_plugins_reads_bundled_manifests() {
     let workspace = Workspace::new(&kernel);
     let plugins = workspace.list_plugins();
     assert!(
-        plugins.iter().any(|plugin| plugin.id == "continuity-checker"),
+        plugins
+            .iter()
+            .any(|plugin| plugin.id == "continuity-checker"),
         "{plugins:?}"
     );
     assert!(plugins.iter().all(|plugin| plugin.runtime == "builtin"));

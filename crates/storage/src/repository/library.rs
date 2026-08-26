@@ -1,6 +1,6 @@
 use super::{
-    chapter_status, parse_book_id, parse_chapter_id, parse_project_id, parse_rfc3339, parse_scene_id,
-    parse_volume_id, SETTING_ACTIVE_PROJECT,
+    chapter_status, parse_book_id, parse_chapter_id, parse_project_id, parse_rfc3339,
+    parse_scene_id, parse_volume_id, SETTING_ACTIVE_PROJECT,
 };
 use crate::StorageError;
 use chrono::Utc;

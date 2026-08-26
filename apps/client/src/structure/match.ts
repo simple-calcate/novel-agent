@@ -80,7 +80,11 @@ export function matchStoryEntries(
 ): ContextHint[] {
   const hints: ContextHint[] = [];
   for (const entry of entries) {
-    const hit = matchEntry(current, lookback, entry);
+    const hit = matchEntry(
+      current,
+      entry.kind === "character" ? lookback : "",
+      entry,
+    );
     if (!hit) continue;
     const kind =
       entry.kind === "character"

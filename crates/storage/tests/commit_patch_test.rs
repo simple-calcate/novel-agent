@@ -314,13 +314,7 @@ fn scene_crud_does_not_delete_chapter_text() {
         .create_chapter_with_volume(&project.id, &book.id.to_string(), "第一章", 0, None)
         .unwrap();
     let scene = repository
-        .create_scene(
-            &project.id,
-            &chapter.id.to_string(),
-            "码头夜谈",
-            0,
-            None,
-        )
+        .create_scene(&project.id, &chapter.id.to_string(), "码头夜谈", 0, None)
         .unwrap();
     assert_eq!(repository.list_scenes(&project.id).unwrap().len(), 1);
     repository.delete_scene(&project.id, &scene.id).unwrap();

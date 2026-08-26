@@ -112,7 +112,9 @@ impl Repository {
     ) -> Result<PreferenceRule, StorageError> {
         let mut rules = self.list_preference_rules(project_id)?;
         let Some(rule) = rules.iter_mut().find(|item| &item.id == rule_id) else {
-            return Err(novel_domain::DomainError::NotFound(format!("preference {rule_id}")).into());
+            return Err(
+                novel_domain::DomainError::NotFound(format!("preference {rule_id}")).into(),
+            );
         };
         rule.status = status;
         rule.updated_at = chrono::Utc::now();

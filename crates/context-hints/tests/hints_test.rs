@@ -383,6 +383,8 @@ fn shared_match_fixtures_agree_with_typescript() {
         );
         let titles: Vec<String> = hints.iter().map(|hint| hint.title.clone()).collect();
         assert_eq!(titles, expected, "case {id}");
-        assert!(hints.iter().all(|hint| entries.iter().any(|entry| entry.id == hint.id)));
+        assert!(hints
+            .iter()
+            .all(|hint| entries.iter().any(|entry| entry.id == hint.id)));
     }
 }

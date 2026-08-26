@@ -758,7 +758,11 @@ fn set_preference_status(
         Ok(id) => id,
         Err(_) => return CommandResult::error(format!("invalid preference id: {rule_id}")),
     };
-    CommandResult::from_result(workspace(&state).set_preference_status(&project_id, &rule_id, disabled))
+    CommandResult::from_result(workspace(&state).set_preference_status(
+        &project_id,
+        &rule_id,
+        disabled,
+    ))
 }
 
 #[tauri::command]
