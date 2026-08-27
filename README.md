@@ -77,4 +77,5 @@ cd apps/client && pnpm tauri dev
 
 ## 许可
 
-GPL-3.0-or-later
+宿主（应用、内核、仓储、编辑器、匹配）为**专有许可**，见 [LICENSE](LICENSE)。
+写插件用的接口是 **MIT**：`packages/plugin-sdk`、`packages/event-schema`、`packages/workflow-builder`。说明见 [许可](docs/wiki/licensing.md) 与 [ADR 0012](docs/architecture/adr/0012-host-proprietary-plugin-mit.md)。作者保证见 [trust.md](docs/wiki/trust.md)。

@@ -52,3 +52,39 @@ export function createChapterWorkflow(id: string): WorkflowDefinition {
     cooldownMs: 0,
   };
 }
+
+export class WorkflowDefinitionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WorkflowDefinitionError";
+  }
+}
+
+/** 作者侧声明式工作流入口：不写 WASM，只声明触发器与动作。 */
+export function defineWorkflow(definition: WorkflowDefinition): WorkflowDefinition {
+  const id = definition.id?.trim() ?? "";
+  const name = definition.name?.trim() ?? "";
+  const trigger = definition.trigger?.trim() ?? "";
+  if (!id) {
+    throw new WorkflowDefinitionError("workflow id 不能为空");
+  }
+  if (!name) {
+    throw new WorkflowDefinitionError("workflow name 不能为空");
+  }
+  if (!trigger) {
+    throw new WorkflowDefinitionError("workflow trigger 不能为空");
+  }
+  if (!definition.actions?.length) {
+    throw new WorkflowDefinitionError("至少一条 action");
+  }
+  return {
+    ...definition,
+    id,
+    name,
+    trigger,
+    conditions: definition.conditions ?? [],
+    enabled: definition.enabled ?? true,
+    priority: definition.priority ?? 100,
+    cooldownMs: definition.cooldownMs ?? 0,
+  };
+}

@@ -70,6 +70,9 @@ export function SettingsModal({ open, onClose, initialConfig, onSave }: Props) {
         </div>
 
         <div className="modal-body">
+          <p className="panel-muted">
+            正文只存在本机。API Key 进密钥链，不进作品库。没配模型也能继续写。以后若有付费同步，到期不会锁已有稿件。
+          </p>
           <label className="field">
             <span className="field-label">
               <Server size={14} />

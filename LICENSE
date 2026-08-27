@@ -1,0 +1,52 @@
+# 墨枢专有许可
+
+版权所有 © 2026 墨枢项目作者。保留所有权利。
+
+本仓库里的应用程序、内核、扩展、仓储、编辑器界面与匹配实现（下文称「宿主」）
+不是开源软件。你可以阅读本仓库中的宿主源码，但未经版权人书面许可，不得：
+
+- 复制、修改、再发布宿主源码或编译产物（个人备份自己的构建除外）；
+- 将宿主或其实质部分用于开发、发行与墨枢构成竞争的写作软件；
+- 删除或改写版权与许可声明。
+
+获得发行版的用户可以在自己的设备上安装、运行宿主，用于个人写作。
+订阅、同步或其它付费能力到期后，**不得据此锁定、删除或阻止打开本机已有正文**。
+这一条是产品保证，也是本许可对发行方的约束。
+
+宿主源码出现在公开仓库里，不构成 GPL、MIT 或其它开源许可授予。
+
+## 例外：开放插件接口
+
+下列路径在各自目录的 `LICENSE` 下以 **MIT** 授权，供第三方编写插件与工作流：
+
+- `packages/plugin-sdk/`
+- `packages/event-schema/`
+- `packages/workflow-builder/`
+
+示例插件清单 `plugins/*/plugin.json` 可按 MIT 复制改写。内置执行器与沙箱宿主本身仍属专有。
+
+第三方插件只要遵守清单、权限与沙箱约定，可以用任意许可发行。墨枢发行方可以拒绝加载未签名或未授权限的插件。
+
+## 贡献
+
+向本仓库提交补丁，即表示你将宿主相关贡献的版权授予墨枢项目作者，并同意按本文件许可；向 MIT 目录提交的贡献按 MIT 许可。
+
+---
+
+# Moshu Proprietary License
+
+Copyright © 2026 the Moshu authors. All rights reserved.
+
+The application, kernel, extensions, storage, editor UI, and matching
+implementation in this repository (the "Host") are not open source.
+Viewing Host source in this repository is not a grant under GPL, MIT, or
+any other open-source license.
+
+You may not copy, modify, or redistribute the Host, or use a substantial
+portion of it to build a competing writing product, without written
+permission. Recipients of official builds may install and run the Host
+on their own devices for personal writing. Paid features must not lock
+users out of manuscripts already stored on their machine.
+
+The MIT-licensed exceptions are listed above. Third-party plugins may use
+any license; the Host may refuse unsigned plugins or undeclared capabilities.

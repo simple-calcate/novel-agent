@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "本地优先、插件化的跨平台网文写作 Agent",
+  "license": "UNLICENSED",
   "packageManager": "pnpm@10.14.0",
   "scripts": {
     "dev": "pnpm --filter @novel-agent/client dev",

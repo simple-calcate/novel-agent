@@ -7,6 +7,9 @@
 | 路径 | 用途 |
 |---|---|
 | [wiki/](wiki/README.md) | 现在怎么用、怎么改、还缺什么 |
+| [wiki/trust.md](wiki/trust.md) | 作者保证：稿子在哪、停订能否写 |
+| [wiki/plugins.md](wiki/plugins.md) | 写插件 |
+| [wiki/licensing.md](wiki/licensing.md) | 宿主专有 / SDK MIT |
 | [interfaces.md](interfaces.md) | 稳定 IPC / 仓储 / 工具契约 |
 | [architecture/layers.md](architecture/layers.md) | 分层禁区 |
 | [architecture/adr/](architecture/adr/) | 已接受的决策 |

@@ -32,7 +32,7 @@ UI  ──libraryApi──► Tauri command（只译 JSON）
 | `crates/story-model` | 启发式正史 / 连续性（非 UI 主路径） |
 | `crates/automation` | 信号、规则、队列状态机 |
 | `crates/plugin-host` | 清单、权限、桌面 wasmi 沙箱（Android 走内置） |
-| `packages/` | 事件 schema、插件 SDK、工作流模板 |
+| `packages/` | 事件 schema、插件 SDK、工作流模板（MIT）；匹配 fixtures 与 shared-types 仍属宿主 |
 
 ## 仓储切分
 

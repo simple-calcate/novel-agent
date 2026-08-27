@@ -67,6 +67,8 @@ Project（作品） 1—n Book（书） 1—n 可选 Volume（卷） 1—n Chapt
 | `block.save` / `block.edit` / `training.export` | 块模型与按写作协议导出训练数据 |
 | `plugin.install` / `plugin.operation` | 插件 |
 
+第三方清单用 MIT 包 `@novel-agent/plugin-sdk` 的 `definePlugin` 生成。宿主本身不是开源软件，见 [wiki/licensing.md](wiki/licensing.md)。
+
 ## 4. 仓储：`StorageHandle` + `Repository`
 
 作品库：

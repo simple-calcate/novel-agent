@@ -38,6 +38,7 @@ CI（`.github/workflows/ci.yml`）只在面向 `main` 的 pull request / push �
 | Agent / 队列可调用 | `Tool` + `register_tool`；工作流模板与 `OPERATION_LABELS` |
 | 只换实现 | `Kernel::builder().extension(...)` 或覆盖同名工具 |
 | 段落匹配规则 | `crates/context-hints` **和** `apps/client/src/structure/match.ts`，加上共享 fixtures |
+| 插件清单 / 工作流定义 | MIT 包 `packages/plugin-sdk`、`packages/workflow-builder` |
 | 模型密钥 | `SecretVault`，不要写进 `save_setting` |
 | 界面文案 / 树交互 | `apps/client/src/App.tsx` 与 `components/`，不改仓储 |
 

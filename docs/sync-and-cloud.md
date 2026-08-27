@@ -16,10 +16,11 @@
 
 ## 阶段 3（商业控制面）
 
-- 许可/订阅验证
+- 许可/订阅验证（到期不得锁本机正文，见 [trust.md](wiki/trust.md)）
 - 插件签名与审核
-- 可选匿名诊断
+- 可选匿名诊断（默认关）
 - 隐私设置中心
+- 宿主专有、插件接口 MIT，见 [ADR 0012](architecture/adr/0012-host-proprietary-plugin-mit.md)
 
 ## 实时协作（立项后）
 
