@@ -6,3 +6,4 @@ export {
   capabilityKind,
   PluginManifestError,
 } from "./define";
+export { helloNames, countNames } from "./examples/hello-names";

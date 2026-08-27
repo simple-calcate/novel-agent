@@ -20,9 +20,10 @@ export function PluginModal({ open, plugins, onClose }: Props) {
         </div>
         <div className="modal-body">
           <p className="panel-muted">
-            打包插件走内置执行器。桌面在清单带 <code>wasmBase64</code> 时于 wasmi
-            沙箱运行（无 WASI、无文件系统）。Android 仍只支持声明式工作流与内置操作。
-            第三方请用 MIT 的 <code>@novel-agent/plugin-sdk</code> 写清单；宿主本身不是开源软件。
+            打包插件走内置执行器。第三方用 MIT 的 <code>@novel-agent/plugin-sdk</code> 写清单，
+            用 <code>@novel-agent/plugin-compile</code> 把 AssemblyScript guest 编成 WASM，写入清单的{" "}
+            <code>wasmBase64</code>。桌面 wasmi 沙箱无 WASI、无文件系统。Android
+            仍只支持声明式工作流与内置操作。宿主本身不是开源软件。
           </p>
           <ul className="plugin-list">
             {plugins.map((plugin) => (

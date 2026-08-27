@@ -2,7 +2,8 @@ import { definePlugin, PluginContext, PluginResult } from "../index";
 
 /**
  * 第三方插件示例：只读当前选区，统计给定人名出现次数。
- * `definePlugin` 产出清单；进桌面沙箱还要把逻辑编成 WASM。
+ * `definePlugin` 产出清单；进桌面沙箱用 `@novel-agent/plugin-compile`
+ * 把 `packages/plugin-compile/examples/hello-names.ts` 编成 WASM。
  * Android 忽略 WASM，只跑声明式工作流与内置操作。
  */
 export const helloNames = definePlugin({

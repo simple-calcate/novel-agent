@@ -3,7 +3,8 @@
 | 路径 | 许可 | 给谁 |
 |---|---|---|
 | 根目录 `LICENSE` | 专有 | 宿主：应用、内核、仓储、匹配、UI |
-| `packages/plugin-sdk` | MIT | 写第三方插件 |
+| `packages/plugin-sdk` | MIT | 写第三方插件清单 |
+| `packages/plugin-compile` | MIT | 把 AssemblyScript guest 编成 WASM |
 | `packages/event-schema` | MIT | 事件信封 |
 | `packages/workflow-builder` | MIT | 声明式工作流 |
 

@@ -19,7 +19,7 @@
 
 ## 独立大件（不要当小重构）
 
-- **WASM 插件沙箱**（[ADR 0004](../architecture/adr/0004-plugin-sandbox.md) 第三层）：桌面 `plugin.operation` 在清单带 `wasmBase64` 时于 wasmi 运行。`definePlugin` 能产出清单；**TS 编成 WASM 的脚手架没有**。签名与商店没有。
+- **WASM 插件沙箱**（[ADR 0004](../architecture/adr/0004-plugin-sandbox.md) 第三层）：桌面 `plugin.operation` 在清单带 `wasmBase64` 时于 wasmi 运行。`definePlugin` 产出清单；`@novel-agent/plugin-compile` 用 AssemblyScript 把 guest 编成无导入 WASM。签名与商店没有。
 - **工作流可视化编辑器**：`defineWorkflow` 与模板在 MIT 包里；应用里仍是内置模板列表。
 - **多设备同步**：outbox 可写出本机 JSONL，**没有**传输、冲突 UI、E2E。见 [sync-and-cloud.md](../sync-and-cloud.md) 阶段 2。
 - **Android 伴侣**（[ADR 0006](../architecture/adr/0006-android-strategy.md)）：CI 对无 C 依赖 crate 做 `aarch64-linux-android` 的 `cargo check`。没有 APK / NDK 全套。见 [android-companion.md](../android-companion.md)。

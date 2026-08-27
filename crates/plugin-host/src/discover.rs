@@ -15,6 +15,8 @@ struct ListedManifest {
     version: String,
     #[serde(default)]
     operations: Vec<ListedOperation>,
+    #[serde(default)]
+    wasm_base64: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -30,7 +32,15 @@ pub fn list_bundled_plugins() -> Vec<PluginSummary> {
             id: manifest.id,
             name: manifest.name,
             version: manifest.version,
-            runtime: "builtin".into(),
+            runtime: if manifest
+                .wasm_base64
+                .as_deref()
+                .is_some_and(|value| !value.trim().is_empty())
+            {
+                "wasm".into()
+            } else {
+                "builtin".into()
+            },
             operations: manifest
                 .operations
                 .iter()

@@ -17,6 +17,8 @@ cargo clippy --workspace -- -D warnings
 cargo fmt --all -- --check
 pnpm --filter @novel-agent/client test
 pnpm --filter @novel-agent/client typecheck
+pnpm --filter @novel-agent/plugin-compile test
+pnpm --filter @novel-agent/plugin-sdk test
 ```
 
 CI（`.github/workflows/ci.yml`）只在面向 `main` 的 pull request / push 上跑。叠放在功能分支上的 PR 不会触发这套 workflow；合并前仍应在本地跑上面几条。
@@ -38,7 +40,7 @@ CI（`.github/workflows/ci.yml`）只在面向 `main` 的 pull request / push �
 | Agent / 队列可调用 | `Tool` + `register_tool`；工作流模板与 `OPERATION_LABELS` |
 | 只换实现 | `Kernel::builder().extension(...)` 或覆盖同名工具 |
 | 段落匹配规则 | `crates/context-hints` **和** `apps/client/src/structure/match.ts`，加上共享 fixtures |
-| 插件清单 / 工作流定义 | MIT 包 `packages/plugin-sdk`、`packages/workflow-builder` |
+| 插件清单 / 工作流定义 | MIT 包 `packages/plugin-sdk`、`packages/workflow-builder`、`packages/plugin-compile` |
 | 模型密钥 | `SecretVault`，不要写进 `save_setting` |
 | 界面文案 / 树交互 | `apps/client/src/App.tsx` 与 `components/`，不改仓储 |
 

@@ -25,6 +25,7 @@ crates/feedback-memory/ 人类纠正候选与偏好规则（拒绝续写后写�
 crates/plugin-host/   插件清单、权限评估、运行时
 packages/event-schema/ 版本化事件 schema
 packages/plugin-sdk/   插件 SDK 与清单 JSON Schema
+packages/plugin-compile/ 把 AssemblyScript guest 编成 WASM
 packages/workflow-builder/ 工作流定义与模板
 plugins/              内置插件清单
 docs/architecture/adr/ 架构决策记录
@@ -78,4 +79,4 @@ cd apps/client && pnpm tauri dev
 ## 许可
 
 宿主（应用、内核、仓储、编辑器、匹配）为**专有许可**，见 [LICENSE](LICENSE)。
-写插件用的接口是 **MIT**：`packages/plugin-sdk`、`packages/event-schema`、`packages/workflow-builder`。说明见 [许可](docs/wiki/licensing.md) 与 [ADR 0012](docs/architecture/adr/0012-host-proprietary-plugin-mit.md)。作者保证见 [trust.md](docs/wiki/trust.md)。
+写插件用的接口是 **MIT**：`packages/plugin-sdk`、`packages/event-schema`、`packages/workflow-builder`、`packages/plugin-compile`。说明见 [许可](docs/wiki/licensing.md) 与 [ADR 0012](docs/architecture/adr/0012-host-proprietary-plugin-mit.md)。作者保证见 [trust.md](docs/wiki/trust.md)。

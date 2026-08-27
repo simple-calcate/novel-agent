@@ -1,0 +1,28 @@
+{
+  "name": "@novel-agent/plugin-compile",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "bin": {
+    "moshu-plugin-compile": "./src/cli.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo ok",
+    "compile:hello-names": "node scripts/compile-hello.mjs"
+  },
+  "dependencies": {
+    "@novel-agent/plugin-sdk": "workspace:*",
+    "assemblyscript": "^0.27.36"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3",
+    "vitest": "^2.1.9"
+  }
+}

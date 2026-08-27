@@ -8,7 +8,7 @@
 |---|---|
 | [产品](product.md) | 作者侧：界面、作品库、预先结构、段落预选、续写与偏好、密钥 |
 | [作者保证](trust.md) | 稿子在哪、停订能否打开、插件权限 |
-| [写插件](plugins.md) | `definePlugin` / `defineWorkflow`；MIT 接口 |
+| [写插件](plugins.md) | `definePlugin` / `defineWorkflow` / `compileGuest`；MIT 接口 |
 | [许可](licensing.md) | 宿主专有，SDK MIT |
 | [架构](architecture.md) | 分层、写路径、匹配、outbox、密钥库、调用链 |
 | [开发](development.md) | 怎么跑、测什么、改一处能力动哪些文件 |

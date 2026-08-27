@@ -48,8 +48,34 @@ const plugin = definePlugin({
 console.log(toManifestJson(plugin));
 ```
 
-完整例子：`packages/plugin-sdk/src/examples/hello-names.ts`。
+完整例子：`packages/plugin-sdk/src/examples/hello-names.ts`（清单与 TypeScript 参考实现）。
 
-桌面若清单带 `wasmBase64`，`plugin.operation` 在 wasmi 里跑：导出 `memory` 与 `plugin_execute(i32,i32)->(i32,i32)`，JSON 进 JSON 出。无 WASI、无宿主导入、有燃料上限。Android 忽略 WASM。
+## 编成 WASM
 
-TS 编成 WASM 的脚手架还没有；现在先用 `definePlugin` 把清单写对。签名与商店见阶段 3。
+桌面若清单带 `wasmBase64`，`plugin.operation` 在 wasmi 里跑。Guest 必须：
+
+- 导出 `memory`
+- 导出 `plugin_execute(i32,i32)->(i32,i32)`，或 `plugin_execute(i32,i32)->i64`（高 32 位指针、低 32 位长度）
+- 读宿主写入的 JSON：`{"operation":"...","input":{...}}`（写在已有线性内存之后，不会盖掉静态数据）
+- 返回 JSON：`{"output":{...},"logs":["..."]}` 的指针和长度
+- 无 WASI、无宿主导入；有燃料上限。Android 忽略 WASM。
+
+TypeScript 不能直接进沙箱。脚手架是 MIT 包 `@novel-agent/plugin-compile`：用 AssemblyScript（TS 子集）写 guest，编成无导入的 wasm32。
+
+```bash
+pnpm --filter @novel-agent/plugin-compile compile:hello-names
+```
+
+或：
+
+```ts
+import { compileGuest, packPlugin } from "@novel-agent/plugin-compile";
+import { helloNames } from "@novel-agent/plugin-sdk";
+
+const wasm = await compileGuest("examples/hello-names.ts");
+console.log(packPlugin(helloNames, wasm));
+```
+
+Guest 入口示例：`packages/plugin-compile/examples/hello-names.ts`。可复用 `assembly/execute.ts` 与 `assembly/json.ts`。语法是 AssemblyScript，不是完整 TypeScript（没有 DOM、没有 npm 包）。wasmi 回归固件在 `crates/plugin-host/tests/fixtures/hello-names.wasm`，改 guest 后重新 `compile:hello-names` 再拷过去。
+
+签名与商店见阶段 3。多数人仍应只用 `defineWorkflow`，不必写 guest。

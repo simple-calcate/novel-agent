@@ -79,7 +79,7 @@
 
 拒绝一次 AI 续写会记下一条作者偏好；下次续写把未停用的规则写进 system prompt。同一条规则文本被拒绝两次会升为 Confirmed。右侧 Agent 页可以查看并停用。接受续写则把预览写入正文。
 
-左下角「插件」列出打包清单。打包项走内置执行器。桌面若清单带 `wasmBase64`，`plugin.operation` 在 wasmi 沙箱里跑（无 WASI、无文件系统）。Android 仍是内置。
+左下角「插件」列出打包清单。打包项走内置执行器。第三方把 AssemblyScript guest 用 `@novel-agent/plugin-compile` 编成 WASM，清单带 `wasmBase64` 时桌面在 wasmi 沙箱里跑（无 WASI、无文件系统）。Android 仍是内置。
 
 工作流页可以把待发送 outbox 写成应用数据目录下的 JSONL。这是本机 journal，**不是**手机和电脑之间的同步。
 

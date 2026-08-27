@@ -1,4 +1,5 @@
 //! 桌面 WASM 沙箱：无 WASI、无宿主导入、有燃料上限。
+//! 请求 JSON 写在已有线性内存之后；`plugin_execute` 接受多值返回或 packed i64。
 //! Android 不编译本模块，`plugin.operation` 走内置执行器。
 
 use crate::runtime::{PluginInstance, PluginRuntimeError};
@@ -58,23 +59,21 @@ fn run_wasm(wasm: &[u8], request: &[u8]) -> Result<Vec<u8>, PluginRuntimeError> 
     let memory = instance
         .get_memory(&store, "memory")
         .ok_or_else(|| PluginRuntimeError::Sandbox("guest must export memory".into()))?;
-    ensure_capacity(&memory, &mut store, request.len())?;
+    // 写到已有线性内存之后，避免盖掉 guest 的 data / 堆。
+    let input_ptr = memory.data_size(&store);
+    let needed = input_ptr
+        .checked_add(request.len())
+        .ok_or_else(|| PluginRuntimeError::Sandbox("input overflow".into()))?;
+    ensure_capacity(&memory, &mut store, needed)?;
     memory
-        .write(&mut store, 0, request)
+        .write(&mut store, input_ptr, request)
         .map_err(|error| PluginRuntimeError::Sandbox(format!("write input: {error}")))?;
 
-    let func = instance
-        .get_typed_func::<(i32, i32), (i32, i32)>(&store, "plugin_execute")
-        .map_err(|error| {
-            PluginRuntimeError::Sandbox(format!(
-                "guest must export plugin_execute(i32,i32)->(i32,i32): {error}"
-            ))
-        })?;
+    let in_ptr = i32::try_from(input_ptr)
+        .map_err(|_| PluginRuntimeError::Sandbox("input pointer too large".into()))?;
     let in_len = i32::try_from(request.len())
         .map_err(|_| PluginRuntimeError::Sandbox("input too large".into()))?;
-    let (out_ptr, out_len) = func
-        .call(&mut store, (0, in_len))
-        .map_err(|error| PluginRuntimeError::Sandbox(format!("trap: {error}")))?;
+    let (out_ptr, out_len) = call_plugin_execute(&instance, &mut store, in_ptr, in_len)?;
     if out_ptr < 0 || out_len < 0 {
         return Err(PluginRuntimeError::Sandbox(
             "guest returned negative pointer or length".into(),
@@ -95,6 +94,32 @@ fn run_wasm(wasm: &[u8], request: &[u8]) -> Result<Vec<u8>, PluginRuntimeError> 
         .read(&store, out_ptr, &mut output)
         .map_err(|error| PluginRuntimeError::Sandbox(format!("read output: {error}")))?;
     Ok(output)
+}
+
+fn call_plugin_execute(
+    instance: &wasmi::Instance,
+    store: &mut Store<()>,
+    in_ptr: i32,
+    in_len: i32,
+) -> Result<(i32, i32), PluginRuntimeError> {
+    if let Ok(func) = instance.get_typed_func::<(i32, i32), (i32, i32)>(&*store, "plugin_execute") {
+        return func
+            .call(&mut *store, (in_ptr, in_len))
+            .map_err(|error| PluginRuntimeError::Sandbox(format!("trap: {error}")));
+    }
+    if let Ok(func) = instance.get_typed_func::<(i32, i32), i64>(&*store, "plugin_execute") {
+        let packed = func
+            .call(&mut *store, (in_ptr, in_len))
+            .map_err(|error| PluginRuntimeError::Sandbox(format!("trap: {error}")))?;
+        let bits = packed as u64;
+        let out_ptr = (bits >> 32) as u32 as i32;
+        let out_len = (bits & 0xffff_ffff) as u32 as i32;
+        return Ok((out_ptr, out_len));
+    }
+    Err(PluginRuntimeError::Sandbox(
+        "guest must export plugin_execute(i32,i32)->(i32,i32) or plugin_execute(i32,i32)->i64"
+            .into(),
+    ))
 }
 
 fn ensure_capacity(
