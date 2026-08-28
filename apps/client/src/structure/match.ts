@@ -60,6 +60,9 @@ const STOPWORDS = new Set([
   "走进",
   "来到",
   "抵达",
+  "到了",
+  "快到",
+  "快到了",
 ]);
 
 const SPLITTERS = /[，。；、,.!?！？：:\n\t 「」“”'（）《》—…·的地得]/;
@@ -179,12 +182,51 @@ function matchEntry(
         return { score: 0.56, reason: `上一段出现别名「${alias}」` };
       }
     }
-    return null;
+    return retrieveEntry(current, entry);
   }
   hits.sort((left, right) => right.score - left.score);
   const best = hits[0];
   if (hits.length > 1) best.score = Math.min(1, best.score + 0.04 * (hits.length - 1));
   return best;
+}
+
+function retrieveEntry(
+  current: string,
+  entry: StoryEntry,
+): { score: number; reason: string } | null {
+  const haystack = normalize(`${entry.title} ${(entry.aliases ?? []).join(" ")} ${entry.summary}`);
+  const matched = queryTokens(current).filter((token) => haystack.includes(normalize(token)));
+  if (matched.length === 0) return null;
+  matched.sort((left, right) => [...right].length - [...left].length);
+  const term = matched[0];
+  return { score: 0.4, reason: `检索到「${term}」` };
+}
+
+function queryTokens(text: string): string[] {
+  const tokens: string[] = [];
+  for (const chunk of text.split(SPLITTERS)) {
+    pushQueryChunk(tokens, chunk);
+  }
+  return tokens;
+}
+
+function pushQueryChunk(tokens: string[], chunk: string) {
+  const text = chunk.trim();
+  const chars = [...text];
+  const n = chars.length;
+  if (n < 2) return;
+  if (n <= 12) acceptQueryToken(tokens, text);
+  const maxLen = Math.min(n, 4);
+  for (let len = 2; len <= maxLen; len += 1) {
+    for (let start = 0; start <= n - len; start += 1) {
+      acceptQueryToken(tokens, chars.slice(start, start + len).join(""));
+    }
+  }
+}
+
+function acceptQueryToken(tokens: string[], token: string) {
+  if ([...token].length < 2 || STOPWORDS.has(token)) return;
+  if (!tokens.includes(token)) tokens.push(token);
 }
 
 function titleCores(title: string): string[] {

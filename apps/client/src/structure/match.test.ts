@@ -53,6 +53,22 @@ describe("structure matching", () => {
     expect(matchStoryEntries("夜晚的海面", "", [linWan, lighthouse], 1)).toEqual([]);
   });
 
+  it("retrieves an entry by inverted lexical search", () => {
+    const keeper: StoryEntry = {
+      id: "4",
+      projectId: "p",
+      kind: "character",
+      title: "灯塔守夜人",
+      summary: "负责在雾季敲钟",
+      aliases: [],
+    };
+    const hints = matchStoryEntries("雾季快到了", "", [keeper], 1);
+    expect(hints).toHaveLength(1);
+    expect(hints[0]?.title).toBe("灯塔守夜人");
+    expect(hints[0]?.matchReason).toContain("检索到");
+    expect(hints[0]?.matchReason).toContain("雾季");
+  });
+
   it("shares ranking cases with the rust matcher", () => {
     const fog: StoryEntry = {
       id: "3",
@@ -63,10 +79,17 @@ describe("structure matching", () => {
       aliases: [],
     };
     for (const item of cases) {
+      const extras = ((item as { extraEntries?: StoryEntry[] }).extraEntries ?? []).map(
+        (entry) => ({
+          ...entry,
+          projectId: entry.projectId ?? "p",
+          aliases: entry.aliases ?? [],
+        }),
+      );
       const titles = matchStoryEntries(
         item.current,
         item.lookback,
-        [linWan, lighthouse, fog],
+        [linWan, lighthouse, fog, ...extras],
         1,
       ).map((hint) => hint.title);
       expect(titles, item.id).toEqual(item.expectedTitles);

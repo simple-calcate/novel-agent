@@ -34,6 +34,7 @@ import { useQueue } from "./hooks/useQueue";
 import { useEditorSession } from "./hooks/useEditorSession";
 import { useStructure } from "./hooks/useStructure";
 import { PluginSummary } from "./types";
+import { uniqueNames } from "./plugins/format";
 
 export function App() {
   const [sidebarTab, setSidebarTab] = useState<"context" | "structure" | "workflow" | "agent">(
@@ -102,6 +103,17 @@ export function App() {
     pinHint,
     ignoreHint,
   } = session;
+
+  const pluginCharacterNames = uniqueNames([
+    ...hints.filter((hint) => hint.kind === "characterState").map((hint) => hint.title),
+    ...structure.entries.filter((entry) => entry.kind === "character").map((entry) => entry.title),
+  ]);
+
+  async function handleOpenSample(saveCurrent: boolean) {
+    if (saveCurrent) await persistChapter();
+    const installed = await openSampleChapter();
+    if (installed) await structure.refresh(installed.projectId);
+  }
 
   const activeChapterRecord = chapters.find((chapter) => chapter.id === activeChapter);
   const promptCopy = prompt
@@ -326,7 +338,7 @@ export function App() {
           <button
             className="tree-item add"
             onClick={() => {
-              void persistChapter().then(() => openSampleChapter());
+              void handleOpenSample(true);
             }}
           >
             <BookOpen size={14} />
@@ -389,7 +401,7 @@ export function App() {
             <div className="workspace-empty">
               <p>从左侧创建作品、书和章节，即可开始写作。</p>
               <div className="workspace-empty-actions">
-                <button className="btn primary" onClick={() => void openSampleChapter()}>
+                <button className="btn primary" onClick={() => void handleOpenSample(false)}>
                   打开示例章节
                 </button>
                 <button className="btn" onClick={() => setPrompt({ mode: "create", target: "book" })}>
@@ -544,6 +556,8 @@ export function App() {
           <WorkflowPanel
             jobs={jobs}
             queueReady={queueReady}
+            chapterText={chapterText}
+            characterNames={pluginCharacterNames}
             onRun={(operation, label) => {
               logger.info("手动运行工作流", { operation, label });
               enqueue(operation);
@@ -625,7 +639,13 @@ export function App() {
         onClose={() => setPendingDelete(null)}
         onConfirm={handleDelete}
       />
-      <PluginModal open={pluginOpen} plugins={plugins} onClose={() => setPluginOpen(false)} />
+      <PluginModal
+        open={pluginOpen}
+        plugins={plugins}
+        chapterText={session.chapterText}
+        characterNames={pluginCharacterNames}
+        onClose={() => setPluginOpen(false)}
+      />
     </div>
   );
 }

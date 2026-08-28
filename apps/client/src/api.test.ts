@@ -122,4 +122,32 @@ describe("memory library", () => {
     const disabled = await libraryApi.setPreferenceStatus(project.id, again[0].id, true);
     expect(disabled[0].status).toBe("disabled");
   });
+
+  it("lists bundled plugins and counts names in the browser preview", async () => {
+    const plugins = await libraryApi.listPlugins();
+    expect(plugins.some((plugin) => plugin.id === "hello-names")).toBe(true);
+    const result = await libraryApi.runPluginOperation("hello-names", "count-names", {
+      selection: "林晚走进雾港，林晚没有回头",
+      names: ["林晚", "雾儿"],
+    });
+    expect(result.output).toEqual({ counts: { 林晚: 2, 雾儿: 0 } });
+    const sample = await libraryApi.runPluginOperation("hello-names", "count-names", {
+      selection:
+        "林默站在窗前。林默没有再掀第二次。林默把怀表收回衣襟。",
+      names: ["林默"],
+    });
+    expect(sample.output).toEqual({ counts: { 林默: 3 } });
+  });
+
+  it("returns a Chinese placeholder receipt for builtin plugins in the browser preview", async () => {
+    const result = await libraryApi.runPluginOperation("continuity-checker", "check-chapter", {});
+    expect((result.output as { message?: string }).message).toContain("占位回执");
+  });
+
+  it("reports empty outbox in the browser preview", async () => {
+    expect(await libraryApi.pendingOutboxCount()).toBe(0);
+    const flushed = await libraryApi.flushOutboxJournal();
+    expect(flushed.written).toBe(0);
+    expect(flushed.note).toContain("不是设备间同步");
+  });
 });

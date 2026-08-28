@@ -9,14 +9,16 @@ use crate::util::{storage, with_repository};
 use novel_domain::{
     Annotation, Book, BookId, CanonProposal, Chapter, ChapterBody, ChapterId, ContentBlock,
     ContentPatch, DomainEvent, FactId, FactStatus, Job, JobId, JobStatus, JobView, LibrarySnapshot,
-    PluginSummary, PreferenceRule, PreferenceRuleId, PreferenceScope, PreferenceStatus, Project,
-    ProjectId, ProposalId, RejectionReason, Revision, Scene, SceneId, StoryEntry, StoryEntryKind,
-    Volume, VolumeId,
+    PluginResult, PluginSummary, PreferenceRule, PreferenceRuleId, PreferenceScope,
+    PreferenceStatus, Project, ProjectId, ProposalId, RejectionReason, Revision, Scene, SceneId,
+    StoryEntry, StoryEntryKind, Volume, VolumeId,
 };
 use novel_kernel::{AgentSpec, DispatchSummary, Kernel, KernelError, ProviderConfig};
 use novel_storage::{StorageError, SETTING_ACTIVE_PROJECT};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::io::Write;
+use std::path::Path;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -41,6 +43,18 @@ pub struct ModelConfigView {
     pub api_key_set: bool,
     pub base_url: String,
     pub model: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OutboxFlushResult {
+    pub written: u32,
+    pub path: String,
+    pub note: String,
+}
+
+impl OutboxFlushResult {
+    pub const NOTE: &'static str = "本机 JSONL 写出，不是设备间同步。载荷只有 id 和修订号。";
 }
 
 /// 宿主面向的应用门面。不持有仓库锁跨越 `dispatch`。
@@ -667,6 +681,67 @@ impl<'a> Workspace<'a> {
 
     pub fn list_plugins(&self) -> Vec<PluginSummary> {
         novel_plugin_host::list_bundled_plugins()
+    }
+
+    pub fn run_plugin_operation(
+        &self,
+        plugin_id: &str,
+        operation: &str,
+        input: Value,
+    ) -> Result<PluginResult, WorkspaceError> {
+        novel_plugin_host::execute_bundled(plugin_id, operation, input)
+            .map_err(|error| WorkspaceError::Message(error.to_string()))
+    }
+
+    pub fn pending_outbox_count(&self) -> Result<u32, WorkspaceError> {
+        Ok(self
+            .handle()?
+            .execute(|repository| repository.count_pending_outbox())?)
+    }
+
+    /// 把待发送 outbox 追加写成 JSONL，然后标记 delivered。
+    /// 这是本机消费者，不是设备间同步。
+    pub fn flush_outbox_journal(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> Result<OutboxFlushResult, WorkspaceError> {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|error| WorkspaceError::Message(error.to_string()))?;
+            }
+        }
+        let pending = self
+            .handle()?
+            .execute(|repository| repository.list_pending_outbox(10_000))?;
+        if pending.is_empty() {
+            return Ok(OutboxFlushResult {
+                written: 0,
+                path: path.display().to_string(),
+                note: OutboxFlushResult::NOTE.into(),
+            });
+        }
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .map_err(|error| WorkspaceError::Message(error.to_string()))?;
+        for event in &pending {
+            let line = serde_json::to_string(event)
+                .map_err(|error| WorkspaceError::Message(error.to_string()))?;
+            writeln!(file, "{line}").map_err(|error| WorkspaceError::Message(error.to_string()))?;
+        }
+        file.sync_all()
+            .map_err(|error| WorkspaceError::Message(error.to_string()))?;
+        let ids: Vec<i64> = pending.iter().map(|event| event.id).collect();
+        self.handle()?
+            .execute(|repository| repository.mark_outbox_delivered(&ids))?;
+        Ok(OutboxFlushResult {
+            written: pending.len() as u32,
+            path: path.display().to_string(),
+            note: OutboxFlushResult::NOTE.into(),
+        })
     }
 
     pub fn enqueue_job(

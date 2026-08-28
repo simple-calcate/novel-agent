@@ -53,6 +53,12 @@ describe("fog-harbor sample chapter", () => {
     expect(loaded.blocks).toHaveLength(sampleChapter.blocks.length);
     expect(loaded.text).toBe(sampleBodyText());
     expect(first.created).toBe(true);
+    const story = await libraryApi.listStoryEntries(first.projectId);
+    expect(story.map((entry) => `${entry.kind}:${entry.title}`)).toEqual([
+      "character:林默",
+      "setting:雾港码头",
+      "foreshadow:怀表来历",
+    ]);
 
     await libraryApi.saveChapter(first.chapterId, "作者改过的正文。", [
       {
@@ -69,5 +75,6 @@ describe("fog-harbor sample chapter", () => {
     expect(second.created).toBe(false);
     const again = await libraryApi.loadChapter(second.chapterId);
     expect(again.text).toBe("作者改过的正文。");
+    expect(await libraryApi.listStoryEntries(second.projectId)).toHaveLength(3);
   });
 });

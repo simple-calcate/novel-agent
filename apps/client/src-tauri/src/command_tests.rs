@@ -6,10 +6,10 @@ use crate::{
     create_scene, create_story_entry, create_volume, delete_book, delete_chapter, delete_volume,
     editor_tick, emit_domain_event, generate_continuation, install_plugin_manifest, kernel_tools,
     list_canon, list_plugins, list_story_entries, load_chapter, load_library, load_model_config,
-    move_book, propose_canon, rename_book, rename_chapter, rename_project, review_canon_fact,
-    run_queue_step, save_chapter, save_model_config, AppState, EditorTickInput, HintRequest,
-    ModelConfigInput, NewBookInput, NewChapterInput, NewProjectInput, NewSceneInput,
-    NewVolumeInput,
+    move_book, pending_outbox_count, propose_canon, rename_book, rename_chapter, rename_project,
+    review_canon_fact, run_plugin_operation, run_queue_step, save_chapter, save_model_config,
+    AppState, EditorTickInput, HintRequest, ModelConfigInput, NewBookInput, NewChapterInput,
+    NewProjectInput, NewSceneInput, NewVolumeInput, RunPluginInput,
 };
 use novel_domain::{
     Actor, BlockKind, ContentBlock, DomainEvent, EventId, EventSource, Platform, Revision,
@@ -725,9 +725,31 @@ fn scene_roundtrip_and_plugin_list() {
 
     let plugins = list_plugins(state());
     assert!(plugins.ok, "{plugins:?}");
+    let plugins = plugins.data.unwrap();
     assert!(plugins
-        .data
-        .unwrap()
         .iter()
         .any(|plugin| plugin.id == "continuity-checker"));
+    assert!(plugins
+        .iter()
+        .any(|plugin| plugin.id == "hello-names" && plugin.runtime == "wasm"));
+
+    let counted = run_plugin_operation(
+        state(),
+        RunPluginInput {
+            plugin_id: "hello-names".into(),
+            operation: "count-names".into(),
+            input: json!({
+                "selection": "林晚走进雾港，林晚没有回头",
+                "names": ["林晚", "雾儿"]
+            }),
+        },
+    );
+    assert!(counted.ok, "{counted:?}");
+    let output = counted.data.unwrap().output;
+    assert_eq!(output["counts"]["林晚"], 2);
+    assert_eq!(output["counts"]["雾儿"], 0);
+
+    let pending = pending_outbox_count(state());
+    assert!(pending.ok, "{pending:?}");
+    assert!(pending.data.unwrap() > 0);
 }

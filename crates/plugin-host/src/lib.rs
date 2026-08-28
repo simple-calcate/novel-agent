@@ -5,6 +5,9 @@ pub mod manifest;
 pub mod permissions;
 pub mod runtime;
 
+#[cfg(not(target_os = "android"))]
+mod sandbox;
+
 pub use discover::*;
 pub use manifest::*;
 pub use permissions::*;

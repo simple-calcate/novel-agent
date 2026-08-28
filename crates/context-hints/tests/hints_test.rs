@@ -1,7 +1,7 @@
 use novel_context_hints::{HintEngine, HintQuery};
 use novel_domain::{
     CanonEntity, ChapterId, EntityId, EntityKind, PlotThread, PlotThreadStatus, ProjectId,
-    Revision, StoryInstant, WorkContextRef,
+    Revision, StoryEntry, StoryEntryKind, StoryInstant, WorkContextRef,
 };
 
 fn work_ref() -> WorkContextRef {
@@ -328,36 +328,99 @@ fn unrelated_paragraph_without_lookback_stays_empty() {
 }
 
 #[test]
-fn shared_match_fixtures_agree_with_typescript() {
-    let raw = include_str!("../../../packages/match-fixtures/cases.json");
-    let cases: Vec<serde_json::Value> = serde_json::from_str(raw).unwrap();
-    let project_id = ProjectId::new();
-    let entries = vec![
-        novel_domain::StoryEntry {
+fn lexical_retrieval_matches_summary_term_missing_from_local_keywords() {
+    let entry = StoryEntry {
+        id: "4".into(),
+        project_id: ProjectId::new(),
+        kind: StoryEntryKind::Character,
+        title: "灯塔守夜人".into(),
+        summary: "负责在雾季敲钟".into(),
+        aliases: vec![],
+    };
+    let hints = rank_one("雾季快到了", "", entry);
+    assert_eq!(hints.len(), 1);
+    assert_eq!(hints[0].title, "灯塔守夜人");
+    assert!(
+        hints[0].match_reason.contains("检索到"),
+        "{}",
+        hints[0].match_reason
+    );
+    assert!(
+        hints[0].match_reason.contains("雾季"),
+        "{}",
+        hints[0].match_reason
+    );
+}
+
+fn fixture_entries(project_id: &ProjectId) -> Vec<StoryEntry> {
+    vec![
+        StoryEntry {
             id: "1".into(),
             project_id: project_id.clone(),
-            kind: novel_domain::StoryEntryKind::Character,
+            kind: StoryEntryKind::Character,
             title: "林晚".into(),
             summary: "雾港来的刀客".into(),
             aliases: vec!["雾儿".into()],
         },
-        novel_domain::StoryEntry {
+        StoryEntry {
             id: "2".into(),
             project_id: project_id.clone(),
-            kind: novel_domain::StoryEntryKind::Foreshadow,
+            kind: StoryEntryKind::Foreshadow,
             title: "雾中灯塔".into(),
             summary: "里面还有旧王玺".into(),
             aliases: vec![],
         },
-        novel_domain::StoryEntry {
+        StoryEntry {
             id: "3".into(),
-            project_id,
-            kind: novel_domain::StoryEntryKind::Setting,
+            project_id: project_id.clone(),
+            kind: StoryEntryKind::Setting,
             title: "雾港".into(),
             summary: "终年被海雾罩住".into(),
             aliases: vec![],
         },
-    ];
+    ]
+}
+
+fn extra_fixture_entries(project_id: &ProjectId, extra: &serde_json::Value) -> Vec<StoryEntry> {
+    extra
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| {
+            Some(StoryEntry {
+                id: item.get("id")?.as_str()?.to_owned(),
+                project_id: project_id.clone(),
+                kind: match item.get("kind")?.as_str()? {
+                    "setting" => StoryEntryKind::Setting,
+                    "foreshadow" => StoryEntryKind::Foreshadow,
+                    _ => StoryEntryKind::Character,
+                },
+                title: item.get("title")?.as_str()?.to_owned(),
+                summary: item
+                    .get("summary")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned(),
+                aliases: item
+                    .get("aliases")
+                    .and_then(serde_json::Value::as_array)
+                    .map(|aliases| {
+                        aliases
+                            .iter()
+                            .filter_map(|value| value.as_str().map(str::to_owned))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            })
+        })
+        .collect()
+}
+
+#[test]
+fn shared_match_fixtures_agree_with_typescript() {
+    let raw = include_str!("../../../packages/match-fixtures/cases.json");
+    let cases: Vec<serde_json::Value> = serde_json::from_str(raw).unwrap();
+    let project_id = ProjectId::new();
     let engine = HintEngine {
         minimum_dwell_score: 0.0,
     };
@@ -371,6 +434,8 @@ fn shared_match_fixtures_agree_with_typescript() {
             .iter()
             .filter_map(|value| value.as_str().map(str::to_owned))
             .collect();
+        let mut entries = fixture_entries(&project_id);
+        entries.extend(extra_fixture_entries(&project_id, &case["extraEntries"]));
         let hints = engine.rank_entries(
             &HintQuery {
                 work_ref: work_ref(),

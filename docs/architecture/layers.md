@@ -43,4 +43,4 @@
 3. **用户点按钮就能做** → `Workspace` 方法 + Tauri command + `libraryApi` 方法 + 界面
 4. **只改装配** → `Kernel::builder().extension(...)` 或覆盖同名工具
 
-接口清单见 [interfaces.md](../interfaces.md)。决策记录见 [adr/](adr/)，含 [ADR 0008](adr/0008-workspace-storage-handle.md)、[ADR 0009](adr/0009-canon-review-loop.md)、[ADR 0010](adr/0010-secret-vault.md) 与 [ADR 0011](adr/0011-writing-protocol.md)。
+接口清单见 [interfaces.md](../interfaces.md)。决策记录见 [adr/](adr/)，含 [ADR 0008](adr/0008-workspace-storage-handle.md)、[ADR 0009](adr/0009-canon-review-loop.md)、[ADR 0010](adr/0010-secret-vault.md)、[ADR 0011](adr/0011-writing-protocol.md) 与 [ADR 0012](adr/0012-host-proprietary-plugin-mit.md)。

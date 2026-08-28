@@ -79,4 +79,13 @@ impl Repository {
         }
         Ok(updated)
     }
+
+    pub fn count_pending_outbox(&self) -> Result<u32, StorageError> {
+        let count: i64 = self.connection.query_row(
+            "SELECT COUNT(*) FROM outbox WHERE delivered_at IS NULL",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(count as u32)
+    }
 }

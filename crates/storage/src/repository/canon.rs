@@ -173,13 +173,13 @@ impl Repository {
         Ok(threads)
     }
 
-    /// 用已接受的正史实体重建 FTS 检索索引，返回索引条数。
+    /// 用已接受的正史实体和预先结构条目重建 FTS 检索索引，返回索引条数。
     pub fn rebuild_search_index(&self, project_id: &ProjectId) -> Result<u32, StorageError> {
         self.connection.execute(
             "DELETE FROM search_documents WHERE project_id = ?1",
             params![project_id.to_string()],
         )?;
-        let inserted = self.connection.execute(
+        let canon = self.connection.execute(
             "INSERT INTO search_documents(project_id, entity_kind, entity_id, title, body)
              SELECT ?1, kind, id, canonical_name, canonical_name || ' ' || aliases_json
              FROM canon_entities
@@ -190,7 +190,15 @@ impl Repository {
                )",
             params![project_id.to_string()],
         )?;
-        Ok(inserted as u32)
+        let designed = self.connection.execute(
+            "INSERT INTO search_documents(project_id, entity_kind, entity_id, title, body)
+             SELECT project_id, kind, id, title,
+                    title || ' ' || summary || ' ' || COALESCE(aliases_json, '[]')
+             FROM story_entries
+             WHERE project_id = ?1",
+            params![project_id.to_string()],
+        )?;
+        Ok((canon + designed) as u32)
     }
 
     pub fn propose_canon_mentions(

@@ -1,5 +1,5 @@
 //! 插件宿主扩展：`plugin.install` 解析清单并评估权限，
-//! `plugin.operation` 分发插件操作（当前为内置执行器，WASM 沙箱后续接入）。
+//! `plugin.operation` 在清单带 WASM 时走桌面沙箱，否则走内置执行器。
 
 use async_trait::async_trait;
 use novel_domain::{PluginGrant, PluginManifest, PluginPlatform};
@@ -116,7 +116,7 @@ impl Tool for PluginOperationTool {
             grant: parsed.grant,
         };
         let result = instance
-            .execute_builtin(&parsed.operation, parsed.input)
+            .execute(&parsed.operation, parsed.input)
             .map_err(|error| KernelError::ToolFailed {
                 tool: "plugin.operation".into(),
                 message: error.to_string(),

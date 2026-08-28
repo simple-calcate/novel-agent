@@ -1,0 +1,15 @@
+{
+  "targets": {
+    "release": {
+      "outFile": "build/plugin.wasm",
+      "runtime": "stub",
+      "optimizeLevel": 3,
+      "shrinkLevel": 2,
+      "noAssert": true,
+      "disable": ["simd"]
+    }
+  },
+  "options": {
+    "use": ["abort="]
+  }
+}

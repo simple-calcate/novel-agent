@@ -257,8 +257,57 @@ fn list_plugins_reads_bundled_manifests() {
     assert!(
         plugins
             .iter()
-            .any(|plugin| plugin.id == "continuity-checker"),
+            .any(|plugin| plugin.id == "continuity-checker" && plugin.runtime == "builtin"),
         "{plugins:?}"
     );
-    assert!(plugins.iter().all(|plugin| plugin.runtime == "builtin"));
+    assert!(
+        plugins
+            .iter()
+            .any(|plugin| plugin.id == "hello-names" && plugin.runtime == "wasm"),
+        "{plugins:?}"
+    );
+}
+
+#[test]
+fn run_plugin_counts_names_in_wasm_sandbox() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let result = workspace
+        .run_plugin_operation(
+            "hello-names",
+            "count-names",
+            serde_json::json!({
+                "selection": "林晚走进雾港，林晚没有回头",
+                "names": ["林晚", "雾儿"]
+            }),
+        )
+        .unwrap();
+    assert_eq!(result.output["counts"]["林晚"], 2);
+    assert_eq!(result.output["counts"]["雾儿"], 0);
+}
+
+#[test]
+fn flush_outbox_journal_writes_jsonl_and_marks_delivered() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    workspace.create_project("夜航星图").unwrap();
+    assert_eq!(workspace.pending_outbox_count().unwrap(), 1);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("outbox-journal.jsonl");
+    let flushed = workspace.flush_outbox_journal(&path).unwrap();
+    assert_eq!(flushed.written, 1);
+    assert_eq!(workspace.pending_outbox_count().unwrap(), 0);
+    let contents = std::fs::read_to_string(&path).unwrap();
+    assert!(contents.contains("project.created"));
+    assert!(flushed.note.contains("不是设备间同步"));
+
+    workspace.create_project("第二部").unwrap();
+    let again = workspace.flush_outbox_journal(&path).unwrap();
+    assert_eq!(again.written, 1);
+    let lines = std::fs::read_to_string(&path)
+        .unwrap()
+        .lines()
+        .filter(|line| !line.is_empty())
+        .count();
+    assert_eq!(lines, 2);
 }

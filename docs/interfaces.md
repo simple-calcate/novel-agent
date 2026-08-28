@@ -67,6 +67,10 @@ Project（作品） 1—n Book（书） 1—n 可选 Volume（卷） 1—n Chapt
 | `block.save` / `block.edit` / `training.export` | 块模型与按写作协议导出训练数据 |
 | `plugin.install` / `plugin.operation` | 插件 |
 
+第三方清单用 MIT 包 `@novel-agent/plugin-sdk` 的 `definePlugin` 生成。guest 用 `@novel-agent/plugin-compile` 编成无导入 WASM。宿主本身不是开源软件，见 [wiki/licensing.md](wiki/licensing.md)。
+
+桌面沙箱 ABI：导出 `memory`；`plugin_execute(i32,i32)->(i32,i32)` 或 packed i64；请求 JSON 写在已有内存之后。无 WASI。Android 忽略 `wasmBase64`。
+
 ## 4. 仓储：`StorageHandle` + `Repository`
 
 作品库：
@@ -92,7 +96,7 @@ Project（作品） 1—n Book（书） 1—n 可选 Volume（卷） 1—n Chapt
 设置：`save_setting` / `get_setting`；当前作品键 `SETTING_ACTIVE_PROJECT`。
 模型配置：`Workspace::save_model_config` / `load_model_config`；API Key 走 `SecretVault`，不进 `app_settings`。
 
-Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `outbox`；`list_pending_outbox` / `mark_outbox_delivered`。同步发送仍未实现。
+Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `outbox`；`list_pending_outbox` / `mark_outbox_delivered` / `count_pending_outbox`。`Workspace::flush_outbox_journal(path)` 把待发送行追加写成 JSONL 再标记 delivered。这是本机写出，不是设备间同步。
 
 偏好：`save_preference_rule` / `list_preference_rules` / `set_preference_status` / `save_correction`；拒绝续写后写入，下次 `generate_continuation` 拼进 system prompt。停用的规则不进提示。
 
@@ -111,11 +115,12 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 - `generate_continuation`
 - `save_model_config` / `load_model_config`
 - `record_generation_feedback` / `list_preference_rules` / `set_preference_status`
-- `list_plugins`
+- `list_plugins` / `run_plugin_operation`
+- `pending_outbox_count` / `flush_outbox_journal`
 - `propose_canon_from_chapter` / `list_canon` / `review_canon_fact`
 - `create_story_entry` / `list_story_entries` / `delete_story_entry`
 
-`LibrarySnapshot`、`ChapterBody`、`JobView`、`CanonProposal`、`StoryEntry`、`Scene`、`PreferenceRule`、`PluginSummary` 定义在 `novel-domain`。
+`LibrarySnapshot`、`ChapterBody`、`JobView`、`CanonProposal`、`StoryEntry`、`Scene`、`PreferenceRule`、`PluginSummary`、`PluginResult` 定义在 `novel-domain`。
 
 产品路径：作者预先添加人物 / 设定 / 伏笔；`context.hints` 按当前段落匹配，结果排在编辑器上方。章内场次是大纲，删场不删正文。启发式抽取仍可用，但 UI 不走这条路径。IPC 形状的黄金样例见 `packages/shared-types/examples.json`。匹配黄金用例见 `packages/match-fixtures/cases.json`。
 
@@ -150,7 +155,10 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 | `record_generation_feedback` | `projectId`, `accepted`, `aiText`, `humanText?`, `contextExcerpt?` | `PreferenceRule[]` |
 | `list_preferences` | `projectId` | `PreferenceRule[]` |
 | `set_preference_status` | `projectId`, `ruleId`, `disabled` | `PreferenceRule[]` |
-| `list_plugins` | — | `PluginSummary[]`（`runtime` 目前为 `builtin`） |
+| `list_plugins` | — | `PluginSummary[]`（打包项 `runtime` 为 `builtin` 或 `wasm`） |
+| `run_plugin_operation` | `{ pluginId, operation, input }` | `PluginResult`；打包 WASM 在桌面 wasmi 跑；浏览器预览对人名点名走 SDK，其它打包项返回中文占位回执 |
+| `pending_outbox_count` | — | `u32` |
+| `flush_outbox_journal` | — | `{ written, path, note }`；写入应用数据目录 `sync/outbox-journal.jsonl`，不是设备间同步 |
 | `propose_canon` | `chapterId` | `CanonProposal[]`（启发式抽取，非主路径） |
 | `list_canon` | `projectId`, `status?` | `CanonProposal[]` |
 | `review_canon_fact` | `factId`, `accept` | 更新后的 `CanonProposal` |
@@ -160,7 +168,7 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 
 `training.export` 额外字段：`format`（jsonl/sharegpt/alpaca/r1）、`includeMarkup`（默认 true）、`minQuality`（默认 `usable`，丢弃 skip）。返回 `examples`、`dropped`、`qualityCounts`、`protocolVersion`（当前为 2）。每条样本的 `context` 从章首累积思考+正文，不截断。思考里的 `@` 是写作标签（`MarkupRef::Tag`），不是正史实体。写作约定见 [writing-protocol.md](writing-protocol.md)。
 
-前端**只通过** `apps/client/src/api.ts` 的 `libraryApi` 访问作品库、结构、设置、续写、偏好与插件列表。浏览器预览无 Tauri 时使用内存实现。作品库 / 队列 / 编辑会话 / 结构分别在 `hooks/useLibrary.ts`、`hooks/useQueue.ts`、`hooks/useEditorSession.ts`、`hooks/useStructure.ts`。
+前端**只通过** `apps/client/src/api.ts` 的 `libraryApi` 访问作品库、结构、设置、续写、偏好、插件列表、插件运行与 outbox journal。浏览器预览无 Tauri 时使用内存实现。作品库 / 队列 / 编辑会话 / 结构分别在 `hooks/useLibrary.ts`、`hooks/useQueue.ts`、`hooks/useEditorSession.ts`、`hooks/useStructure.ts`。
 
 ## 6. 改接口时的检查表
 

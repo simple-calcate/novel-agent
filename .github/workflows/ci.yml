@@ -64,15 +64,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android
-      - run: rustup target add aarch64-linux-android
-      - run: echo "Android NDK setup and build would go here"
+      - uses: Swatinem/rust-cache@v2
+      - name: Check crates without C dependencies for Android
+        run: |
+          rustup target add aarch64-linux-android
+          cargo check --target aarch64-linux-android \
+            -p novel-domain \
+            -p novel-kernel \
+            -p novel-story-model \
+            -p novel-feedback-memory \
+            -p novel-context-hints
 
   performance-baseline:
     runs-on: ubuntu-latest

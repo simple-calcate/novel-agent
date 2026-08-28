@@ -51,6 +51,10 @@
       },
       "uniqueItems": true
     },
-    "settingsSchema": { "type": "object" }
+    "settingsSchema": { "type": "object" },
+    "wasmBase64": {
+      "type": "string",
+      "description": "Optional WASM module as standard Base64. Desktop runs it in wasmi; Android ignores it."
+    }
   }
 }

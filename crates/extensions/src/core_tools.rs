@@ -55,7 +55,7 @@ impl Tool for RebuildIndexTool {
     }
 
     fn summary(&self) -> &str {
-        "用正史实体重建 FTS 检索索引"
+        "用已接受正史和预先结构条目重建 FTS 检索索引"
     }
 
     async fn execute(&self, input: Value, ctx: &ToolContext<'_>) -> Result<Value, KernelError> {

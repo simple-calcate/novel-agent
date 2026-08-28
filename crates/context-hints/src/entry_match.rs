@@ -10,11 +10,69 @@ pub struct EntryMatch {
 }
 
 const STOPWORDS: &[&str] = &[
-    "然后", "于是", "只是", "可是", "但是", "这时", "此时", "忽然", "突然", "终于", "其实", "因为",
-    "所以", "如果", "虽然", "他们", "她们", "我们", "自己", "这个", "那个", "什么", "没有", "不是",
-    "已经", "还是", "或者", "以及", "里面", "还有", "一个", "没有", "现在", "后来", "开始", "继续",
-    "出现", "时候", "地方", "东西", "补充", "说明", "预先", "设定", "人物", "伏笔", "条目", "终年",
-    "夜晚", "海面", "进来", "出去", "看见", "听到", "知道", "觉得", "走过", "走进", "来到", "抵达",
+    "然后",
+    "于是",
+    "只是",
+    "可是",
+    "但是",
+    "这时",
+    "此时",
+    "忽然",
+    "突然",
+    "终于",
+    "其实",
+    "因为",
+    "所以",
+    "如果",
+    "虽然",
+    "他们",
+    "她们",
+    "我们",
+    "自己",
+    "这个",
+    "那个",
+    "什么",
+    "没有",
+    "不是",
+    "已经",
+    "还是",
+    "或者",
+    "以及",
+    "里面",
+    "还有",
+    "一个",
+    "没有",
+    "现在",
+    "后来",
+    "开始",
+    "继续",
+    "出现",
+    "时候",
+    "地方",
+    "东西",
+    "补充",
+    "说明",
+    "预先",
+    "设定",
+    "人物",
+    "伏笔",
+    "条目",
+    "终年",
+    "夜晚",
+    "海面",
+    "进来",
+    "出去",
+    "看见",
+    "听到",
+    "知道",
+    "觉得",
+    "走过",
+    "走进",
+    "来到",
+    "抵达",
+    "到了",
+    "快到",
+    "快到了",
 ];
 
 const SPLITTERS: &[char] = &[
@@ -123,7 +181,7 @@ pub fn match_story_entry(current: &str, lookback: &str, entry: &StoryEntry) -> O
                 });
             }
         }
-        return None;
+        return retrieve_story_entry(current, entry);
     }
 
     if let Some(hit) = &mut best {
@@ -132,6 +190,77 @@ pub fn match_story_entry(current: &str, lookback: &str, entry: &StoryEntry) -> O
         }
     }
     best
+}
+
+/// 第二级预算：用当前段里的词去条目标题/说明里做词汇检索。
+/// 本地规则没命中时才走到这里；不用模型。
+pub fn retrieve_story_entry(current: &str, entry: &StoryEntry) -> Option<EntryMatch> {
+    let haystack = normalize(&format!(
+        "{} {} {}",
+        entry.title,
+        entry.aliases.join(" "),
+        entry.summary
+    ));
+    let mut matched: Vec<String> = query_tokens(current)
+        .into_iter()
+        .filter(|token| haystack.contains(&normalize(token)))
+        .collect();
+    if matched.is_empty() {
+        return None;
+    }
+    matched.sort_by_key(|token| std::cmp::Reverse(token.chars().count()));
+    matched.dedup();
+    let term = matched[0].as_str();
+    Some(EntryMatch {
+        score: 0.40,
+        reason: format!("检索到「{term}」"),
+    })
+}
+
+fn query_tokens(text: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    for ch in text.chars() {
+        if SPLITTERS.contains(&ch) {
+            push_query_chunk(&mut tokens, &current);
+            current.clear();
+        } else {
+            current.push(ch);
+        }
+    }
+    push_query_chunk(&mut tokens, &current);
+    tokens
+}
+
+fn push_query_chunk(tokens: &mut Vec<String>, chunk: &str) {
+    let chunk = chunk.trim();
+    if chunk.is_empty() {
+        return;
+    }
+    let chars: Vec<char> = chunk.chars().collect();
+    let n = chars.len();
+    if n < 2 {
+        return;
+    }
+    if n <= 12 {
+        accept_query_token(tokens, chunk);
+    }
+    let max_len = n.min(4);
+    for len in 2..=max_len {
+        for start in 0..=n - len {
+            let term: String = chars[start..start + len].iter().collect();
+            accept_query_token(tokens, &term);
+        }
+    }
+}
+
+fn accept_query_token(tokens: &mut Vec<String>, token: &str) {
+    if token.chars().count() < 2 || is_stop(token) {
+        return;
+    }
+    if !tokens.iter().any(|existing| existing == token) {
+        tokens.push(token.to_owned());
+    }
 }
 
 fn consider(best: &mut Option<EntryMatch>, extra: &mut u32, candidate: EntryMatch) {

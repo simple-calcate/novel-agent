@@ -80,4 +80,4 @@ Tauri 命令层只做参数翻译，作品库走 `Workspace`，Agent/队列走 `
 - 第三方可以覆盖任何内置工具/提供方，或注册新的事件订阅者。
 - 队列操作名与工具名统一（`document.save` 等），工作流动作自动路由到工具。
 - 模型 API Key 由 `SecretVault` 保存（系统密钥链，失败则落到应用数据目录 0600 文件），不进 SQLite。见 [ADR 0010](0010-secret-vault.md)。
-- WASM 插件沙箱（ADR 0004 第三层）今后可作为又一个扩展接入 `plugin.operation`。
+- WASM 插件沙箱（ADR 0004 第三层）由 `plugin.operation` 在桌面接入 wasmi；Android 仍走内置执行器。
