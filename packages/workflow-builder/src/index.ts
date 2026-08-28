@@ -79,6 +79,22 @@ export function createSaveCheckWorkflow(id: string): WorkflowDefinition {
   };
 }
 
+/** 手动点播放时跑打包的人名点名。不是可视化编辑器。 */
+export function createNameCountWorkflow(id: string): WorkflowDefinition {
+  return {
+    id,
+    name: "点名当前章",
+    enabled: true,
+    trigger: "manual",
+    conditions: [],
+    actions: [
+      { type: "runPluginOperation", pluginId: "hello-names", operation: "count-names" },
+    ],
+    priority: 40,
+    cooldownMs: 0,
+  };
+}
+
 export function actionToToolId(action: WorkflowAction): string {
   switch (action.type) {
     case "saveDocument":
@@ -103,6 +119,7 @@ export function bundledWorkflowTemplates(): WorkflowDefinition[] {
     createChapterWorkflow("chapter-outline"),
     createParagraphCheckWorkflow("paragraph-check"),
     createSaveCheckWorkflow("save-check"),
+    createNameCountWorkflow("name-count"),
   ];
 }
 

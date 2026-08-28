@@ -131,6 +131,17 @@ describe("memory library", () => {
       names: ["林晚", "雾儿"],
     });
     expect(result.output).toEqual({ counts: { 林晚: 2, 雾儿: 0 } });
+    const sample = await libraryApi.runPluginOperation("hello-names", "count-names", {
+      selection:
+        "林默站在窗前。林默没有再掀第二次。林默把怀表收回衣襟。",
+      names: ["林默"],
+    });
+    expect(sample.output).toEqual({ counts: { 林默: 3 } });
+  });
+
+  it("returns a Chinese placeholder receipt for builtin plugins in the browser preview", async () => {
+    const result = await libraryApi.runPluginOperation("continuity-checker", "check-chapter", {});
+    expect((result.output as { message?: string }).message).toContain("占位回执");
   });
 
   it("reports empty outbox in the browser preview", async () => {

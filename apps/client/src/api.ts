@@ -29,6 +29,8 @@ import {
 } from "./types";
 import { extractMentions } from "./canon/extract";
 import { splitTitleAndAliases, matchStoryEntries } from "./structure/match";
+// 必须静态导入。动态 import 在浏览器里第一次点「运行」会得到 undefined.call。
+import { countNames } from "@novel-agent/plugin-sdk";
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -757,14 +759,13 @@ export const libraryApi = {
     }
     if (pluginId === "hello-names" && operation === "count-names") {
       const payload = (input ?? {}) as { selection?: string; names?: string[] };
-      const { countNames } = await import("@novel-agent/plugin-sdk");
       const result = countNames(payload.selection ?? "", payload.names ?? []);
       return { output: result.output, logs: result.logs ?? ["hello-names"] };
     }
     return {
       output: {
         operation,
-        message: "浏览器预览没有 wasmi。hello-names 用 SDK 的 TypeScript 实现；其它打包项请在桌面运行。",
+        message: "这是内置占位回执，还没有真正执行。浏览器预览只对人名点名走 SDK。",
       },
       logs: ["browser-preview"],
     };

@@ -27,6 +27,9 @@ describe("workflow templates", () => {
   it("maps actions to kernel tool ids", () => {
     expect(actionToToolId({ type: "saveDocument" })).toBe("document.save");
     expect(actionToToolId({ type: "checkContinuity" })).toBe("continuity.check");
+    expect(
+      actionToToolId({ type: "runPluginOperation", pluginId: "hello-names", operation: "count-names" }),
+    ).toBe("plugin.operation");
   });
 
   it("bundled templates are the ones shown in the app", () => {
@@ -35,7 +38,13 @@ describe("workflow templates", () => {
       "chapter.created",
       "paragraph.created",
       "document.saved",
+      "manual",
     ]);
+    expect(bundledWorkflowTemplates().at(-1)?.actions[0]).toEqual({
+      type: "runPluginOperation",
+      pluginId: "hello-names",
+      operation: "count-names",
+    });
   });
 
   it("defineWorkflow rejects empty actions", () => {

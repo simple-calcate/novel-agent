@@ -156,7 +156,7 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 | `list_preferences` | `projectId` | `PreferenceRule[]` |
 | `set_preference_status` | `projectId`, `ruleId`, `disabled` | `PreferenceRule[]` |
 | `list_plugins` | — | `PluginSummary[]`（打包项 `runtime` 为 `builtin` 或 `wasm`） |
-| `run_plugin_operation` | `{ pluginId, operation, input }` | `PluginResult`；打包 WASM 在桌面 wasmi 跑，浏览器预览对 hello-names 走 SDK |
+| `run_plugin_operation` | `{ pluginId, operation, input }` | `PluginResult`；打包 WASM 在桌面 wasmi 跑；浏览器预览对人名点名走 SDK，其它打包项返回中文占位回执 |
 | `pending_outbox_count` | — | `u32` |
 | `flush_outbox_journal` | — | `{ written, path, note }`；写入应用数据目录 `sync/outbox-journal.jsonl`，不是设备间同步 |
 | `propose_canon` | `chapterId` | `CanonProposal[]`（启发式抽取，非主路径） |

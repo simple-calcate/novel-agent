@@ -1460,6 +1460,30 @@ body {
   gap: 8px;
 }
 
+.plugin-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+.plugin-badge.wasm {
+  color: var(--green);
+  background: rgba(110, 231, 200, 0.12);
+}
+
+.plugin-list li .plugin-badge.wasm {
+  color: var(--green);
+}
+
+.plugin-badge.builtin {
+  color: var(--text-muted);
+  background: var(--bg-hover);
+}
+
 .plugin-names {
   display: flex;
   flex-direction: column;
@@ -1514,9 +1538,67 @@ body {
   margin-bottom: 4px;
 }
 
-.workflow-desc {
+.workflow-desc,
+.workflow-trigger {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.workflow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.workflow-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.workflow-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.workflow-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.workflow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.workflow-actions span {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--bg-hover);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+.workflow-run-note {
+  margin-bottom: 12px;
+}
+
+.jobs-heading {
+  font-size: 13px;
+  margin: 4px 0 10px;
 }
 
 .outbox-journal {

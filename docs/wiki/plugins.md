@@ -21,7 +21,7 @@ export const idle = defineWorkflow({
 });
 ```
 
-模板还在 `createIdleWorkflow` / `createChapterWorkflow`。应用里工作流页列出 MIT 包的 `bundledWorkflowTemplates()`，点播放会入队模板动作。可视化编辑器还没有，所以没有「新建」。
+模板还在 `createIdleWorkflow` / `createChapterWorkflow` / `createNameCountWorkflow`。应用里工作流页列出 MIT 包的 `bundledWorkflowTemplates()`，并显示每条模板会做什么。点播放：队列类动作入队；「点名当前章」立刻对人名点名。可视化编辑器还没有，所以没有「新建」。
 
 ## 要自定义操作：清单 + 沙箱
 
