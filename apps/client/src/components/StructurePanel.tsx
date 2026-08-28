@@ -33,11 +33,38 @@ export function StructurePanel({ disabled, busy, error, entries, onCreate, onDel
 
   return (
     <div className="panel-content">
-      <h3>结构</h3>
+      <h3>结构{entries.length > 0 ? `（${entries.length}）` : ""}</h3>
       <p className="canon-lead">
         预先写好人物、设定和伏笔。写作时按名称、别名和设定关键词匹配当前段落；本地没命中时再用这段里的词去说明里检索。
       </p>
       {error && <div className="tree-empty">{error}</div>}
+
+      {entries.length === 0 && (
+        <div className="empty-state">还没有结构。先添加人物、设定或伏笔。</div>
+      )}
+      {KIND_ORDER.map((group) => {
+        const items = entries.filter((entry) => entry.kind === group);
+        if (items.length === 0) return null;
+        return (
+          <section key={group} className="structure-group">
+            <h4 className="structure-group-title">{KIND_LABELS[group]}</h4>
+            {items.map((entry) => (
+              <div key={entry.id} className="context-card canon-card">
+                <div className="context-card-title">
+                  {entry.title}
+                  {entry.aliases?.length > 0 && (
+                    <span className="canon-kind">{entry.aliases.join("、")}</span>
+                  )}
+                  <button className="icon-button" title="删除" onClick={() => onDelete(entry)}>
+                    <X size={12} />
+                  </button>
+                </div>
+                {entry.summary && <p>{entry.summary}</p>}
+              </div>
+            ))}
+          </section>
+        );
+      })}
 
       <div className="structure-form">
         <div className="structure-kinds">
@@ -78,33 +105,6 @@ export function StructurePanel({ disabled, busy, error, entries, onCreate, onDel
           添加
         </button>
       </div>
-
-      {entries.length === 0 && (
-        <div className="empty-state">还没有结构。先添加人物、设定或伏笔。</div>
-      )}
-      {KIND_ORDER.map((group) => {
-        const items = entries.filter((entry) => entry.kind === group);
-        if (items.length === 0) return null;
-        return (
-          <section key={group} className="structure-group">
-            <h4 className="structure-group-title">{KIND_LABELS[group]}</h4>
-            {items.map((entry) => (
-              <div key={entry.id} className="context-card canon-card">
-                <div className="context-card-title">
-                  {entry.title}
-                  {entry.aliases?.length > 0 && (
-                    <span className="canon-kind">{entry.aliases.join("、")}</span>
-                  )}
-                  <button className="icon-button" title="删除" onClick={() => onDelete(entry)}>
-                    <X size={12} />
-                  </button>
-                </div>
-                {entry.summary && <p>{entry.summary}</p>}
-              </div>
-            ))}
-          </section>
-        );
-      })}
     </div>
   );
 }
