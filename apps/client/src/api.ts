@@ -18,6 +18,7 @@ import {
   LibrarySnapshot,
   ModelConfig,
   PluginSummary,
+  PluginRunResult,
   OutboxFlushResult,
   PreferenceRule,
   Project,
@@ -721,6 +722,13 @@ export const libraryApi = {
         operations: ["check-chapter"],
       },
       {
+        id: "hello-names",
+        name: "人名点名",
+        version: "0.1.0",
+        runtime: "wasm",
+        operations: ["count-names"],
+      },
+      {
         id: "summary-extractor",
         name: "章节摘要与实体抽取",
         version: "0.1.0",
@@ -735,6 +743,31 @@ export const libraryApi = {
         operations: ["continue-scene"],
       },
     ];
+  },
+
+  async runPluginOperation(
+    pluginId: string,
+    operation: string,
+    input: unknown,
+  ): Promise<PluginRunResult> {
+    if (isTauriRuntime()) {
+      return command<PluginRunResult>("run_plugin_operation", {
+        input: { pluginId, operation, input },
+      });
+    }
+    if (pluginId === "hello-names" && operation === "count-names") {
+      const payload = (input ?? {}) as { selection?: string; names?: string[] };
+      const { countNames } = await import("@novel-agent/plugin-sdk");
+      const result = countNames(payload.selection ?? "", payload.names ?? []);
+      return { output: result.output, logs: result.logs ?? ["hello-names"] };
+    }
+    return {
+      output: {
+        operation,
+        message: "浏览器预览没有 wasmi。hello-names 用 SDK 的 TypeScript 实现；其它打包项请在桌面运行。",
+      },
+      logs: ["browser-preview"],
+    };
   },
 
   async pendingOutboxCount(): Promise<number> {

@@ -1,5 +1,9 @@
+import { FileDown, Play, Workflow } from "lucide-react";
 import { useEffect, useState } from "react";
-import { FileDown, Play, Plus, Workflow } from "lucide-react";
+import {
+  actionToToolId,
+  bundledWorkflowTemplates,
+} from "@novel-agent/workflow-builder";
 import { libraryApi } from "../api";
 
 interface Props {
@@ -8,12 +12,7 @@ interface Props {
   onRun: (operation: string, label: string) => void;
 }
 
-const templates: Array<{ label: string; trigger: string; operation: string }> = [
-  { label: "停笔后自动保存并刷新索引", trigger: "editor.idle", operation: "index.rebuild" },
-  { label: "新章节生成大纲草稿", trigger: "chapter.created", operation: "agent.continuation" },
-  { label: "新段落超过 200 字时检查设定", trigger: "paragraph.created", operation: "continuity.check" },
-  { label: "保存后运行连续性检查", trigger: "document.saved", operation: "continuity.check" },
-];
+const templates = bundledWorkflowTemplates();
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "排队中",
@@ -64,11 +63,11 @@ export function WorkflowPanel({ jobs, queueReady, onRun }: Props) {
     <div className="panel-content">
       <div className="panel-heading">
         <h3>工作流</h3>
-        <button className="mini-button">
-          <Plus size={12} />
-          新建
-        </button>
       </div>
+      <p className="panel-muted">
+        模板来自 MIT 包 <code>@novel-agent/workflow-builder</code>
+        。可视化编辑器还没有；点播放会按顺序入队模板里的动作。
+      </p>
 
       <div className="outbox-journal">
         <div className="outbox-journal-copy">
@@ -84,18 +83,22 @@ export function WorkflowPanel({ jobs, queueReady, onRun }: Props) {
 
       <div className="workflow-list">
         {templates.map((template) => (
-          <div key={template.label} className="workflow-item">
+          <div key={template.id} className="workflow-item">
             <div className="workflow-icon">
               <Workflow size={14} />
             </div>
             <div className="workflow-body">
-              <div className="workflow-name">{template.label}</div>
+              <div className="workflow-name">{template.name}</div>
               <div className="workflow-trigger">{template.trigger}</div>
             </div>
             <button
               className="mini-button"
-              onClick={() => onRun(template.operation, template.label)}
-              title="立即运行"
+              onClick={() => {
+                for (const action of template.actions) {
+                  onRun(actionToToolId(action), template.name);
+                }
+              }}
+              title="立即运行模板中的动作"
             >
               <Play size={12} />
             </button>

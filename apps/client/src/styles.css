@@ -1453,6 +1453,46 @@ body {
   font-style: normal;
 }
 
+.plugin-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.plugin-names {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 10px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.plugin-names input {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 6px 8px;
+}
+
+.plugin-result {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.plugin-error {
+  margin: 10px 0 0;
+  color: var(--danger, #c45c5c);
+  font-size: 12px;
+}
+
 /* Workflow Panel */
 .workflow-template {
   background: var(--bg-elevated);

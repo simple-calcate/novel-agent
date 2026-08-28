@@ -14,6 +14,8 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.6.0",
+    "@novel-agent/plugin-sdk": "workspace:*",
+    "@novel-agent/workflow-builder": "workspace:*",
     "@tiptap/core": "^2.11.7",
     "@tiptap/extension-placeholder": "^2.11.7",
     "@tiptap/react": "^2.11.7",

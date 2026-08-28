@@ -2,8 +2,8 @@ use novel_automation::TypingSession;
 use novel_domain::{
     Annotation, BlockId, Book, BookId, CanonProposal, Chapter, ChapterBody, ChapterId,
     ContentBlock, ContentPatch, DomainEvent, EventId, EventSource, FactId, FactStatus, JobView,
-    LibrarySnapshot, PluginSummary, Project, ProjectId, Revision, Scene, SceneId, StoryEntry,
-    StoryEntryKind, Volume, VolumeId, EVENT_SCHEMA_VERSION,
+    LibrarySnapshot, PluginResult, PluginSummary, Project, ProjectId, Revision, Scene, SceneId,
+    StoryEntry, StoryEntryKind, Volume, VolumeId, EVENT_SCHEMA_VERSION,
 };
 use novel_extensions::{BuiltinsExtension, OutboxFlushResult, SecretVault, Workspace};
 use novel_kernel::{Kernel, ProviderConfig, ToolDescriptor};
@@ -770,6 +770,27 @@ fn list_plugins(state: State<'_, AppState>) -> CommandResult<Vec<PluginSummary>>
     CommandResult::ok(workspace(&state).list_plugins())
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RunPluginInput {
+    plugin_id: String,
+    operation: String,
+    #[serde(default)]
+    input: Value,
+}
+
+#[tauri::command]
+fn run_plugin_operation(
+    state: State<'_, AppState>,
+    input: RunPluginInput,
+) -> CommandResult<PluginResult> {
+    CommandResult::from_result(workspace(&state).run_plugin_operation(
+        &input.plugin_id,
+        &input.operation,
+        input.input,
+    ))
+}
+
 #[tauri::command]
 fn pending_outbox_count(state: State<'_, AppState>) -> CommandResult<u32> {
     CommandResult::from_result(workspace(&state).pending_outbox_count())
@@ -1264,6 +1285,7 @@ pub fn run() {
             list_preferences,
             set_preference_status,
             list_plugins,
+            run_plugin_operation,
             pending_outbox_count,
             flush_outbox_journal,
         ])

@@ -9,9 +9,9 @@ use crate::util::{storage, with_repository};
 use novel_domain::{
     Annotation, Book, BookId, CanonProposal, Chapter, ChapterBody, ChapterId, ContentBlock,
     ContentPatch, DomainEvent, FactId, FactStatus, Job, JobId, JobStatus, JobView, LibrarySnapshot,
-    PluginSummary, PreferenceRule, PreferenceRuleId, PreferenceScope, PreferenceStatus, Project,
-    ProjectId, ProposalId, RejectionReason, Revision, Scene, SceneId, StoryEntry, StoryEntryKind,
-    Volume, VolumeId,
+    PluginResult, PluginSummary, PreferenceRule, PreferenceRuleId, PreferenceScope,
+    PreferenceStatus, Project, ProjectId, ProposalId, RejectionReason, Revision, Scene, SceneId,
+    StoryEntry, StoryEntryKind, Volume, VolumeId,
 };
 use novel_kernel::{AgentSpec, DispatchSummary, Kernel, KernelError, ProviderConfig};
 use novel_storage::{StorageError, SETTING_ACTIVE_PROJECT};
@@ -681,6 +681,16 @@ impl<'a> Workspace<'a> {
 
     pub fn list_plugins(&self) -> Vec<PluginSummary> {
         novel_plugin_host::list_bundled_plugins()
+    }
+
+    pub fn run_plugin_operation(
+        &self,
+        plugin_id: &str,
+        operation: &str,
+        input: Value,
+    ) -> Result<PluginResult, WorkspaceError> {
+        novel_plugin_host::execute_bundled(plugin_id, operation, input)
+            .map_err(|error| WorkspaceError::Message(error.to_string()))
     }
 
     pub fn pending_outbox_count(&self) -> Result<u32, WorkspaceError> {

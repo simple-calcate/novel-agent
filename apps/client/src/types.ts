@@ -168,6 +168,11 @@ export interface PluginSummary {
   operations: string[];
 }
 
+export interface PluginRunResult {
+  output: unknown;
+  logs: string[];
+}
+
 export interface OutboxFlushResult {
   written: number;
   path: string;

@@ -21,7 +21,7 @@ export const idle = defineWorkflow({
 });
 ```
 
-模板还在 `createIdleWorkflow` / `createChapterWorkflow`。应用里工作流页目前是内置模板，可视化编辑器还没有。
+模板还在 `createIdleWorkflow` / `createChapterWorkflow`。应用里工作流页列出 MIT 包的 `bundledWorkflowTemplates()`，点播放会入队模板动作。可视化编辑器还没有，所以没有「新建」。
 
 ## 要自定义操作：清单 + 沙箱
 
@@ -76,6 +76,6 @@ const wasm = await compileGuest("examples/hello-names.ts");
 console.log(packPlugin(helloNames, wasm));
 ```
 
-Guest 入口示例：`packages/plugin-compile/examples/hello-names.ts`。可复用 `assembly/execute.ts` 与 `assembly/json.ts`。语法是 AssemblyScript，不是完整 TypeScript（没有 DOM、没有 npm 包）。wasmi 回归固件在 `crates/plugin-host/tests/fixtures/hello-names.wasm`，改 guest 后重新 `compile:hello-names` 再拷过去。
+Guest 入口示例：`packages/plugin-compile/examples/hello-names.ts`。可复用 `assembly/execute.ts` 与 `assembly/json.ts`。语法是 AssemblyScript，不是完整 TypeScript（没有 DOM、没有 npm 包）。打包结果在 `plugins/hello-names/plugin.json`（含 `wasmBase64`），改 guest 后重新 `compile:hello-names`。软件里点「插件」→「人名点名」→「运行」，会对当前正文统计人名。
 
 签名与商店见阶段 3。多数人仍应只用 `defineWorkflow`，不必写 guest。

@@ -53,6 +53,59 @@ export function createChapterWorkflow(id: string): WorkflowDefinition {
   };
 }
 
+export function createParagraphCheckWorkflow(id: string): WorkflowDefinition {
+  return {
+    id,
+    name: "新段落超过 200 字时检查设定",
+    enabled: true,
+    trigger: "paragraph.created",
+    conditions: [{ path: "wordCount", operator: "gte", value: 200 }],
+    actions: [{ type: "checkContinuity" }],
+    priority: 80,
+    cooldownMs: 10_000,
+  };
+}
+
+export function createSaveCheckWorkflow(id: string): WorkflowDefinition {
+  return {
+    id,
+    name: "保存后运行连续性检查",
+    enabled: true,
+    trigger: "document.saved",
+    conditions: [],
+    actions: [{ type: "checkContinuity" }],
+    priority: 90,
+    cooldownMs: 5000,
+  };
+}
+
+export function actionToToolId(action: WorkflowAction): string {
+  switch (action.type) {
+    case "saveDocument":
+      return "document.save";
+    case "rebuildIndex":
+      return "index.rebuild";
+    case "checkContinuity":
+      return "continuity.check";
+    case "generateContinuation":
+    case "runAgent":
+      return "agent.continuation";
+    case "createBackup":
+      return "backup.create";
+    case "runPluginOperation":
+      return "plugin.operation";
+  }
+}
+
+export function bundledWorkflowTemplates(): WorkflowDefinition[] {
+  return [
+    createIdleWorkflow("idle-save"),
+    createChapterWorkflow("chapter-outline"),
+    createParagraphCheckWorkflow("paragraph-check"),
+    createSaveCheckWorkflow("save-check"),
+  ];
+}
+
 export class WorkflowDefinitionError extends Error {
   constructor(message: string) {
     super(message);

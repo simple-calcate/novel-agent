@@ -257,10 +257,33 @@ fn list_plugins_reads_bundled_manifests() {
     assert!(
         plugins
             .iter()
-            .any(|plugin| plugin.id == "continuity-checker"),
+            .any(|plugin| plugin.id == "continuity-checker" && plugin.runtime == "builtin"),
         "{plugins:?}"
     );
-    assert!(plugins.iter().all(|plugin| plugin.runtime == "builtin"));
+    assert!(
+        plugins
+            .iter()
+            .any(|plugin| plugin.id == "hello-names" && plugin.runtime == "wasm"),
+        "{plugins:?}"
+    );
+}
+
+#[test]
+fn run_plugin_counts_names_in_wasm_sandbox() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let result = workspace
+        .run_plugin_operation(
+            "hello-names",
+            "count-names",
+            serde_json::json!({
+                "selection": "林晚走进雾港，林晚没有回头",
+                "names": ["林晚", "雾儿"]
+            }),
+        )
+        .unwrap();
+    assert_eq!(result.output["counts"]["林晚"], 2);
+    assert_eq!(result.output["counts"]["雾儿"], 0);
 }
 
 #[test]

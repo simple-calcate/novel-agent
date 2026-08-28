@@ -123,6 +123,16 @@ describe("memory library", () => {
     expect(disabled[0].status).toBe("disabled");
   });
 
+  it("lists bundled plugins and counts names in the browser preview", async () => {
+    const plugins = await libraryApi.listPlugins();
+    expect(plugins.some((plugin) => plugin.id === "hello-names")).toBe(true);
+    const result = await libraryApi.runPluginOperation("hello-names", "count-names", {
+      selection: "林晚走进雾港，林晚没有回头",
+      names: ["林晚", "雾儿"],
+    });
+    expect(result.output).toEqual({ counts: { 林晚: 2, 雾儿: 0 } });
+  });
+
   it("reports empty outbox in the browser preview", async () => {
     expect(await libraryApi.pendingOutboxCount()).toBe(0);
     const flushed = await libraryApi.flushOutboxJournal();

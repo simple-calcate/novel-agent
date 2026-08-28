@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  actionToToolId,
+  bundledWorkflowTemplates,
   createIdleWorkflow,
   createChapterWorkflow,
   defineWorkflow,
@@ -20,6 +22,20 @@ describe("workflow templates", () => {
     expect(wf.trigger).toBe("chapter.created");
     expect(wf.conditions[0].operator).toBe("notEq");
     expect(wf.conditions[0].value).toBe("import");
+  });
+
+  it("maps actions to kernel tool ids", () => {
+    expect(actionToToolId({ type: "saveDocument" })).toBe("document.save");
+    expect(actionToToolId({ type: "checkContinuity" })).toBe("continuity.check");
+  });
+
+  it("bundled templates are the ones shown in the app", () => {
+    expect(bundledWorkflowTemplates().map((item) => item.trigger)).toEqual([
+      "editor.idle",
+      "chapter.created",
+      "paragraph.created",
+      "document.saved",
+    ]);
   });
 
   it("defineWorkflow rejects empty actions", () => {

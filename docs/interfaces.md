@@ -115,12 +115,12 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 - `generate_continuation`
 - `save_model_config` / `load_model_config`
 - `record_generation_feedback` / `list_preference_rules` / `set_preference_status`
-- `list_plugins`
+- `list_plugins` / `run_plugin_operation`
 - `pending_outbox_count` / `flush_outbox_journal`
 - `propose_canon_from_chapter` / `list_canon` / `review_canon_fact`
 - `create_story_entry` / `list_story_entries` / `delete_story_entry`
 
-`LibrarySnapshot`、`ChapterBody`、`JobView`、`CanonProposal`、`StoryEntry`、`Scene`、`PreferenceRule`、`PluginSummary` 定义在 `novel-domain`。
+`LibrarySnapshot`、`ChapterBody`、`JobView`、`CanonProposal`、`StoryEntry`、`Scene`、`PreferenceRule`、`PluginSummary`、`PluginResult` 定义在 `novel-domain`。
 
 产品路径：作者预先添加人物 / 设定 / 伏笔；`context.hints` 按当前段落匹配，结果排在编辑器上方。章内场次是大纲，删场不删正文。启发式抽取仍可用，但 UI 不走这条路径。IPC 形状的黄金样例见 `packages/shared-types/examples.json`。匹配黄金用例见 `packages/match-fixtures/cases.json`。
 
@@ -155,7 +155,8 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 | `record_generation_feedback` | `projectId`, `accepted`, `aiText`, `humanText?`, `contextExcerpt?` | `PreferenceRule[]` |
 | `list_preferences` | `projectId` | `PreferenceRule[]` |
 | `set_preference_status` | `projectId`, `ruleId`, `disabled` | `PreferenceRule[]` |
-| `list_plugins` | — | `PluginSummary[]`（打包项 `runtime` 为 `builtin`） |
+| `list_plugins` | — | `PluginSummary[]`（打包项 `runtime` 为 `builtin` 或 `wasm`） |
+| `run_plugin_operation` | `{ pluginId, operation, input }` | `PluginResult`；打包 WASM 在桌面 wasmi 跑，浏览器预览对 hello-names 走 SDK |
 | `pending_outbox_count` | — | `u32` |
 | `flush_outbox_journal` | — | `{ written, path, note }`；写入应用数据目录 `sync/outbox-journal.jsonl`，不是设备间同步 |
 | `propose_canon` | `chapterId` | `CanonProposal[]`（启发式抽取，非主路径） |
@@ -167,7 +168,7 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 
 `training.export` 额外字段：`format`（jsonl/sharegpt/alpaca/r1）、`includeMarkup`（默认 true）、`minQuality`（默认 `usable`，丢弃 skip）。返回 `examples`、`dropped`、`qualityCounts`、`protocolVersion`（当前为 2）。每条样本的 `context` 从章首累积思考+正文，不截断。思考里的 `@` 是写作标签（`MarkupRef::Tag`），不是正史实体。写作约定见 [writing-protocol.md](writing-protocol.md)。
 
-前端**只通过** `apps/client/src/api.ts` 的 `libraryApi` 访问作品库、结构、设置、续写、偏好、插件列表与 outbox journal。浏览器预览无 Tauri 时使用内存实现。作品库 / 队列 / 编辑会话 / 结构分别在 `hooks/useLibrary.ts`、`hooks/useQueue.ts`、`hooks/useEditorSession.ts`、`hooks/useStructure.ts`。
+前端**只通过** `apps/client/src/api.ts` 的 `libraryApi` 访问作品库、结构、设置、续写、偏好、插件列表、插件运行与 outbox journal。浏览器预览无 Tauri 时使用内存实现。作品库 / 队列 / 编辑会话 / 结构分别在 `hooks/useLibrary.ts`、`hooks/useQueue.ts`、`hooks/useEditorSession.ts`、`hooks/useStructure.ts`。
 
 ## 6. 改接口时的检查表
 

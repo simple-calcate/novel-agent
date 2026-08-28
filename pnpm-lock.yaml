@@ -17,6 +17,12 @@ importers:
 
   apps/client:
     dependencies:
+      '@novel-agent/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@novel-agent/workflow-builder':
+        specifier: workspace:*
+        version: link:../../packages/workflow-builder
       '@tauri-apps/api':
         specifier: ^2.6.0
         version: 2.11.1

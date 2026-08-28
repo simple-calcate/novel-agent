@@ -625,7 +625,16 @@ export function App() {
         onClose={() => setPendingDelete(null)}
         onConfirm={handleDelete}
       />
-      <PluginModal open={pluginOpen} plugins={plugins} onClose={() => setPluginOpen(false)} />
+      <PluginModal
+        open={pluginOpen}
+        plugins={plugins}
+        chapterText={session.chapterText}
+        characterNames={structure.entries
+          .filter((entry) => entry.kind === "character")
+          .flatMap((entry) => [entry.title, ...entry.aliases])
+          .filter(Boolean)}
+        onClose={() => setPluginOpen(false)}
+      />
     </div>
   );
 }

@@ -148,42 +148,18 @@ fn host_does_not_clobber_guest_static_data() {
     assert_eq!(result.output["input"]["hello"], "雾港");
 }
 
-/// 由 `pnpm --filter @novel-agent/plugin-compile compile:hello-names` 生成后拷到此处。
+/// 由 `pnpm --filter @novel-agent/plugin-compile compile:hello-names` 写入 `plugins/hello-names/plugin.json`。
 #[test]
 fn compiled_hello_names_counts_in_wasmi() {
-    let wasm = include_bytes!("fixtures/hello-names.wasm");
-    let plugin = PluginInstance {
-        manifest: PluginManifest {
-            id: "hello-names".into(),
-            name: "人名点名".into(),
-            version: "0.1.0".into(),
-            api_version: 1,
-            platforms: vec![PluginPlatform::Linux],
-            operations: vec![PluginOperation {
-                name: "count-names".into(),
-                input_schema: json!({"type": "object"}),
-                output_schema: json!({"type": "object"}),
-                triggers: vec![],
-            }],
-            requested_capabilities: BTreeSet::from([Capability::ReadSelection, Capability::Log]),
-            settings_schema: json!({}),
-            wasm_base64: Some(encode_bytes(wasm)),
-        },
-        grant: PluginGrant {
-            plugin_id: "hello-names".into(),
-            capabilities: BTreeSet::from([Capability::ReadSelection, Capability::Log]),
-            enabled: true,
-        },
-    };
-    let result = plugin
-        .execute(
-            "count-names",
-            json!({
-                "selection": "林晚走进雾港，林晚没有回头",
-                "names": ["林晚", "雾儿"]
-            }),
-        )
-        .expect("compiled guest");
+    let result = novel_plugin_host::execute_bundled(
+        "hello-names",
+        "count-names",
+        json!({
+            "selection": "林晚走进雾港，林晚没有回头",
+            "names": ["林晚", "雾儿"]
+        }),
+    )
+    .expect("compiled guest");
     assert_eq!(result.output["counts"]["林晚"], 2);
     assert_eq!(result.output["counts"]["雾儿"], 0);
     assert!(result.logs.iter().any(|line| line == "hello-names"));

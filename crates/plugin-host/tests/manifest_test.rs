@@ -56,9 +56,10 @@ fn evaluate_denies_unapproved() {
 #[test]
 fn bundled_plugins_are_embedded() {
     let plugins = novel_plugin_host::list_bundled_plugins();
-    assert_eq!(plugins.len(), 3);
     assert!(plugins
         .iter()
-        .any(|plugin| plugin.id == "continuity-checker"));
-    assert!(plugins.iter().all(|plugin| plugin.runtime == "builtin"));
+        .any(|plugin| plugin.id == "continuity-checker" && plugin.runtime == "builtin"));
+    assert!(plugins
+        .iter()
+        .any(|plugin| plugin.id == "hello-names" && plugin.runtime == "wasm"));
 }
