@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { libraryApi } from "../api";
 import { Book, Chapter, LibrarySnapshot, Project, Scene, Volume } from "../types";
 import { logger } from "../logger";
-import { installSampleChapter } from "../editor/sampleChapter";
+import { installSampleChapter, type InstalledSample } from "../editor/sampleChapter";
 
 export type PromptKind =
   | {
@@ -222,7 +222,7 @@ export function useLibrary() {
     [project, applyLibrary],
   );
 
-  const openSampleChapter = useCallback(async () => {
+  const openSampleChapter = useCallback(async (): Promise<InstalledSample | null> => {
     try {
       const installed = await installSampleChapter();
       const snapshot = await libraryApi.setActiveProject(installed.projectId);
@@ -231,9 +231,11 @@ export function useLibrary() {
       setActiveVolumeId(null);
       setActiveChapter(installed.chapterId);
       setLibraryError(null);
+      return installed;
     } catch (error) {
       logger.error("打开示例章节失败", { error: String(error) });
       setLibraryError(String(error));
+      return null;
     }
   }, [applyLibrary]);
 

@@ -8,19 +8,23 @@ export function useStructure(project: Project | null) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    if (!project) {
-      setEntries([]);
-      return;
-    }
-    try {
-      setEntries(await libraryApi.listStoryEntries(project.id));
-      setError(null);
-    } catch (err) {
-      logger.warn("结构列表拉取失败", { error: String(err) });
-      setError(String(err));
-    }
-  }, [project]);
+  const refresh = useCallback(
+    async (projectId?: string) => {
+      const id = projectId ?? project?.id;
+      if (!id) {
+        setEntries([]);
+        return;
+      }
+      try {
+        setEntries(await libraryApi.listStoryEntries(id));
+        setError(null);
+      } catch (err) {
+        logger.warn("结构列表拉取失败", { error: String(err) });
+        setError(String(err));
+      }
+    },
+    [project],
+  );
 
   useEffect(() => {
     void refresh();

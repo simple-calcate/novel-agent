@@ -111,8 +111,8 @@ export function App() {
 
   async function handleOpenSample(saveCurrent: boolean) {
     if (saveCurrent) await persistChapter();
-    await openSampleChapter();
-    await structure.refresh();
+    const installed = await openSampleChapter();
+    if (installed) await structure.refresh(installed.projectId);
   }
 
   const activeChapterRecord = chapters.find((chapter) => chapter.id === activeChapter);
