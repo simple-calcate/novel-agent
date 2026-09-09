@@ -34,6 +34,29 @@ describe("memory library", () => {
     expect(after.books).toHaveLength(1);
   });
 
+  it("keeps chapter history and diffs two revisions", async () => {
+    const project = await libraryApi.createProject("夜航星图");
+    const book = await libraryApi.createBook(project.id, "卷一");
+    const chapter = await libraryApi.createChapter(project.id, book.id, "第一章");
+
+    await libraryApi.saveChapter(chapter.id, "雾港来客。");
+    await libraryApi.saveChapter(chapter.id, "雾港来客。灯还亮着。");
+    await libraryApi.saveChapter(chapter.id, "雾港来客。灯还亮着。");
+
+    const history = await libraryApi.listChapterRevisions(chapter.id);
+    expect(history.map((item) => item.revision)).toEqual([2, 1]);
+    expect(history[0].charCount).toBeGreaterThan(history[1].charCount);
+
+    const diff = await libraryApi.diffChapterRevisions(chapter.id, 1, 2);
+    expect(diff.summary).toContain("字");
+    expect(diff.insertedChars).toBeGreaterThan(0);
+    expect(diff.lines.some((line) => line.tag === "insert" || line.tag === "delete")).toBe(true);
+
+    const restored = await libraryApi.restoreChapterRevision(chapter.id, 1);
+    expect(restored.text).toBe("雾港来客。");
+    expect(restored.revision).toBe(3);
+  });
+
   it("groups chapters under a volume and ungroups on delete", async () => {
     const project = await libraryApi.createProject("夜航星图");
     const book = await libraryApi.createBook(project.id, "雾港纪事");

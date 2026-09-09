@@ -41,5 +41,30 @@
     "title": "林晚",
     "summary": "雾港来的刀客",
     "aliases": ["雾儿"]
+  },
+  "revisionSummary": {
+    "revision": 2,
+    "createdAt": "2026-01-01T00:00:00Z",
+    "charCount": 12,
+    "preview": "雾港来客。灯还亮着。",
+    "actor": "user"
+  },
+  "revisionDiff": {
+    "chapterId": "44444444-4444-4444-4444-444444444444",
+    "fromRevision": 1,
+    "toRevision": 2,
+    "summary": "+6 字",
+    "insertedChars": 6,
+    "deletedChars": 0,
+    "ratio": 0.67,
+    "lines": [
+      {
+        "tag": "insert",
+        "oldIndex": null,
+        "newIndex": 0,
+        "text": "雾港来客。灯还亮着。",
+        "spans": [{ "tag": "insert", "text": "雾港来客。灯还亮着。" }]
+      }
+    ]
   }
 }

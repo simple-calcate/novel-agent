@@ -2,16 +2,16 @@
 
 这是当前代码的入口。ADR 记录「为什么这样切」，[interfaces.md](../interfaces.md) 记录稳定契约；本手册只写**现在怎么用、怎么改、还缺什么**。实现以代码为准。
 
-文档放在仓库 `docs/wiki/` 里，跟代码一起审、一起发，而不是 GitHub Wiki。改产品行为时先改代码，再改本手册对应页，避免 ADR 与界面各说各话。
+文档放在仓库 `docs/wiki/` 里，跟代码一起审、一起发，而不是 GitHub Wiki。改产品行为时先改代码，再改 [产品](product.md)；新词改 [术语](glossary.md)；落点改 [开发](development.md)。签名改 [interfaces.md](../interfaces.md)，由 `ipc_contract` 与 `generate_handler!` 对齐。避免 ADR 与界面各说各话。
 
 | 页 | 读它为了 |
 |---|---|
-| [产品](product.md) | 作者侧：界面、作品库、预先结构、段落预选、续写与偏好、密钥 |
+| [产品](product.md) | 作者侧：界面、作品库、预先结构、段落预选、修订历史、续写与偏好、密钥 |
 | [作者保证](trust.md) | 稿子在哪、停订能否打开、插件权限 |
 | [写插件](plugins.md) | `definePlugin` / `defineWorkflow` / `compileGuest`；MIT 接口 |
 | [许可](licensing.md) | 宿主专有，SDK MIT |
 | [架构](architecture.md) | 分层、写路径、匹配、outbox、密钥库、调用链 |
-| [开发](development.md) | 怎么跑、测什么、改一处能力动哪些文件 |
+| [开发](development.md) | 怎么跑、测什么、改一处能力动哪些文件；改接口时必看检查表 |
 | [术语](glossary.md) | 作品 / 正史 / 预选条 / Workspace 等容易混的词 |
 | [未做](backlog.md) | 表有了但产品没有、以及不要当小重构的大件 |
 
@@ -29,7 +29,7 @@
 |---|---|
 | [0001](../architecture/adr/0001-local-first.md) | 本地优先，云不是可用性前提 |
 | [0002](../architecture/adr/0002-revision-and-outbox.md) | Revision + 同事务 outbox |
-| [0003](../architecture/adr/0003-story-model.md) | 正史模型仍在库内，**不是**写作主路径 |
+| [0003](../architecture/adr/0003-story-model.md) | 正史模型仍在库内，**不是**写作主路径（产品见 0009） |
 | [0004](../architecture/adr/0004-plugin-sandbox.md) | 插件三层；桌面 wasmi，Android 内置 |
 | [0005](../architecture/adr/0005-context-hints.md) | 编辑器上方浮带；本地匹配 + 词汇检索 |
 | [0006](../architecture/adr/0006-android-strategy.md) | Android 伴侣；CI 检查无 C 依赖 crate |

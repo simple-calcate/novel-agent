@@ -6,6 +6,7 @@ use crate::{
     create_scene, create_story_entry, create_volume, delete_book, delete_chapter, delete_volume,
     editor_tick, emit_domain_event, generate_continuation, install_plugin_manifest, kernel_tools,
     list_canon, list_plugins, list_story_entries, load_chapter, load_library, load_model_config,
+    list_chapter_revisions, diff_chapter_revisions, restore_chapter_revision,
     move_book, pending_outbox_count, propose_canon, rename_book, rename_chapter, rename_project,
     review_canon_fact, run_plugin_operation, run_queue_step, save_chapter, save_model_config,
     AppState, EditorTickInput, HintRequest, ModelConfigInput, NewBookInput, NewChapterInput,
@@ -138,6 +139,20 @@ fn create_project_and_chapter_roundtrip() {
     assert!(saved.ok, "{saved:?}");
     let loaded = load_chapter(state(), chapter_id.clone());
     assert_eq!(loaded.data.unwrap().text, "雾港来客。");
+
+    let history = list_chapter_revisions(state(), chapter_id.clone());
+    assert!(history.ok, "{history:?}");
+    assert_eq!(history.data.as_ref().unwrap().len(), 1);
+
+    let saved_again = save_chapter(state(), chapter_id.clone(), "雾港来客。灯还亮着。".into(), None);
+    assert!(saved_again.ok, "{saved_again:?}");
+    let diff = diff_chapter_revisions(state(), chapter_id.clone(), 1, 2);
+    assert!(diff.ok, "{diff:?}");
+    assert!(diff.data.as_ref().unwrap().diff.inserted_chars > 0);
+
+    let restored = restore_chapter_revision(state(), chapter_id.clone(), 1);
+    assert!(restored.ok, "{restored:?}");
+    assert_eq!(restored.data.unwrap().text, "雾港来客。");
 
     let blocks = vec![
         ContentBlock {

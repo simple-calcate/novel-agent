@@ -41,7 +41,7 @@ UI  ──libraryApi──► Tauri command（只译 JSON）
 | 模块 | 职责 |
 |---|---|
 | `library` | 作品 / 书 / 卷 / 章 / 场 |
-| `revisions` | 修订、补丁、块序列 |
+| `revisions` | 修订快照、补丁、块序列；`list_revisions` / `diff_revisions`（`similar`） |
 | `structure` | `story_entries` 预先结构 |
 | `canon` | 启发式正史候选（非 UI 主路径） |
 | `queue` / `automation` | 任务与工作流 |

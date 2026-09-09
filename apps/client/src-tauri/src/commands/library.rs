@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 use novel_domain::{
     Book, Chapter, ChapterBody, ContentBlock, DomainEvent, EventId, EventSource, LibrarySnapshot,
-    Project, Scene, Volume, EVENT_SCHEMA_VERSION,
+    Project, RevisionDiff, RevisionSummary, Scene, Volume, EVENT_SCHEMA_VERSION,
 };
 
 #[derive(Debug, Deserialize)]
@@ -279,6 +279,51 @@ pub fn save_chapter(
         Err(err) => return CommandResult::error(err),
     };
     CommandResult::from_result(workspace(&state).save_chapter(&id, &text, blocks))
+}
+
+#[tauri::command]
+pub fn list_chapter_revisions(
+    state: State<'_, crate::AppState>,
+    chapter_id: String,
+) -> CommandResult<Vec<RevisionSummary>> {
+    let id = match parse_chapter_id(&chapter_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).list_chapter_revisions(&id))
+}
+
+#[tauri::command]
+pub fn diff_chapter_revisions(
+    state: State<'_, crate::AppState>,
+    chapter_id: String,
+    from_revision: u64,
+    to_revision: u64,
+) -> CommandResult<RevisionDiff> {
+    let id = match parse_chapter_id(&chapter_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).diff_chapter_revisions(
+        &id,
+        novel_domain::Revision(from_revision),
+        novel_domain::Revision(to_revision),
+    ))
+}
+
+#[tauri::command]
+pub fn restore_chapter_revision(
+    state: State<'_, crate::AppState>,
+    chapter_id: String,
+    revision: u64,
+) -> CommandResult<ChapterBody> {
+    let id = match parse_chapter_id(&chapter_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(
+        workspace(&state).restore_chapter_revision(&id, novel_domain::Revision(revision)),
+    )
 }
 
 #[tauri::command]

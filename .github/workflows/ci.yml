@@ -44,6 +44,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r typecheck
+      - run: pnpm --filter @novel-agent/client test
       - run: pnpm -r build
 
   windows-build:

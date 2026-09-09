@@ -67,6 +67,37 @@ fn book_and_chapter_roundtrip() {
 }
 
 #[test]
+fn chapter_history_diff_and_restore() {
+    let kernel = kernel_with_touch();
+    let workspace = Workspace::new(&kernel);
+    let project = workspace.create_project("作品").unwrap();
+    let book = workspace.create_book(&project.id, "卷一", "", 0).unwrap();
+    let chapter = workspace
+        .create_chapter(&project.id, &book.id.to_string(), "第一章", 0, None)
+        .unwrap();
+    workspace
+        .save_chapter(&chapter.id, "雾港来客。", None)
+        .unwrap();
+    workspace
+        .save_chapter(&chapter.id, "雾港来客。灯还亮着。", None)
+        .unwrap();
+
+    let listed = workspace.list_chapter_revisions(&chapter.id).unwrap();
+    assert_eq!(listed.len(), 2);
+
+    let diff = workspace
+        .diff_chapter_revisions(&chapter.id, novel_domain::Revision(1), novel_domain::Revision(2))
+        .unwrap();
+    assert!(diff.diff.inserted_chars > 0);
+
+    let restored = workspace
+        .restore_chapter_revision(&chapter.id, novel_domain::Revision(1))
+        .unwrap();
+    assert_eq!(restored.text, "雾港来客。");
+    assert_eq!(restored.revision, 3);
+}
+
+#[test]
 fn volume_groups_chapters_in_snapshot() {
     let kernel = kernel_with_touch();
     let workspace = Workspace::new(&kernel);

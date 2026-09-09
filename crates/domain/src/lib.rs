@@ -6,6 +6,7 @@
 
 pub mod actor;
 pub mod content;
+pub mod diff;
 pub mod events;
 pub mod ids;
 pub mod jobs;
@@ -17,6 +18,7 @@ pub mod work;
 
 pub use actor::*;
 pub use content::*;
+pub use diff::*;
 pub use events::*;
 pub use ids::*;
 pub use jobs::*;

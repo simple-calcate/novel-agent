@@ -343,6 +343,54 @@ impl<'a> Workspace<'a> {
         })?)
     }
 
+    pub fn list_chapter_revisions(
+        &self,
+        chapter_id: &ChapterId,
+    ) -> Result<Vec<novel_domain::RevisionSummary>, WorkspaceError> {
+        Ok(self
+            .handle()?
+            .execute(|repository| repository.list_revisions(chapter_id))?)
+    }
+
+    pub fn diff_chapter_revisions(
+        &self,
+        chapter_id: &ChapterId,
+        from: Revision,
+        to: Revision,
+    ) -> Result<novel_domain::RevisionDiff, WorkspaceError> {
+        Ok(self
+            .handle()?
+            .execute(|repository| repository.diff_revisions(chapter_id, from, to))?)
+    }
+
+    /// 把某次历史修订再存成新版本，不改写已有行。
+    pub fn restore_chapter_revision(
+        &self,
+        chapter_id: &ChapterId,
+        revision: Revision,
+    ) -> Result<ChapterBody, WorkspaceError> {
+        Ok(self.handle()?.execute(|repository| {
+            let current = repository.current_revision(chapter_id)?;
+            if revision.0 != 0 && revision.0 > current.0 {
+                return Err(novel_domain::DomainError::NotFound(format!(
+                    "revision {} of chapter {chapter_id}",
+                    revision.0
+                ))
+                .into());
+            }
+            let text = repository.chapter_text_or_empty(chapter_id, revision)?;
+            match repository.block_sequence(chapter_id, revision)? {
+                Some(sequence) => {
+                    repository.save_block_sequence(chapter_id, &sequence.blocks)?;
+                }
+                None => {
+                    repository.save_chapter_snapshot(chapter_id, &text, "user")?;
+                }
+            }
+            read_chapter_body(repository, chapter_id)
+        })?)
+    }
+
     pub fn rename_project(
         &self,
         project_id: &ProjectId,

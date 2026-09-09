@@ -14,6 +14,7 @@ import {
   Settings,
   Sparkles,
   Terminal,
+  History,
 } from "lucide-react";
 import { libraryApi } from "./api";
 import { Editor, AIPreview } from "./components/Editor";
@@ -28,6 +29,7 @@ import { ConfirmDialog, TreeItemActions } from "./components/LibraryActions";
 import { SceneStrip } from "./components/SceneStrip";
 import { PreferencePanel } from "./components/PreferencePanel";
 import { PluginModal } from "./components/PluginModal";
+import { HistoryPanel } from "./components/HistoryPanel";
 import { logger } from "./logger";
 import { useLibrary } from "./hooks/useLibrary";
 import { useQueue } from "./hooks/useQueue";
@@ -43,6 +45,7 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [logPanelOpen, setLogPanelOpen] = useState(false);
   const [pluginOpen, setPluginOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [plugins, setPlugins] = useState<PluginSummary[]>([]);
   const library = useLibrary();
   const {
@@ -102,6 +105,8 @@ export function App() {
     hintPrefs,
     pinHint,
     ignoreHint,
+    editorNonce,
+    applyChapterBody,
   } = session;
 
   const pluginCharacterNames = uniqueNames([
@@ -378,7 +383,17 @@ export function App() {
           <div className="chapter-title">
             <BookOpen size={16} />
             <span>{activeChapterRecord?.title ?? "未选择章节"}</span>
-            <span className="revision-badge">R{revision}</span>
+            <button
+              className={`revision-badge ${historyOpen ? "active" : ""}`}
+              title="查看修订历史"
+              disabled={!activeChapter}
+              onClick={() => {
+                void persistChapter().then(() => setHistoryOpen(true));
+              }}
+            >
+              <History size={12} />
+              R{revision}
+            </button>
           </div>
           <div className="topbar-actions">
             <button
@@ -440,7 +455,7 @@ export function App() {
               )}
               <ErrorBoundary label="编辑器">
                 <Editor
-                  key={activeChapter}
+                  key={`${activeChapter}:${editorNonce}`}
                   initialText={chapterText}
                   initialBlocks={chapterBlocks}
                   projectId={project?.id}
@@ -606,6 +621,20 @@ export function App() {
       />
 
       <LogPanel open={logPanelOpen} onClose={() => setLogPanelOpen(false)} />
+
+      <HistoryPanel
+        open={historyOpen}
+        chapterId={activeChapter}
+        chapterTitle={activeChapterRecord?.title}
+        currentRevision={revision}
+        onClose={() => setHistoryOpen(false)}
+        onRestore={async (target) => {
+          if (!activeChapter) return;
+          await persistChapter();
+          const body = await libraryApi.restoreChapterRevision(activeChapter, target);
+          applyChapterBody(body);
+        }}
+      />
 
       <CreateDialog
         open={prompt !== null}

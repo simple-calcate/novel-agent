@@ -22,6 +22,8 @@ import {
   OutboxFlushResult,
   PreferenceRule,
   Project,
+  RevisionDiff,
+  RevisionSummary,
   Scene,
   StoryEntry,
   StoryEntryKind,
@@ -29,6 +31,7 @@ import {
 } from "./types";
 import { extractMentions } from "./canon/extract";
 import { splitTitleAndAliases, matchStoryEntries } from "./structure/match";
+import { previewText, revisionDiff } from "./editor/textDiff";
 // 必须静态导入。动态 import 在浏览器里第一次点「运行」会得到 undefined.call。
 import { countNames } from "@novel-agent/plugin-sdk";
 
@@ -44,11 +47,20 @@ async function command<T>(name: string, args?: Record<string, unknown>): Promise
   return result.data as T;
 }
 
+interface MemoryRevision {
+  revision: number;
+  createdAt: string;
+  text: string;
+  blocks: ContentBlock[];
+  actor: string;
+}
+
 interface MemoryState {
   projects: Project[];
   books: Book[];
   chapters: Chapter[];
   texts: Record<string, ChapterBody>;
+  history: Record<string, MemoryRevision[]>;
   activeProjectId: string | undefined;
   canon: CanonProposal[];
   story: StoryEntry[];
@@ -63,6 +75,7 @@ const memory: MemoryState = {
   books: [],
   chapters: [],
   texts: {},
+  history: {},
   activeProjectId: undefined,
   canon: [],
   story: [],
@@ -110,6 +123,7 @@ export function resetMemoryLibrary(): void {
   memory.books = [];
   memory.chapters = [];
   memory.texts = {};
+  memory.history = {};
   memory.activeProjectId = undefined;
   memory.canon = [];
   memory.story = [];
@@ -245,7 +259,64 @@ export const libraryApi = {
     memory.texts[chapterId] = body;
     const chapter = memory.chapters.find((item) => item.id === chapterId);
     if (chapter) chapter.currentRevision = revision;
+    if (revision !== previous.revision) {
+      const snapshots = memory.history[chapterId] ?? [];
+      snapshots.push({
+        revision,
+        createdAt: nowIso(),
+        text,
+        blocks: body.blocks.map((block) => ({ ...block, markup: [...block.markup] })),
+        actor: "user",
+      });
+      memory.history[chapterId] = snapshots;
+    }
     return body;
+  },
+
+  async listChapterRevisions(chapterId: string): Promise<RevisionSummary[]> {
+    if (isTauriRuntime()) {
+      return command<RevisionSummary[]>("list_chapter_revisions", { chapterId });
+    }
+    const snapshots = memory.history[chapterId] ?? [];
+    return snapshots
+      .slice()
+      .reverse()
+      .map((item) => ({
+        revision: item.revision,
+        createdAt: item.createdAt,
+        charCount: [...item.text].length,
+        preview: previewText(item.text),
+        actor: item.actor,
+      }));
+  },
+
+  async diffChapterRevisions(
+    chapterId: string,
+    fromRevision: number,
+    toRevision: number,
+  ): Promise<RevisionDiff> {
+    if (isTauriRuntime()) {
+      return command<RevisionDiff>("diff_chapter_revisions", {
+        chapterId,
+        fromRevision,
+        toRevision,
+      });
+    }
+    const oldText = memoryTextAt(chapterId, fromRevision);
+    const newText = memoryTextAt(chapterId, toRevision);
+    return revisionDiff(chapterId, fromRevision, toRevision, oldText, newText);
+  },
+
+  async restoreChapterRevision(chapterId: string, revision: number): Promise<ChapterBody> {
+    if (isTauriRuntime()) {
+      return command<ChapterBody>("restore_chapter_revision", { chapterId, revision });
+    }
+    if (revision === 0) {
+      return libraryApi.saveChapter(chapterId, "", []);
+    }
+    const snapshot = (memory.history[chapterId] ?? []).find((item) => item.revision === revision);
+    if (!snapshot) throw new Error("修订不存在");
+    return libraryApi.saveChapter(chapterId, snapshot.text, snapshot.blocks);
   },
 
   async renameProject(projectId: string, title: string): Promise<LibrarySnapshot> {
@@ -270,6 +341,7 @@ export const libraryApi = {
     memory.chapters = memory.chapters.filter((chapter) =>
       memory.books.some((book) => book.id === chapter.bookId),
     );
+    pruneChapterData();
     memory.projects = memory.projects.filter((item) => item.id !== projectId);
     memory.canon = memory.canon.filter((item) => item.projectId !== projectId);
     memory.story = memory.story.filter((item) => item.projectId !== projectId);
@@ -296,6 +368,7 @@ export const libraryApi = {
     memory.chapters = memory.chapters.filter((chapter) => chapter.bookId !== bookId);
     memory.volumes = memory.volumes.filter((volume) => volume.bookId !== bookId);
     memory.books = memory.books.filter((book) => book.id !== bookId);
+    pruneChapterData();
     return snapshot(projectId);
   },
 
@@ -332,6 +405,7 @@ export const libraryApi = {
     memory.chapters = memory.chapters.filter((item) => item.id !== chapterId);
     memory.scenes = memory.scenes.filter((item) => item.chapterId !== chapterId);
     delete memory.texts[chapterId];
+    delete memory.history[chapterId];
     return snapshot(projectId);
   },
 
@@ -789,6 +863,24 @@ export const libraryApi = {
     };
   },
 };
+
+function pruneChapterData(): void {
+  const ids = new Set(memory.chapters.map((chapter) => chapter.id));
+  for (const id of Object.keys(memory.texts)) {
+    if (!ids.has(id)) delete memory.texts[id];
+  }
+  for (const id of Object.keys(memory.history)) {
+    if (!ids.has(id)) delete memory.history[id];
+  }
+}
+
+function memoryTextAt(chapterId: string, revision: number): string {
+  if (revision === 0) return "";
+  const stored = (memory.history[chapterId] ?? []).find((item) => item.revision === revision);
+  if (stored) return stored.text;
+  if (memory.texts[chapterId]?.revision === revision) return memory.texts[chapterId].text;
+  return "";
+}
 
 function belongsToProject(rule: PreferenceRule, projectId: string): boolean {
   if (typeof rule.scope === "string") return true;

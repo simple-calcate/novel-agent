@@ -70,9 +70,5 @@ pub fn prompt_prefix(rules: &[PreferenceRule]) -> Option<String> {
 }
 
 fn summarize_diff(ai: &str, human: &str) -> String {
-    format!(
-        "AI 文本 {} 字，人类文本 {} 字",
-        ai.chars().count(),
-        human.chars().count()
-    )
+    novel_domain::summarize_text_diff(ai, human)
 }

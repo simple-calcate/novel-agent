@@ -6,6 +6,8 @@
 | **书 / Book** | 作品下的一本书。 |
 | **卷 / Volume** | 书下的可选分组。删卷不删章。 |
 | **章 / Chapter** | 可修订的正文单位，带单调 `currentRevision`。 |
+| **修订 / Revision** | 章正文的单调版本号。停笔保存且内容有变才递增。点顶栏 `R n` 看历史。 |
+| **修订对比** | 两个修订的正文 diff。桌面用 `similar`（Patience 行级 + 行内高亮），浏览器预览用行级 LCS。恢复某版会再写成新修订，不覆盖旧行。 |
 | **场 / Scene** | 章内大纲标题。删场不删正文。可选 POV 指向人物结构条目。 |
 | **结构 / StoryEntry** | 作者预先写的人物、设定、伏笔。存在 `story_entries`。这是写作主路径。 |
 | **预选条 / ContextRail** | 编辑器上方按当前段落排出的结构卡片。无命中则隐藏。可钉住或忽略。 |
@@ -19,4 +21,4 @@
 | **SecretVault** | API Key 存放处（密钥链或 0600 文件），不进 SQLite。 |
 | **偏好 / PreferenceRule** | 拒绝续写后记下的规则，下次续写进 system prompt。可在 Agent 页停用。 |
 | **浏览器预览** | Vite 前端，内存库，无 Tauri。 |
-| **叠放 PR** | 功能分支互相为 base，最终才进 `main`。面向非 `main` 的 PR 不跑现有 CI workflow。 |
+| **IPC 命令表** | [interfaces.md](../interfaces.md) §5。必须与 `generate_handler!` 一致，由 `ipc_contract` 测试锁定。 |

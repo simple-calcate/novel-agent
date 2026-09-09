@@ -87,6 +87,7 @@ Project（作品） 1—n Book（书） 1—n 可选 Volume（卷） 1—n Chapt
 - `rename_chapter` / `delete_chapter` / `move_chapter(delta)`
 - `save_chapter_snapshot` / `save_block_sequence` / `block_sequence`
 - `chapter_text` / `current_revision` / `commit_patch`
+- `list_revisions` / `diff_revisions` / `chapter_text_or_empty`
 - `propose_canon_mentions` / `list_canon_proposals` / `set_fact_status`
 - `create_story_entry` / `list_story_entries` / `delete_story_entry`
 - `list_canon_entities_for_project` / `list_canon_facts_for_project` / `list_plot_threads_for_project`
@@ -110,6 +111,7 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 
 - `create_project` / `create_book` / `create_volume` / `create_chapter` / `create_scene`
 - `load_library` / `set_active_project` / `load_chapter` / `save_chapter`
+- `list_chapter_revisions` / `diff_chapter_revisions` / `restore_chapter_revision`
 - `rename_*` / `delete_*` / `move_*` / `set_scene_pov`
 - `enqueue_job` / `list_jobs` / `save_setting` / `get_setting`
 - `generate_continuation`
@@ -120,13 +122,15 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 - `propose_canon_from_chapter` / `list_canon` / `review_canon_fact`
 - `create_story_entry` / `list_story_entries` / `delete_story_entry`
 
-`LibrarySnapshot`、`ChapterBody`、`JobView`、`CanonProposal`、`StoryEntry`、`Scene`、`PreferenceRule`、`PluginSummary`、`PluginResult` 定义在 `novel-domain`。
+`LibrarySnapshot`、`ChapterBody`、`JobView`、`CanonProposal`、`StoryEntry`、`Scene`、`PreferenceRule`、`PluginSummary`、`PluginResult`、`RevisionSummary`、`RevisionDiff` 定义在 `novel-domain`。
 
 产品路径：作者预先添加人物 / 设定 / 伏笔；`context.hints` 按当前段落匹配，结果排在编辑器上方。章内场次是大纲，删场不删正文。启发式抽取仍可用，但 UI 不走这条路径。IPC 形状的黄金样例见 `packages/shared-types/examples.json`。匹配黄金用例见 `packages/match-fixtures/cases.json`。
 
 ## 5. 宿主 IPC（Tauri）
 
 统一返回 `{ ok, data, error }`（`CommandResult`），camelCase。
+
+本节表格必须覆盖 `apps/client/src-tauri/src/lib.rs` 里 `generate_handler!` 的全部命令，不多不少。`crates/domain/tests/ipc_contract.rs` 会解析两边并比对。`training.export` 是内核工具，不是 Tauri 命令，写在表后。
 
 | 命令 | 入参 | 出参 |
 |---|---|---|
@@ -139,19 +143,28 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 | `set_active_project` | `projectId` | 同上 |
 | `load_chapter` | `chapterId` | `{ chapterId, revision, text, blocks }` |
 | `save_chapter` | `chapterId`, `text`, `blocks?` | 同上；有 `blocks` 时写入块序列 |
+| `list_chapter_revisions` | `chapterId` | `RevisionSummary[]`（新到旧） |
+| `diff_chapter_revisions` | `chapterId`, `fromRevision`, `toRevision` | `RevisionDiff`（`similar` 行级对比，可含行内 spans；`fromRevision=0` 表示空稿） |
+| `restore_chapter_revision` | `chapterId`, `revision` | `ChapterBody`；把该版再存成新修订，不覆盖旧行 |
 | `rename_project` / `delete_project` | `projectId`（改名另加 `title`） | `LibrarySnapshot` |
 | `rename_book` / `delete_book` / `move_book` | `projectId`, `bookId`（改名加 `title`，移动加 `delta`） | `LibrarySnapshot` |
 | `rename_volume` / `delete_volume` / `move_volume` | `projectId`, `volumeId`（同上） | `LibrarySnapshot` |
 | `rename_scene` / `delete_scene` / `move_scene` / `set_scene_pov` | `projectId`, `sceneId`（改名加 `title`，移动加 `delta`，POV 加 `povEntryId`） | `LibrarySnapshot` |
 | `rename_chapter` / `delete_chapter` / `move_chapter` | `projectId`, `chapterId`（同上） | `LibrarySnapshot` |
-| `enqueue_job` | `{ projectId, operation, payload, priority }` | `{ jobId }` |
-| `run_queue_step` | — | `{ executed, ... }` |
-| `list_jobs` | — | `JobView[]` |
-| `kernel_tools` | — | 工具自描述列表 |
+| `editor_tick` | `{ projectId, chapterId, revision, charsSinceCommit, composing, focused }` | `{ shouldEmitIdle, revision }` |
 | `context_hints` | `projectId`, `chapterId`, `revision`, `nearbyText`, `lookbackText?`, `generation` | `ContextHint[]`（多信号匹配预先结构） |
 | `save_model_config` | provider / baseUrl / model / apiKey? | `{ saved }`；密钥进 `SecretVault`，留空保持原值 |
 | `load_model_config` | — | `{ provider, baseUrl, model, apiKey: "", apiKeySet }` |
 | `generate_continuation` | 章、修订、prompt、config | `ContentPatch`；config 可不带密钥 |
+| `install_plugin_manifest` | `manifestJson` | 走 `plugin.install` 工具 |
+| `commit_annotation` | `Annotation` | `{ saved }` |
+| `emit_domain_event` | `DomainEvent` | `{ recorded, queued }` |
+| `emit_block_mode_changed` | `projectId`, `chapterId`, `mode`, `previousMode`, `blockId?`, `position?` | `{ recorded, queued }`；派发 `block.mode.changed` |
+| `build_context_package` | 章、修订、instruction、场景与钉住/检索/摘要 | 走 `context.assemble` |
+| `enqueue_job` | `{ projectId, operation, payload, priority }` | `{ jobId }` |
+| `run_queue_step` | — | `{ executed, ... }` |
+| `list_jobs` | — | `JobView[]` |
+| `kernel_tools` | — | 工具自描述列表 |
 | `record_generation_feedback` | `projectId`, `accepted`, `aiText`, `humanText?`, `contextExcerpt?` | `PreferenceRule[]` |
 | `list_preferences` | `projectId` | `PreferenceRule[]` |
 | `set_preference_status` | `projectId`, `ruleId`, `disabled` | `PreferenceRule[]` |
@@ -168,11 +181,12 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 
 `training.export` 额外字段：`format`（jsonl/sharegpt/alpaca/r1）、`includeMarkup`（默认 true）、`minQuality`（默认 `usable`，丢弃 skip）。返回 `examples`、`dropped`、`qualityCounts`、`protocolVersion`（当前为 2）。每条样本的 `context` 从章首累积思考+正文，不截断。思考里的 `@` 是写作标签（`MarkupRef::Tag`），不是正史实体。写作约定见 [writing-protocol.md](writing-protocol.md)。
 
-前端**只通过** `apps/client/src/api.ts` 的 `libraryApi` 访问作品库、结构、设置、续写、偏好、插件列表、插件运行与 outbox journal。浏览器预览无 Tauri 时使用内存实现。作品库 / 队列 / 编辑会话 / 结构分别在 `hooks/useLibrary.ts`、`hooks/useQueue.ts`、`hooks/useEditorSession.ts`、`hooks/useStructure.ts`。
+前端作品库 / 结构 / 设置 / 续写 / 偏好 / 修订历史 / 插件 / outbox 走 `apps/client/src/api.ts` 的 `libraryApi`。`editor_tick`、`commit_annotation`、`emit_domain_event`、`emit_block_mode_changed`、`build_context_package` 由编辑器会话直接 `invoke`。浏览器预览无 Tauri 时 `libraryApi` 用内存实现。作品库 / 队列 / 编辑会话 / 结构分别在 `hooks/useLibrary.ts`、`hooks/useQueue.ts`、`hooks/useEditorSession.ts`、`hooks/useStructure.ts`；修订面板在 `components/HistoryPanel.tsx`。
 
 ## 6. 改接口时的检查表
 
-1. 改 domain 字段 → serde camelCase、SQLite 迁移、TS `types.ts`
-2. 改 command 名或字段 → `libraryApi`、`command_tests`、本页表格
+1. 改 domain 字段 → serde camelCase、SQLite 迁移、TS `types.ts`、`packages/shared-types/examples.json`
+2. 改 command 名或字段 → `libraryApi`（若前端要调）、`command_tests`、本页 **§5 表格**（必须与 `generate_handler!` 一致）
 3. 改工具 id → 工作流模板、`OPERATION_LABELS`、本页工具表
-4. `cargo test --workspace` 与 `pnpm --filter @novel-agent/client test`
+4. 产品能看见的行为 → [wiki/product.md](wiki/product.md)；新词 → [wiki/glossary.md](wiki/glossary.md)；落点与前端模块 → [wiki/development.md](wiki/development.md)
+5. `cargo test --workspace`（含 `ipc_contract` 的命令表对齐）与 `pnpm --filter @novel-agent/client test` / `typecheck`

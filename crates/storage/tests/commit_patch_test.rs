@@ -95,6 +95,44 @@ fn library_lists_and_snapshot_roundtrip() {
 }
 
 #[test]
+fn lists_and_diffs_saved_revisions() {
+    let mut repository = Repository::open_in_memory().unwrap();
+    let project = repository.create_project("夜航星图").unwrap();
+    let book = repository
+        .create_book(&project.id, "卷一", "", 1)
+        .unwrap();
+    let chapter = repository
+        .create_chapter(&project.id, &book.id.to_string(), "第一章", 1)
+        .unwrap();
+
+    repository
+        .save_chapter_snapshot(&chapter.id, "雾在潮响前漫进港口。", "user")
+        .unwrap();
+    repository
+        .save_chapter_snapshot(&chapter.id, "雾在潮响前漫进港口。\n林晚站在灯下。", "user")
+        .unwrap();
+
+    let listed = repository.list_revisions(&chapter.id).unwrap();
+    assert_eq!(listed.len(), 2);
+    assert_eq!(listed[0].revision, 2);
+    assert_eq!(listed[1].revision, 1);
+    assert!(listed[0].char_count > listed[1].char_count);
+
+    let diff = repository
+        .diff_revisions(&chapter.id, Revision(1), Revision(2))
+        .unwrap();
+    assert_eq!(diff.from_revision, 1);
+    assert_eq!(diff.to_revision, 2);
+    assert!(diff.diff.inserted_chars > 0);
+    assert!(diff.diff.summary.contains("字"));
+    assert!(diff
+        .diff
+        .lines
+        .iter()
+        .any(|line| line.tag != novel_domain::DiffChangeTag::Equal));
+}
+
+#[test]
 fn rename_delete_and_move_library_items() {
     let repository = Repository::open_in_memory().unwrap();
     let project = repository.create_project("夜航星图").unwrap();

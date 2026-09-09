@@ -49,6 +49,7 @@ export function useEditorSession(options: {
   const [hints, setHints] = useState<ContextHint[]>([]);
   const [aiPreview, setAiPreview] = useState("");
   const [revision, setRevision] = useState(0);
+  const [editorNonce, setEditorNonce] = useState(0);
   const [preferences, setPreferences] = useState<PreferenceRule[]>([]);
   const [modelConfig, setModelConfig] = useState<ModelConfig | null>(null);
   const [hintPrefs, setHintPrefs] = useState<HintPrefs>({ pinned: [], ignored: [] });
@@ -161,6 +162,18 @@ export function useEditorSession(options: {
       logger.warn("保存章节失败", { error: String(error) });
     }
   }, [activeChapter]);
+
+  const applyChapterBody = useCallback(
+    (body: { text: string; blocks?: ContentBlock[]; revision: number }) => {
+      setChapterText(body.text);
+      setChapterBlocks(body.blocks ?? []);
+      draftText.current = body.text;
+      draftBlocks.current = body.blocks ?? [];
+      setRevision(body.revision);
+      setEditorNonce((value) => value + 1);
+    },
+    [],
+  );
 
   const refreshHints = useCallback(
     async (nearbyText: string, lookbackText = "") => {
@@ -280,6 +293,8 @@ export function useEditorSession(options: {
     hintPrefs,
     pinHint,
     ignoreHint,
+    editorNonce,
+    applyChapterBody,
   };
 }
 

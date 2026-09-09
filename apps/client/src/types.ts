@@ -190,3 +190,37 @@ export interface ModelConfig {
 export interface ContinuationPatch {
   operations: Array<{ text?: string }>;
 }
+
+export type DiffChangeTag = "equal" | "delete" | "insert";
+
+export interface RevisionSummary {
+  revision: number;
+  createdAt: string;
+  charCount: number;
+  preview: string;
+  actor?: string;
+}
+
+export interface DiffSpan {
+  tag: DiffChangeTag;
+  text: string;
+}
+
+export interface DiffLine {
+  tag: DiffChangeTag;
+  oldIndex?: number | null;
+  newIndex?: number | null;
+  text: string;
+  spans?: DiffSpan[];
+}
+
+export interface RevisionDiff {
+  chapterId: string;
+  fromRevision: number;
+  toRevision: number;
+  summary: string;
+  insertedChars: number;
+  deletedChars: number;
+  ratio: number;
+  lines: DiffLine[];
+}

@@ -123,6 +123,89 @@ impl Repository {
         Ok(text)
     }
 
+    /// 某修订的正文；修订 0 或不存在的行视为空稿，便于和首版对比。
+    pub fn chapter_text_or_empty(
+        &self,
+        chapter_id: &ChapterId,
+        revision: Revision,
+    ) -> Result<String, StorageError> {
+        if revision.0 == 0 {
+            return Ok(String::new());
+        }
+        Ok(self.chapter_text(chapter_id, revision)?.unwrap_or_default())
+    }
+
+    /// 章节已保存的修订，新到旧。不含尚未落库的 revision 0。
+    pub fn list_revisions(
+        &self,
+        chapter_id: &ChapterId,
+    ) -> Result<Vec<novel_domain::RevisionSummary>, StorageError> {
+        self.current_revision(chapter_id)?;
+        let mut statement = self.connection.prepare(
+            "SELECT r.revision, r.text, r.created_at,
+                    COALESCE((
+                        SELECT actor FROM operation_log
+                        WHERE chapter_id = r.chapter_id AND revision_after = r.revision
+                        ORDER BY id DESC LIMIT 1
+                    ), '')
+             FROM revisions r
+             WHERE r.chapter_id = ?1
+             ORDER BY r.revision DESC",
+        )?;
+        let rows = statement.query_map([chapter_id.to_string()], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })?;
+
+        let mut summaries = Vec::new();
+        for row in rows {
+            let (revision, text, created_at, actor) = row?;
+            summaries.push(novel_domain::RevisionSummary::from_text(
+                revision as u64,
+                super::parse_rfc3339(&created_at),
+                &text,
+                actor,
+            ));
+        }
+        Ok(summaries)
+    }
+
+    /// 用 `similar` 对比两个修订的正文字符串。
+    pub fn diff_revisions(
+        &self,
+        chapter_id: &ChapterId,
+        from: Revision,
+        to: Revision,
+    ) -> Result<novel_domain::RevisionDiff, StorageError> {
+        self.current_revision(chapter_id)?;
+        if from.0 != 0 && self.chapter_text(chapter_id, from)?.is_none() {
+            return Err(DomainError::NotFound(format!(
+                "revision {} of chapter {chapter_id}",
+                from.0
+            ))
+            .into());
+        }
+        if to.0 != 0 && self.chapter_text(chapter_id, to)?.is_none() {
+            return Err(DomainError::NotFound(format!(
+                "revision {} of chapter {chapter_id}",
+                to.0
+            ))
+            .into());
+        }
+        let old = self.chapter_text_or_empty(chapter_id, from)?;
+        let new = self.chapter_text_or_empty(chapter_id, to)?;
+        Ok(novel_domain::RevisionDiff {
+            chapter_id: chapter_id.to_string(),
+            from_revision: from.0,
+            to_revision: to.0,
+            diff: novel_domain::diff_texts(&old, &new),
+        })
+    }
+
     /// 某章节全部操作日志的 project_id（校验日志归属用）。
     pub fn operation_log_project_ids(
         &self,
