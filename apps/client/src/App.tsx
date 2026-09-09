@@ -455,6 +455,7 @@ export function App() {
                   onBlocksChange={(blocks) => {
                     draftBlocks.current = blocks;
                   }}
+                  storyEntries={structure.entries}
                   onIdle={() => {
                     void persistChapter();
                     enqueue("index.rebuild");

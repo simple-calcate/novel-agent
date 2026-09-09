@@ -59,7 +59,21 @@ export function editorToBlocks(editor: Editor): ContentBlock[] {
       let text = "";
       const markup: MarkupRef[] = [];
 
-      const walk = (n: { type?: string; text?: string; attrs?: Record<string, unknown>; marks?: Array<{ type?: string; attrs?: Record<string, unknown> }> }) => {
+      const walk = (n: {
+        type?: string;
+        text?: string;
+        attrs?: Record<string, unknown>;
+        marks?: Array<{ type?: string; attrs?: Record<string, unknown> }>;
+        content?: unknown[];
+      }) => {
+        if (n.type === "markupRef" && n.attrs) {
+          const ref = markupFromAttrs(n.attrs);
+          if (ref) {
+            markup.push(ref);
+            text += markupLabel(ref);
+          }
+          return;
+        }
         if (n.type === "text" && typeof n.text === "string") {
           text += n.text;
           for (const mark of n.marks ?? []) {
@@ -68,13 +82,9 @@ export function editorToBlocks(editor: Editor): ContentBlock[] {
               if (ref) markup.push(ref);
             }
           }
-        } else if (n.type === "markupRef" && n.attrs) {
-          const ref = markupFromAttrs(n.attrs);
-          if (ref) markup.push(ref);
-          if (typeof n.text === "string") text += n.text;
         }
-        for (const child of (n as { content?: typeof n[] }).content ?? []) {
-          walk(child);
+        for (const child of n.content ?? []) {
+          walk(child as typeof n);
         }
       };
       walk(node as never);
@@ -116,18 +126,48 @@ function markupToAttrs(ref: MarkupRef): Record<string, string> {
   }
 }
 
+function labelVariants(label: string): string[] {
+  const variants = new Set([label, label.replace(/：/g, ":"), label.replace(/:/g, "：")]);
+  return [...variants].filter(Boolean);
+}
+
+function findLabel(haystack: string, label: string): { index: number; length: number } | null {
+  for (const variant of labelVariants(label)) {
+    const index = haystack.indexOf(variant);
+    if (index >= 0) return { index, length: variant.length };
+  }
+  return null;
+}
+
 function inlineContent(block: ContentBlock): object[] {
   if (!block.text && block.markup.length === 0) return [];
   if (block.markup.length === 0) {
     return [{ type: "text", text: block.text }];
   }
-  return [
-    {
-      type: "text",
-      text: block.text || markupLabel(block.markup[0]),
-      marks: block.markup.map((ref) => ({ type: "markupRef", attrs: markupToAttrs(ref) })),
-    },
-  ];
+  const pieces: object[] = [];
+  let rest = block.text;
+  const unused = [...block.markup];
+  let i = 0;
+  while (i < unused.length) {
+    const ref = unused[i];
+    if (!ref) break;
+    const found = findLabel(rest, markupLabel(ref));
+    if (!found) {
+      i += 1;
+      continue;
+    }
+    if (found.index > 0) {
+      pieces.push({ type: "text", text: rest.slice(0, found.index) });
+    }
+    pieces.push({ type: "markupRef", attrs: markupToAttrs(ref) });
+    rest = rest.slice(found.index + found.length);
+    unused.splice(i, 1);
+  }
+  if (rest) pieces.push({ type: "text", text: rest });
+  for (const ref of unused) {
+    pieces.push({ type: "markupRef", attrs: markupToAttrs(ref) });
+  }
+  return pieces;
 }
 
 /** 把块序列还原成 Tiptap 文档，供打开章节时注入。 */

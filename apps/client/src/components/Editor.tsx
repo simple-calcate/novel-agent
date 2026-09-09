@@ -31,6 +31,7 @@ import {
   ExportFormat,
 } from "../editor/blocks";
 import { WritingGuide } from "./WritingGuide";
+import { FloatingMenu } from "./FloatingMenu";
 import {
   authorExportSummary,
   countMissingThinking,
@@ -38,8 +39,17 @@ import {
   writerModeFromParent,
   type WriterMode,
 } from "../editor/guide";
-import type { ContentBlock } from "../types";
+import { StoryCatalogContext } from "../editor/StoryCatalog";
+import { filterTagKindLabels } from "../structure/tagCandidates";
+import type { ContentBlock, StoryEntry } from "../types";
 import { logger } from "../logger";
+
+declare global {
+  interface Window {
+    __TAURI_INTERNALS__?: unknown;
+    __editorInsert?: (text: string) => void;
+  }
+}
 
 interface EditorProps {
   onTextChange: (text: string) => void;
@@ -55,12 +65,15 @@ interface EditorProps {
   initialText?: string | undefined;
   initialBlocks?: ContentBlock[] | undefined;
   onBlocksChange?: ((blocks: ContentBlock[]) => void) | undefined;
+  storyEntries?: StoryEntry[];
 }
 
 interface MentionMenuState {
   top: number;
   left: number;
-  anchorFrom: number; // '@' 位置
+  bottom: number;
+  anchorFrom: number;
+  query: string;
 }
 
 const MENTION_ITEMS: Array<{
@@ -69,7 +82,6 @@ const MENTION_ITEMS: Array<{
   label: string;
   desc: string;
   attrs: Record<string, string>;
-  text: string;
 }> = [
   {
     kind: "tag",
@@ -77,7 +89,6 @@ const MENTION_ITEMS: Array<{
     label: "人物",
     desc: "点名角色。写作标签，以后再拆成工具",
     attrs: { kind: "tag", tagKind: "人物", id: "", label: "", note: "" },
-    text: "@人物：",
   },
   {
     kind: "tag",
@@ -85,7 +96,6 @@ const MENTION_ITEMS: Array<{
     label: "伏笔",
     desc: "点一条伏笔。先当标签，不必对上正史库",
     attrs: { kind: "tag", tagKind: "伏笔", id: "", label: "", note: "" },
-    text: "@伏笔：",
   },
   {
     kind: "tag",
@@ -93,7 +103,6 @@ const MENTION_ITEMS: Array<{
     label: "地点",
     desc: "点一个地点",
     attrs: { kind: "tag", tagKind: "地点", id: "", label: "", note: "" },
-    text: "@地点：",
   },
   {
     kind: "tag",
@@ -101,7 +110,6 @@ const MENTION_ITEMS: Array<{
     label: "道具",
     desc: "点一件物件",
     attrs: { kind: "tag", tagKind: "道具", id: "", label: "", note: "" },
-    text: "@道具：",
   },
   {
     kind: "tag",
@@ -109,7 +117,6 @@ const MENTION_ITEMS: Array<{
     label: "势力",
     desc: "点一个组织或势力",
     attrs: { kind: "tag", tagKind: "势力", id: "", label: "", note: "" },
-    text: "@势力：",
   },
   {
     kind: "tag",
@@ -117,7 +124,6 @@ const MENTION_ITEMS: Array<{
     label: "规则",
     desc: "点一条世界规则",
     attrs: { kind: "tag", tagKind: "规则", id: "", label: "", note: "" },
-    text: "@规则：",
   },
 ];
 
@@ -132,6 +138,7 @@ export function Editor({
   initialText = "",
   initialBlocks,
   onBlocksChange,
+  storyEntries = [],
 }: EditorProps) {
   const [wordCount, setWordCount] = useState(0);
   const [thinkingCount, setThinkingCount] = useState(0);
@@ -140,10 +147,15 @@ export function Editor({
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [mention, setMention] = useState<MentionMenuState | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [nearbyText, setNearbyText] = useState("");
   /** 类型标记渐隐动画开关：true 时编辑器内正文/思考/标签按类型着色并逐渐消失 */
   const [flashing, setFlashing] = useState(false);
   const idleTimer = useRef<ReturnType<typeof setTimeout>>();
   const flashTimer = useRef<ReturnType<typeof setTimeout>>();
+  /** 重计算防抖：按键路径只做轻量状态，块转换/训练样例/浮带匹配延迟到停顿后 */
+  const heavyTimer = useRef<ReturnType<typeof setTimeout>>();
+  const nearbyTimer = useRef<ReturnType<typeof setTimeout>>();
   const mounted = useRef(true);
 
   /** 触发一次全编辑器类型着色渐隐（重放：先移除 class，下一帧再加） */
@@ -169,7 +181,7 @@ export function Editor({
         }),
       );
       // 通道 2：后端领域事件 block.mode.changed，驱动工作流任务序列
-      if (projectId && chapterId && (window as any).__TAURI_INTERNALS__) {
+      if (projectId && chapterId && window.__TAURI_INTERNALS__) {
         invoke<{ recorded: boolean; queued: number }>("emit_block_mode_changed", {
           projectId,
           chapterId,
@@ -201,12 +213,39 @@ export function Editor({
   onNearbyChangeRef.current = onNearbyChange;
   const lastNearby = useRef<string | null>(null);
 
+  // onUpdate/onSelectionUpdate 闭包只在 chapterId 变化时重建，用 ref 保持最新值
+  const chapterTitleRef = useRef(chapterTitle);
+  chapterTitleRef.current = chapterTitle;
+  const onTextChangeRef = useRef(onTextChange);
+  onTextChangeRef.current = onTextChange;
+  const onBlocksChangeRef = useRef(onBlocksChange);
+  onBlocksChangeRef.current = onBlocksChange;
+  const mentionRef = useRef(mention);
+  mentionRef.current = mention;
+  const mentionIndexRef = useRef(mentionIndex);
+  mentionIndexRef.current = mentionIndex;
+  const mentionItemsRef = useRef<typeof MENTION_ITEMS>([]);
+  const insertMentionRef = useRef<(item: (typeof MENTION_ITEMS)[number]) => void>(() => {});
+
+  /** 挂起的重计算：卸载时同步冲刷，避免切章节丢失最后一段草稿 */
+  const pendingHeavy = useRef<(() => void) | null>(null);
+  const flushHeavy = () => {
+    if (heavyTimer.current) {
+      clearTimeout(heavyTimer.current);
+      heavyTimer.current = undefined;
+    }
+    const pending = pendingHeavy.current;
+    pendingHeavy.current = null;
+    pending?.();
+  };
+
   const reportNearby = useCallback((ed: NonNullable<ReturnType<typeof useEditor>>) => {
     if (!ed) return;
     const nearby = paragraphWindow(ed);
     const key = `${nearby.current}\n${nearby.previous}`;
     if (lastNearby.current === key) return;
     lastNearby.current = key;
+    setNearbyText(key);
     onNearbyChangeRef.current?.(nearby);
   }, []);
 
@@ -237,6 +276,31 @@ export function Editor({
         class: "novel-editor",
         spellcheck: "false",
       },
+      handleKeyDown: (_view, event) => {
+        const open = mentionRef.current;
+        const items = mentionItemsRef.current;
+        if (!open || items.length === 0) return false;
+        if (event.key === "Escape") {
+          setMention(null);
+          return true;
+        }
+        if (event.key === "ArrowDown") {
+          setMentionIndex((index) => (index + 1) % items.length);
+          return true;
+        }
+        if (event.key === "ArrowUp") {
+          setMentionIndex((index) => (index - 1 + items.length) % items.length);
+          return true;
+        }
+        if (event.key === "Enter" || event.key === "Tab") {
+          const item = items[mentionIndexRef.current];
+          if (item) {
+            insertMentionRef.current(item);
+            return true;
+          }
+        }
+        return false;
+      },
     },
     onTransaction: ({ editor, transaction }) => {
       // 换新行 / 切换模式（doc 结构变化且光标落在空块行首）→ 类型着色渐隐
@@ -249,21 +313,33 @@ export function Editor({
       }
     },
     onUpdate: ({ editor }) => {
-      const blocks = editorToBlocks(editor);
-      const bodyText = blocks
-        .filter((b) => b.kind === "body")
-        .map((b) => b.text)
-        .join("\n");
-      const thinkBlocks = blocks.filter((b) => b.kind === "thinking");
-      const examples = buildTrainingExamples(blocks, true, chapterTitle);
-      setWordCount(bodyText.length);
-      setThinkingCount(thinkBlocks.length);
+      // 轻量路径：只更新光标模式与输入状态，保证击键 <16ms
       setWriterMode(writerModeFromParent(editor.state.selection.$from.parent.type.name));
-      setMissingThinking(countMissingThinking(examples));
       setIsTyping(true);
-      onTextChange(bodyText);
-      onBlocksChange?.(blocks);
-      reportNearby(editor);
+      maybeOpenMention(editor);
+
+      // 重计算尾随防抖：块转换、训练样例、浮带匹配都是全文档遍历
+      if (heavyTimer.current) clearTimeout(heavyTimer.current);
+      const runHeavy = () => {
+        pendingHeavy.current = null;
+        if (!mounted.current) return;
+        const ed = editor;
+        const blocks = editorToBlocks(ed);
+        const bodyText = blocks
+          .filter((b) => b.kind === "body")
+          .map((b) => b.text)
+          .join("\n");
+        const thinkBlocks = blocks.filter((b) => b.kind === "thinking");
+        const examples = buildTrainingExamples(blocks, true, chapterTitleRef.current);
+        setWordCount(bodyText.length);
+        setThinkingCount(thinkBlocks.length);
+        setMissingThinking(countMissingThinking(examples));
+        onTextChangeRef.current(bodyText);
+        onBlocksChangeRef.current?.(blocks);
+        reportNearby(ed);
+      };
+      pendingHeavy.current = runHeavy;
+      heavyTimer.current = setTimeout(runHeavy, 250);
 
       if (idleTimer.current) clearTimeout(idleTimer.current);
       idleTimer.current = setTimeout(() => {
@@ -274,7 +350,12 @@ export function Editor({
     onSelectionUpdate: ({ editor }) => {
       setWriterMode(writerModeFromParent(editor.state.selection.$from.parent.type.name));
       maybeOpenMention(editor);
-      reportNearby(editor);
+      // 光标随击键高频移动，浮带匹配做全文档遍历，需要防抖
+      if (nearbyTimer.current) clearTimeout(nearbyTimer.current);
+      nearbyTimer.current = setTimeout(() => {
+        nearbyTimer.current = undefined;
+        if (mounted.current) reportNearby(editor);
+      }, 150);
     },
     onCreate: ({ editor }) => {
       reportNearby(editor);
@@ -282,28 +363,31 @@ export function Editor({
     onBlur: () => setMention(null),
   }, [chapterId]);
 
-  /** 检测光标前是否输入 `@`（仅思考块内触发补全） */
+  /** 思考块内 `@` 后的标签种类补全。 */
   const maybeOpenMention = useCallback(
     (ed: NonNullable<ReturnType<typeof useEditor>>) => {
       if (!ed) return;
-      const { state } = ed;
-      const { $from } = state.selection;
-      if ($from.parent.type.name !== "thinkingBlock") {
+      const found = mentionQueryAt(ed);
+      if (!found) {
         setMention(null);
         return;
       }
-      const from = state.selection.from;
-      if (from < 1) return;
-      const prev = state.doc.textBetween(Math.max(0, from - 1), from);
-      if (prev !== "@") {
+      const labels = filterTagKindLabels(found.query);
+      if (labels.length === 0) {
         setMention(null);
         return;
       }
-      const coords = ed.view.coordsAtPos(from);
+      const coords = ed.view.coordsAtPos(ed.state.selection.from);
+      const prev = mentionRef.current;
+      if (prev?.anchorFrom !== found.anchorFrom || prev.query !== found.query) {
+        setMentionIndex(0);
+      }
       setMention({
-        top: coords.bottom + 6,
+        top: coords.top,
         left: coords.left,
-        anchorFrom: from - 1,
+        bottom: coords.bottom,
+        anchorFrom: found.anchorFrom,
+        query: found.query,
       });
     },
     [],
@@ -315,32 +399,58 @@ export function Editor({
       editor
         .chain()
         .focus()
-        .deleteRange({ from: mention.anchorFrom, to: mention.anchorFrom + 1 })
-        .insertContent([
-          {
-            type: "text",
-            text: item.text,
-            marks: [{ type: "markupRef", attrs: item.attrs }],
-          },
-        ])
+        .deleteRange({ from: mention.anchorFrom, to: editor.state.selection.from })
+        .insertContent({
+          type: "markupRef",
+          attrs: item.attrs,
+        })
         .run();
       setMention(null);
     },
     [editor, mention],
   );
+  insertMentionRef.current = insertMention;
+
+  useEffect(() => {
+    if (!mention || !editor) return;
+    const update = () => {
+      try {
+        const coords = editor.view.coordsAtPos(editor.state.selection.from);
+        setMention((current) =>
+          current
+            ? { ...current, top: coords.top, left: coords.left, bottom: coords.bottom }
+            : null,
+        );
+      } catch {
+        setMention(null);
+      }
+    };
+    const dom = editor.view.dom;
+    dom.addEventListener("scroll", update);
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      dom.removeEventListener("scroll", update);
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [mention ? 1 : 0, editor]);
 
   useEffect(() => {
     mounted.current = true;
     return () => {
+      // 先冲刷挂起的重计算（把草稿交给上层），再标记卸载
+      flushHeavy();
       mounted.current = false;
       if (idleTimer.current) clearTimeout(idleTimer.current);
       if (flashTimer.current) clearTimeout(flashTimer.current);
+      if (nearbyTimer.current) clearTimeout(nearbyTimer.current);
     };
   }, []);
 
   useEffect(() => {
     if (onInsertText && editor) {
-      (window as any).__editorInsert = (text: string) => {
+      window.__editorInsert = (text: string) => {
         editor.chain().focus().insertContent(text).run();
       };
     }
@@ -383,8 +493,13 @@ export function Editor({
   );
 
   const copy = guideCopy({ mode: writerMode, missingThinkingBeats: missingThinking });
+  const mentionItems = mention
+    ? MENTION_ITEMS.filter((item) => filterTagKindLabels(mention.query).includes(item.label))
+    : [];
+  mentionItemsRef.current = mentionItems;
 
   return (
+    <StoryCatalogContext.Provider value={{ entries: storyEntries, nearby: nearbyText }}>
     <div className={`editor-wrapper ${flashing ? "mode-flash" : ""}`}>
       <div className="editor-toolbar">
         <div className="editor-stats">
@@ -433,14 +548,18 @@ export function Editor({
       )}
       <div className="editor-body">
         <EditorContent editor={editor} />
-        {mention && (
-          <div
-            className="mention-menu"
-            style={{ top: mention.top, left: mention.left }}
-            onMouseDown={(e) => e.preventDefault()}
+        {mention && mentionItems.length > 0 && (
+          <FloatingMenu
+            caret={{ top: mention.top, left: mention.left, bottom: mention.bottom }}
+            itemCount={mentionItems.length}
+            onMouseDown={(event) => event.preventDefault()}
           >
-            {MENTION_ITEMS.map((item) => (
-              <button key={item.label} className="mention-item" onClick={() => insertMention(item)}>
+            {mentionItems.map((item, index) => (
+              <button
+                key={item.label}
+                className={`mention-item${index === mentionIndex ? " active" : ""}`}
+                onClick={() => insertMention(item)}
+              >
                 <span className="mention-icon">{item.icon}</span>
                 <span className="mention-meta">
                   <span className="mention-label">{item.label}</span>
@@ -448,11 +567,35 @@ export function Editor({
                 </span>
               </button>
             ))}
-          </div>
+          </FloatingMenu>
         )}
       </div>
     </div>
+    </StoryCatalogContext.Provider>
   );
+}
+
+function mentionQueryAt(ed: {
+  state: {
+    selection: {
+      from: number;
+      $from: { parent: { type: { name: string } }; start: () => number };
+    };
+    doc: { textBetween: (from: number, to: number) => string };
+  };
+}): { anchorFrom: number; query: string } | null {
+  const { $from, from } = ed.state.selection;
+  if ($from.parent.type.name !== "thinkingBlock") return null;
+  const start = $from.start();
+  let query = "";
+  for (let pos = from; pos > start; pos -= 1) {
+    const ch = ed.state.doc.textBetween(pos - 1, pos);
+    if (ch === "@") return { anchorFrom: pos - 1, query };
+    if (!ch || /\s/.test(ch)) return null;
+    query = `${ch}${query}`;
+    if (query.length > 12) return null;
+  }
+  return null;
 }
 
 function paragraphWindow(editor: {

@@ -749,18 +749,58 @@ body {
   font-size: 0.85em;
 }
 
-/* 标记引用 span */
+/* 写作标签：独立行内块，名字在块内输入 */
+.novel-editor .markup-chip,
 .novel-editor .markup-ref {
+  display: inline-flex;
+  align-items: baseline;
+  vertical-align: baseline;
+  gap: 0;
   background: rgba(240, 198, 116, 0.12);
   border: 1px solid rgba(240, 198, 116, 0.3);
   color: var(--gold);
   border-radius: 4px;
-  padding: 0 5px;
-  margin: 0 2px;
+  padding: 0 4px 0 6px;
+  margin: 0 3px;
   font-style: normal;
   font-family: var(--font-body);
   font-size: 0.9em;
+  line-height: 1.45;
   white-space: nowrap;
+}
+
+.novel-editor .markup-chip.is-selected,
+.novel-editor .markup-chip:focus-within {
+  border-color: var(--gold);
+  background: rgba(240, 198, 116, 0.22);
+}
+
+.novel-editor .markup-chip-kind {
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.novel-editor .markup-chip-colon {
+  pointer-events: none;
+}
+
+.novel-editor .markup-chip-input {
+  min-width: 2ch;
+  max-width: 16ch;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: var(--gold);
+  font: inherit;
+  font-style: normal;
+  outline: none;
+  padding: 0 2px 0 1px;
+  line-height: inherit;
+}
+
+.novel-editor .markup-chip-input::placeholder {
+  color: var(--gold);
+  opacity: 0.45;
 }
 
 .novel-editor .markup-task {
@@ -902,11 +942,12 @@ body {
   color: var(--text);
 }
 
-/* @ 标记补全菜单 */
+/* @ 标记补全菜单（fixed 坐标由 FloatingMenu 写入） */
 .mention-menu {
-  position: absolute;
-  z-index: 100;
+  z-index: 1200;
   min-width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
   padding: 6px;
   background: var(--bg-elevated);
   border: 1px solid var(--accent);
@@ -928,6 +969,7 @@ body {
   text-align: left;
 }
 
+.mention-item.active,
 .mention-item:hover {
   background: var(--accent-dim);
 }
