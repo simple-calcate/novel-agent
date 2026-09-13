@@ -396,6 +396,7 @@ body {
   padding: 16px 24px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
+  flex-shrink: 0;
 }
 
 .chapter-title {
@@ -1379,6 +1380,13 @@ body {
   gap: 6px;
 }
 
+.structure-edit-actions .mini-button {
+  width: auto;
+  height: 28px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
 .canon-card .context-card-title .icon-button {
   margin-left: 0;
 }
@@ -1406,6 +1414,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .panel-tabs button {
