@@ -48,6 +48,8 @@ body {
   display: flex;
   flex-direction: column;
   padding: 20px 16px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .brand {
@@ -183,6 +185,7 @@ body {
 /* Chapter Tree */
 .tree {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -334,6 +337,7 @@ body {
   gap: 8px;
   padding-top: 16px;
   border-top: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .icon-button {
@@ -1383,6 +1387,8 @@ body {
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .panel-tabs {
