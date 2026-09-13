@@ -109,6 +109,7 @@ pub fn run() {
             review_canon_fact,
             create_story_entry,
             list_story_entries,
+            update_story_entry,
             delete_story_entry,
             record_generation_feedback,
             list_preferences,

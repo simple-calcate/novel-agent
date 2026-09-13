@@ -163,6 +163,19 @@ fn create_designed_story_entries() {
     assert!(entries
         .iter()
         .any(|entry| entry.kind == novel_domain::StoryEntryKind::Foreshadow));
+
+    let lin = entries.iter().find(|entry| entry.title == "林晚").unwrap();
+    let updated = workspace
+        .update_story_entry(
+            &project.id,
+            &lin.id,
+            novel_domain::StoryEntryKind::Character,
+            "林晚、雾儿",
+            "雾港来的刀客，不爱回头",
+        )
+        .unwrap();
+    assert_eq!(updated.aliases, vec!["雾儿".to_string()]);
+    assert_eq!(updated.summary, "雾港来的刀客，不爱回头");
 }
 
 #[test]

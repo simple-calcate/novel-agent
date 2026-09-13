@@ -347,12 +347,23 @@ body {
   place-items: center;
   cursor: pointer;
   transition: all 0.2s;
+  position: relative;
 }
 
 .icon-button:hover, .icon-button.active {
   background: var(--accent-dim);
   color: var(--accent);
   border-color: var(--accent);
+}
+
+.queue-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: var(--accent);
 }
 
 /* ============ Workspace ============ */
@@ -1147,6 +1158,10 @@ body {
   cursor: default;
 }
 
+.hint-card.openable {
+  cursor: pointer;
+}
+
 .hint-card:hover {
   border-color: var(--accent);
 }
@@ -1324,8 +1339,33 @@ body {
   resize: vertical;
 }
 
-.canon-card .context-card-title .icon-button {
+.canon-card {
+  cursor: pointer;
+}
+
+.canon-card.focused {
+  outline: 1px solid var(--accent);
+}
+
+.structure-card-actions {
   margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+
+.structure-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.structure-edit-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.canon-card .context-card-title .icon-button {
+  margin-left: 0;
 }
 
 .hint-source {

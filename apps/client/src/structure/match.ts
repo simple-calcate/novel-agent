@@ -75,6 +75,10 @@ export function splitTitleAndAliases(raw: string): { title: string; aliases: str
   return { title: parts[0] ?? "", aliases: parts.slice(1) };
 }
 
+export function joinTitleAndAliases(title: string, aliases: string[] = []): string {
+  return [title, ...aliases].map((part) => part.trim()).filter(Boolean).join("、");
+}
+
 export function matchStoryEntries(
   current: string,
   lookback: string,

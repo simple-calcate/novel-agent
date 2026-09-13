@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchStoryEntries } from "./match";
+import { joinTitleAndAliases, matchStoryEntries, splitTitleAndAliases } from "./match";
 import { StoryEntry } from "../types";
 import cases from "../../../../packages/match-fixtures/cases.json";
 
@@ -94,5 +94,14 @@ describe("structure matching", () => {
       ).map((hint) => hint.title);
       expect(titles, item.id).toEqual(item.expectedTitles);
     }
+  });
+
+  it("joins aliases back into the editable title field", () => {
+    expect(joinTitleAndAliases("林晚", ["雾儿", "阿晚"])).toBe("林晚、雾儿、阿晚");
+    expect(joinTitleAndAliases("雾港", [])).toBe("雾港");
+    expect(splitTitleAndAliases(joinTitleAndAliases("林晚", ["雾儿"]))).toEqual({
+      title: "林晚",
+      aliases: ["雾儿"],
+    });
   });
 });

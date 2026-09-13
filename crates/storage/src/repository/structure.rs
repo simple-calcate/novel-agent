@@ -93,6 +93,70 @@ impl Repository {
         Ok(entries)
     }
 
+    pub fn update_story_entry(
+        &self,
+        project_id: &ProjectId,
+        id: &str,
+        kind: StoryEntryKind,
+        title: &str,
+        summary: &str,
+    ) -> Result<StoryEntry, StorageError> {
+        let (title, aliases) = split_title_and_aliases(title);
+        if title.is_empty() {
+            return Err(DomainError::Validation("title required".into()).into());
+        }
+        let summary = summary.trim().to_owned();
+        let aliases_json = serde_json::to_string(&aliases)?;
+        self.write_with_outbox(
+            &project_id.to_string(),
+            "story.entry.updated",
+            serde_json::json!({
+                "id": id,
+                "kind": kind_name(kind),
+                "title": title
+            }),
+            |tx| {
+                let clash: rusqlite::Result<String> = tx.query_row(
+                    "SELECT id FROM story_entries
+                     WHERE project_id = ?1 AND kind = ?2 AND title = ?3 AND id != ?4",
+                    params![project_id.to_string(), kind_name(kind), title, id],
+                    |row| row.get(0),
+                );
+                if clash.is_ok() {
+                    return Err(DomainError::Validation(format!(
+                        "structure entry already exists: {title}"
+                    ))
+                    .into());
+                }
+                let updated = tx.execute(
+                    "UPDATE story_entries
+                     SET title = ?1, summary = ?2, aliases_json = ?3
+                     WHERE id = ?4 AND project_id = ?5 AND kind = ?6",
+                    params![
+                        title,
+                        summary,
+                        aliases_json,
+                        id,
+                        project_id.to_string(),
+                        kind_name(kind),
+                    ],
+                )?;
+                if updated == 0 {
+                    return Err(DomainError::NotFound(format!("story entry {id}")).into());
+                }
+                Ok(())
+            },
+        )?;
+        Ok(StoryEntry {
+            id: id.to_string(),
+            project_id: project_id.clone(),
+            kind,
+            title,
+            summary,
+            aliases,
+        })
+    }
+
     pub fn delete_story_entry(
         &self,
         project_id: &ProjectId,

@@ -27,6 +27,7 @@ Project（作品） 1—n Book（书） 1—n 可选 Volume（卷） 1—n Chapt
 | `volume.created` / `volume.renamed` / `volume.deleted` / `volume.reordered` | 卷 |
 | `chapter.created` / `chapter.renamed` / `chapter.deleted` / `chapter.reordered` | 章 |
 | `scene.created` / `scene.renamed` / `scene.deleted` / `scene.reordered` | 场 |
+| `story.entry.created` / `story.entry.updated` / `story.entry.deleted` | 预先结构（人物 / 设定 / 伏笔） |
 | `canon.proposed` / `canon.accepted` / `canon.rejected` | 正史候选生成与作者审核 |
 | `block.mode.changed` | 编辑器思考/正文切换 |
 | `agent.finished` | 内核续写结束（可选） |
@@ -89,7 +90,7 @@ Project（作品） 1—n Book（书） 1—n 可选 Volume（卷） 1—n Chapt
 - `chapter_text` / `current_revision` / `commit_patch`
 - `list_revisions` / `diff_revisions` / `chapter_text_or_empty`
 - `propose_canon_mentions` / `list_canon_proposals` / `set_fact_status`
-- `create_story_entry` / `list_story_entries` / `delete_story_entry`
+- `create_story_entry` / `list_story_entries` / `update_story_entry` / `delete_story_entry`
 - `list_canon_entities_for_project` / `list_canon_facts_for_project` / `list_plot_threads_for_project`
 
 `Repository` 按聚合拆在 `crates/storage/src/repository/`：`library`、`revisions`、`canon`、`structure`、`queue`、`automation`。
@@ -120,7 +121,7 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 - `list_plugins` / `run_plugin_operation`
 - `pending_outbox_count` / `flush_outbox_journal`
 - `propose_canon_from_chapter` / `list_canon` / `review_canon_fact`
-- `create_story_entry` / `list_story_entries` / `delete_story_entry`
+- `create_story_entry` / `list_story_entries` / `update_story_entry` / `delete_story_entry`
 
 `LibrarySnapshot`、`ChapterBody`、`JobView`、`CanonProposal`、`StoryEntry`、`Scene`、`PreferenceRule`、`PluginSummary`、`PluginResult`、`RevisionSummary`、`RevisionDiff` 定义在 `novel-domain`。
 
@@ -177,6 +178,7 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 | `review_canon_fact` | `factId`, `accept` | 更新后的 `CanonProposal` |
 | `create_story_entry` | `projectId`, `kind`, `title`, `summary?` | `StoryEntry`；`title` 可写 `林晚、雾儿`，别名拆进 `aliases` |
 | `list_story_entries` | `projectId` | `StoryEntry[]` |
+| `update_story_entry` | `projectId`, `id`, `kind`, `title`, `summary?` | `StoryEntry`；同样按顿号拆别名；同 kind 标题不能撞名 |
 | `delete_story_entry` | `projectId`, `id`, `kind` | — |
 
 `training.export` 额外字段：`format`（jsonl/sharegpt/alpaca/r1）、`includeMarkup`（默认 true）、`minQuality`（默认 `usable`，丢弃 skip）。返回 `examples`、`dropped`、`qualityCounts`、`protocolVersion`（当前为 2）。每条样本的 `context` 从章首累积思考+正文，不截断。思考里的 `@` 是写作标签（`MarkupRef::Tag`），不是正史实体。写作约定见 [writing-protocol.md](writing-protocol.md)。

@@ -50,6 +50,26 @@ export function useStructure(project: Project | null) {
     [project, refresh],
   );
 
+  const update = useCallback(
+    async (entry: StoryEntry, title: string, summary: string) => {
+      if (!project) {
+        setError("请先选择作品");
+        return;
+      }
+      setBusy(true);
+      try {
+        await libraryApi.updateStoryEntry(project.id, entry.id, entry.kind, title, summary);
+        await refresh();
+      } catch (err) {
+        logger.error("更新结构失败", { error: String(err) });
+        setError(String(err));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [project, refresh],
+  );
+
   const remove = useCallback(
     async (entry: StoryEntry) => {
       if (!project) return;
@@ -67,5 +87,5 @@ export function useStructure(project: Project | null) {
     [project, refresh],
   );
 
-  return { entries, busy, error, create, remove, refresh };
+  return { entries, busy, error, create, update, remove, refresh };
 }

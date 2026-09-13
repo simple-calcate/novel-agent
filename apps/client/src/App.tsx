@@ -47,6 +47,7 @@ export function App() {
   const [pluginOpen, setPluginOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [plugins, setPlugins] = useState<PluginSummary[]>([]);
+  const [focusEntry, setFocusEntry] = useState<{ id: string; nonce: number } | null>(null);
   const library = useLibrary();
   const {
     projects,
@@ -365,8 +366,16 @@ export function App() {
           >
             <Layers size={16} />
           </button>
-          <button className="icon-button" title="任务队列">
+          <button
+            className={`icon-button ${sidebarTab === "workflow" ? "active" : ""}`}
+            title="任务队列"
+            onClick={() => setSidebarTab("workflow")}
+          >
             <ListChecks size={16} />
+            {jobs.some(
+              (job) =>
+                job.status === "pending" || job.status === "running" || job.status === "blocked",
+            ) && <span className="queue-dot" />}
           </button>
           <button
             className={`icon-button ${logPanelOpen ? "active" : ""}`}
@@ -436,6 +445,10 @@ export function App() {
                 ignoredIds={hintPrefs.ignored}
                 onPin={pinHint}
                 onIgnore={ignoreHint}
+                onOpen={(id) => {
+                  setSidebarTab("structure");
+                  setFocusEntry({ id, nonce: Date.now() });
+                }}
               />
               {project && activeChapter && (
                 <SceneStrip
@@ -563,7 +576,10 @@ export function App() {
             busy={structure.busy}
             error={structure.error}
             entries={structure.entries}
+            focusId={focusEntry?.id ?? null}
+            focusNonce={focusEntry?.nonce ?? 0}
             onCreate={(kind, title, summary) => void structure.create(kind, title, summary)}
+            onUpdate={(entry, title, summary) => void structure.update(entry, title, summary)}
             onDelete={(entry) => void structure.remove(entry)}
           />
         )}
