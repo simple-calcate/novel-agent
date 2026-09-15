@@ -98,9 +98,7 @@ fn library_lists_and_snapshot_roundtrip() {
 fn lists_and_diffs_saved_revisions() {
     let mut repository = Repository::open_in_memory().unwrap();
     let project = repository.create_project("夜航星图").unwrap();
-    let book = repository
-        .create_book(&project.id, "卷一", "", 1)
-        .unwrap();
+    let book = repository.create_book(&project.id, "卷一", "", 1).unwrap();
     let chapter = repository
         .create_chapter(&project.id, &book.id.to_string(), "第一章", 1)
         .unwrap();

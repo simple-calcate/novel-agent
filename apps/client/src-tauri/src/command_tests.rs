@@ -4,13 +4,13 @@
 use crate::{
     build_context_package, context_hints, create_book, create_chapter, create_project,
     create_scene, create_story_entry, create_volume, delete_book, delete_chapter, delete_volume,
-    editor_tick, emit_domain_event, generate_continuation, install_plugin_manifest, kernel_tools,
-    list_canon, list_plugins, list_story_entries, load_chapter, load_library, load_model_config,
-    list_chapter_revisions, diff_chapter_revisions, restore_chapter_revision,
-    move_book, pending_outbox_count, propose_canon, rename_book, rename_chapter, rename_project,
-    review_canon_fact, run_plugin_operation, run_queue_step, save_chapter, save_model_config,
-    AppState, EditorTickInput, HintRequest, ModelConfigInput, NewBookInput, NewChapterInput,
-    NewProjectInput, NewSceneInput, NewVolumeInput, RunPluginInput,
+    diff_chapter_revisions, editor_tick, emit_domain_event, generate_continuation,
+    install_plugin_manifest, kernel_tools, list_canon, list_chapter_revisions, list_plugins,
+    list_story_entries, load_chapter, load_library, load_model_config, move_book,
+    pending_outbox_count, propose_canon, rename_book, rename_chapter, rename_project,
+    restore_chapter_revision, review_canon_fact, run_plugin_operation, run_queue_step,
+    save_chapter, save_model_config, AppState, EditorTickInput, HintRequest, ModelConfigInput,
+    NewBookInput, NewChapterInput, NewProjectInput, NewSceneInput, NewVolumeInput, RunPluginInput,
 };
 use novel_domain::{
     Actor, BlockKind, ContentBlock, DomainEvent, EventId, EventSource, Platform, Revision,
@@ -144,7 +144,12 @@ fn create_project_and_chapter_roundtrip() {
     assert!(history.ok, "{history:?}");
     assert_eq!(history.data.as_ref().unwrap().len(), 1);
 
-    let saved_again = save_chapter(state(), chapter_id.clone(), "雾港来客。灯还亮着。".into(), None);
+    let saved_again = save_chapter(
+        state(),
+        chapter_id.clone(),
+        "雾港来客。灯还亮着。".into(),
+        None,
+    );
     assert!(saved_again.ok, "{saved_again:?}");
     let diff = diff_chapter_revisions(state(), chapter_id.clone(), 1, 2);
     assert!(diff.ok, "{diff:?}");

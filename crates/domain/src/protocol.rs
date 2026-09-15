@@ -759,8 +759,17 @@ mod tests {
     fn fog_harbor_sample_exports_three_gold_beats() {
         #[derive(Deserialize)]
         #[serde(rename_all = "camelCase")]
+        struct SampleStoryEntry {
+            kind: String,
+            title: String,
+        }
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
         struct SampleChapterFile {
             chapter_title: String,
+            #[serde(default)]
+            story: Vec<SampleStoryEntry>,
             blocks: Vec<ContentBlock>,
         }
 
@@ -769,6 +778,14 @@ mod tests {
             "/../../apps/client/src/editor/examples/fog-harbor.json"
         )))
         .expect("fog-harbor sample should parse");
+        assert_eq!(
+            sample
+                .story
+                .iter()
+                .map(|entry| format!("{}:{}", entry.kind, entry.title))
+                .collect::<Vec<_>>(),
+            vec!["character:林默", "setting:雾港码头", "foreshadow:怀表来历"]
+        );
 
         let examples = build_training_examples_from_blocks(
             &sample.blocks,

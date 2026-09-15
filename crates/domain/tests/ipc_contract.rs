@@ -1,4 +1,6 @@
-use novel_domain::{Book, Chapter, Project, RevisionDiff, RevisionSummary, Scene, StoryEntry, Volume};
+use novel_domain::{
+    Book, Chapter, Project, RevisionDiff, RevisionSummary, Scene, StoryEntry, Volume,
+};
 use std::collections::BTreeSet;
 
 const EXAMPLES: &str = include_str!("../../../packages/shared-types/examples.json");

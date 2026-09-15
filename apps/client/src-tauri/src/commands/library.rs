@@ -74,10 +74,7 @@ pub fn create_project(
 }
 
 #[tauri::command]
-pub fn create_book(
-    state: State<'_, crate::AppState>,
-    input: NewBookInput,
-) -> CommandResult<Book> {
+pub fn create_book(state: State<'_, crate::AppState>, input: NewBookInput) -> CommandResult<Book> {
     info!(project_id = %input.project_id, title = %input.title, "create_book 调用");
     let project_id = match parse_project_id(&input.project_id) {
         Ok(id) => id,
@@ -526,9 +523,9 @@ pub fn emit_block_mode_changed<R: tauri::Runtime>(
     block_id: Option<String>,
     position: Option<u32>,
 ) -> CommandResult<serde_json::Value> {
-    use std::str::FromStr;
     use novel_domain::{BlockId, ChapterId, ProjectId};
     use serde_json::json;
+    use std::str::FromStr;
     use tracing::error;
 
     info!(

@@ -9,6 +9,14 @@ import {
 import { installSampleChapter, sampleBodyText, sampleChapter } from "./sampleChapter";
 
 describe("fog-harbor sample chapter", () => {
+  it("keeps story entries in the sample json, not in installer code", () => {
+    expect(sampleChapter.story.map((entry) => `${entry.kind}:${entry.title}`)).toEqual([
+      "character:林默",
+      "setting:雾港码头",
+      "foreshadow:怀表来历",
+    ]);
+  });
+
   it("exports three complete beats from chapter start", () => {
     const examples = buildTrainingExamples(sampleChapter.blocks, true, sampleChapter.chapterTitle);
     expect(examples).toHaveLength(3);
@@ -76,5 +84,56 @@ describe("fog-harbor sample chapter", () => {
     const again = await libraryApi.loadChapter(second.chapterId);
     expect(again.text).toBe("作者改过的正文。");
     expect(await libraryApi.listStoryEntries(second.projectId)).toHaveLength(3);
+  });
+
+  it("does not resurrect a story entry the author deleted", async () => {
+    resetMemoryLibrary();
+    const first = await installSampleChapter();
+    const story = await libraryApi.listStoryEntries(first.projectId);
+    const linMo = story.find((entry) => entry.title === "林默");
+    expect(linMo).toBeDefined();
+    await libraryApi.deleteStoryEntry(first.projectId, linMo!.id, linMo!.kind);
+
+    const second = await installSampleChapter();
+    expect(second.chapterId).toBe(first.chapterId);
+    expect(second.created).toBe(false);
+    const leftover = await libraryApi.listStoryEntries(second.projectId);
+    expect(leftover.map((entry) => entry.title)).toEqual(["雾港码头", "怀表来历"]);
+  });
+
+  it("does not restore deleted story when refilling an emptied sample chapter", async () => {
+    resetMemoryLibrary();
+    const first = await installSampleChapter();
+    const story = await libraryApi.listStoryEntries(first.projectId);
+    const linMo = story.find((entry) => entry.title === "林默");
+    await libraryApi.deleteStoryEntry(first.projectId, linMo!.id, linMo!.kind);
+    await libraryApi.saveChapter(first.chapterId, "", []);
+
+    const second = await installSampleChapter();
+    expect(second.chapterId).toBe(first.chapterId);
+    expect(second.created).toBe(true);
+    expect((await libraryApi.loadChapter(second.chapterId)).text).toBe(sampleBodyText());
+    const leftover = await libraryApi.listStoryEntries(second.projectId);
+    expect(leftover.map((entry) => entry.title)).not.toContain("林默");
+  });
+
+  it("reseeds story when the sample chapter itself was deleted", async () => {
+    resetMemoryLibrary();
+    const first = await installSampleChapter();
+    await libraryApi.deleteChapter(first.projectId, first.chapterId);
+    const leftover = await libraryApi.listStoryEntries(first.projectId);
+    const linMo = leftover.find((entry) => entry.title === "林默");
+    expect(linMo).toBeDefined();
+    await libraryApi.deleteStoryEntry(first.projectId, linMo!.id, linMo!.kind);
+
+    const second = await installSampleChapter();
+    expect(second.chapterId).not.toBe(first.chapterId);
+    expect(second.created).toBe(true);
+    const story = await libraryApi.listStoryEntries(second.projectId);
+    expect(story.map((entry) => `${entry.kind}:${entry.title}`)).toEqual([
+      "character:林默",
+      "setting:雾港码头",
+      "foreshadow:怀表来历",
+    ]);
   });
 });

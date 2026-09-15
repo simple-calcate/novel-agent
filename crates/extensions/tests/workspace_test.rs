@@ -86,7 +86,11 @@ fn chapter_history_diff_and_restore() {
     assert_eq!(listed.len(), 2);
 
     let diff = workspace
-        .diff_chapter_revisions(&chapter.id, novel_domain::Revision(1), novel_domain::Revision(2))
+        .diff_chapter_revisions(
+            &chapter.id,
+            novel_domain::Revision(1),
+            novel_domain::Revision(2),
+        )
         .unwrap();
     assert!(diff.diff.inserted_chars > 0);
 

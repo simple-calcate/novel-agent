@@ -177,7 +177,10 @@ mod tests {
         assert_eq!(diff.summary, "无改动");
         assert_eq!(diff.inserted_chars, 0);
         assert_eq!(diff.deleted_chars, 0);
-        assert!(diff.lines.iter().all(|line| line.tag == DiffChangeTag::Equal));
+        assert!(diff
+            .lines
+            .iter()
+            .all(|line| line.tag == DiffChangeTag::Equal));
     }
 
     #[test]
