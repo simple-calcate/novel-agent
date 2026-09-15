@@ -29,6 +29,7 @@ import {
   StoryEntryKind,
   Volume,
 } from "./types";
+import { compareText, t } from "./i18n";
 import { extractMentions } from "./canon/extract";
 import { splitTitleAndAliases, matchStoryEntries } from "./structure/match";
 import { previewText, revisionDiff } from "./editor/textDiff";
@@ -218,7 +219,7 @@ export const libraryApi = {
       });
     }
     if (!memory.books.some((book) => book.id === bookId && book.projectId === projectId)) {
-      throw new Error("书不存在");
+      throw new Error(t("library.missingBook"));
     }
     const siblings = memory.volumes.filter((volume) => volume.bookId === bookId);
     const volume: Volume = {
@@ -315,7 +316,7 @@ export const libraryApi = {
       return libraryApi.saveChapter(chapterId, "", []);
     }
     const snapshot = (memory.history[chapterId] ?? []).find((item) => item.revision === revision);
-    if (!snapshot) throw new Error("修订不存在");
+    if (!snapshot) throw new Error(t("library.missingRevision"));
     return libraryApi.saveChapter(chapterId, snapshot.text, snapshot.blocks);
   },
 
@@ -324,7 +325,7 @@ export const libraryApi = {
       return command<LibrarySnapshot>("rename_project", { projectId, title });
     }
     const project = memory.projects.find((item) => item.id === projectId);
-    if (!project) throw new Error("作品不存在");
+    if (!project) throw new Error(t("library.missingProject"));
     project.title = title;
     project.updatedAt = nowIso();
     return snapshot(projectId);
@@ -356,7 +357,7 @@ export const libraryApi = {
       return command<LibrarySnapshot>("rename_book", { projectId, bookId, title });
     }
     const book = memory.books.find((item) => item.id === bookId && item.projectId === projectId);
-    if (!book) throw new Error("书不存在");
+    if (!book) throw new Error(t("library.missingBook"));
     book.title = title;
     return snapshot(projectId);
   },
@@ -393,7 +394,7 @@ export const libraryApi = {
       return command<LibrarySnapshot>("rename_chapter", { projectId, chapterId, title });
     }
     const chapter = memory.chapters.find((item) => item.id === chapterId);
-    if (!chapter) throw new Error("章节不存在");
+    if (!chapter) throw new Error(t("library.missingChapter"));
     chapter.title = title;
     return snapshot(projectId);
   },
@@ -418,7 +419,7 @@ export const libraryApi = {
       return command<LibrarySnapshot>("move_chapter", { projectId, chapterId, delta });
     }
     const chapter = memory.chapters.find((item) => item.id === chapterId);
-    if (!chapter) throw new Error("章节不存在");
+    if (!chapter) throw new Error(t("library.missingChapter"));
     const bookId = chapter.bookId;
     const siblings = moveById(
       memory.chapters.filter(
@@ -446,7 +447,7 @@ export const libraryApi = {
       return command<LibrarySnapshot>("rename_volume", { projectId, volumeId, title });
     }
     const volume = memory.volumes.find((item) => item.id === volumeId);
-    if (!volume) throw new Error("卷不存在");
+    if (!volume) throw new Error(t("library.missingVolume"));
     volume.title = title;
     return snapshot(projectId);
   },
@@ -471,7 +472,7 @@ export const libraryApi = {
       return command<LibrarySnapshot>("move_volume", { projectId, volumeId, delta });
     }
     const volume = memory.volumes.find((item) => item.id === volumeId);
-    if (!volume) throw new Error("卷不存在");
+    if (!volume) throw new Error(t("library.missingVolume"));
     const bookId = volume.bookId;
     const siblings = moveById(
       memory.volumes.filter((item) => item.bookId === bookId),
@@ -491,7 +492,7 @@ export const libraryApi = {
     }
     const chapter = memory.chapters.find((item) => item.id === chapterId);
     const book = memory.books.find((item) => item.id === chapter?.bookId);
-    if (!chapter || !book) throw new Error("章节不存在");
+    if (!chapter || !book) throw new Error(t("library.missingChapter"));
     const text = memory.texts[chapterId]?.text ?? "";
     const created: CanonProposal[] = [];
     for (const mention of extractMentions(text)) {
@@ -536,7 +537,7 @@ export const libraryApi = {
       return command<CanonProposal>("review_canon_fact", { factId, accept });
     }
     const fact = memory.canon.find((item) => item.factId === factId);
-    if (!fact) throw new Error("正史条目不存在");
+    if (!fact) throw new Error(t("library.missingCanon"));
     fact.status = accept ? "accepted" : "rejected";
     return fact;
   },
@@ -551,13 +552,13 @@ export const libraryApi = {
       return command<StoryEntry>("create_story_entry", { projectId, kind, title, summary });
     }
     const parsed = splitTitleAndAliases(title);
-    if (!parsed.title) throw new Error("请填写名称");
+    if (!parsed.title) throw new Error(t("library.missingTitle"));
     if (
       memory.story.some(
         (item) => item.projectId === projectId && item.kind === kind && item.title === parsed.title,
       )
     ) {
-      throw new Error("该结构已存在");
+      throw new Error(t("library.duplicateEntry"));
     }
     const entry: StoryEntry = {
       id: newId(),
@@ -578,7 +579,7 @@ export const libraryApi = {
     return memory.story
       .filter((item) => item.projectId === projectId)
       .slice()
-      .sort((left, right) => kindOrder(left.kind) - kindOrder(right.kind) || left.title.localeCompare(right.title, "zh"));
+      .sort((left, right) => kindOrder(left.kind) - kindOrder(right.kind) || compareText(left.title, right.title));
   },
 
   async deleteStoryEntry(projectId: string, id: string, kind: StoryEntryKind): Promise<void> {
@@ -601,7 +602,7 @@ export const libraryApi = {
       });
     }
     const chapter = memory.chapters.find((item) => item.id === chapterId);
-    if (!chapter) throw new Error("章节不存在");
+    if (!chapter) throw new Error(t("library.missingChapter"));
     const siblings = memory.scenes.filter((item) => item.chapterId === chapterId);
     const scene: Scene = {
       id: newId(),
@@ -619,7 +620,7 @@ export const libraryApi = {
       return command<LibrarySnapshot>("rename_scene", { projectId, sceneId, title });
     }
     const scene = memory.scenes.find((item) => item.id === sceneId);
-    if (!scene) throw new Error("场次不存在");
+    if (!scene) throw new Error(t("library.missingScene"));
     scene.title = title;
     return snapshot(projectId);
   },
@@ -637,7 +638,7 @@ export const libraryApi = {
       });
     }
     const scene = memory.scenes.find((item) => item.id === sceneId);
-    if (!scene) throw new Error("场次不存在");
+    if (!scene) throw new Error(t("library.missingScene"));
     scene.povEntryId = povEntryId || null;
     return snapshot(projectId);
   },
@@ -655,7 +656,7 @@ export const libraryApi = {
       return command<LibrarySnapshot>("move_scene", { projectId, sceneId, delta });
     }
     const scene = memory.scenes.find((item) => item.id === sceneId);
-    if (!scene) throw new Error("场次不存在");
+    if (!scene) throw new Error(t("library.missingScene"));
     const chapterId = scene.chapterId;
     const siblings = moveById(
       memory.scenes.filter((item) => item.chapterId === chapterId),
@@ -723,7 +724,7 @@ export const libraryApi = {
         config: input.config ? { ...input.config, apiKey: "" } : undefined,
       });
     }
-    throw new Error("浏览器预览不能调用模型，请用桌面应用续写");
+    throw new Error(t("library.previewNoModel"));
   },
 
   async recordGenerationFeedback(
@@ -839,7 +840,7 @@ export const libraryApi = {
     return {
       output: {
         operation,
-        message: "这是内置占位回执，还没有真正执行。浏览器预览只对人名点名走 SDK。",
+        message: t("plugin.previewReceipt"),
       },
       logs: ["browser-preview"],
     };
@@ -859,7 +860,7 @@ export const libraryApi = {
     return {
       written: 0,
       path: "",
-      note: "浏览器预览没有 outbox，桌面才会把变更写成 JSONL。这不是设备间同步。",
+      note: t("workflow.previewNote"),
     };
   },
 };

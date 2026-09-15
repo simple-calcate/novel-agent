@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { t } from "../i18n";
 
 interface Props {
   children: ReactNode;
@@ -42,11 +43,11 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="error-boundary-card">
           <div className="error-boundary-title">
             <span className="error-boundary-icon">⚠</span>
-            {this.props.label ?? "界面"}运行出错
+            {t("error.crashed", { label: this.props.label ?? t("error.region") })}
           </div>
           <div className="error-boundary-msg">{String(this.state.error.message || this.state.error)}</div>
           <button className="error-boundary-reset" onClick={this.reset}>
-            重置此区域
+            {t("error.reset")}
           </button>
         </div>
       </div>

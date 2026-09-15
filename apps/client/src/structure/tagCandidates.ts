@@ -1,3 +1,4 @@
+import { compareText, t } from "../i18n";
 import type { StoryEntry, StoryEntryKind } from "../types";
 
 export const STORY_TAG_KIND_LABELS = ["人物", "伏笔", "地点", "道具", "势力", "规则"] as const;
@@ -10,6 +11,15 @@ const TAG_TO_ENTRY: Record<string, StoryEntryKind> = {
   道具: "setting",
   势力: "setting",
   规则: "setting",
+};
+
+const TAG_KIND_ALIASES: Record<StoryTagKind, string[]> = {
+  人物: ["character", "char", "person", "people"],
+  伏笔: ["foreshadow", "hook", "plot"],
+  地点: ["place", "location", "setting", "loc"],
+  道具: ["item", "prop", "object"],
+  势力: ["faction", "org", "group"],
+  规则: ["rule", "law"],
 };
 
 const SETTING_HINTS: Record<string, string[]> = {
@@ -26,6 +36,25 @@ export interface TagCandidate {
   matchedAlias?: string;
 }
 
+export function tagKindLabel(kind: string): string {
+  switch (kind) {
+    case "人物":
+      return t("tag.character");
+    case "伏笔":
+      return t("tag.foreshadow");
+    case "地点":
+      return t("tag.place");
+    case "道具":
+      return t("tag.item");
+    case "势力":
+      return t("tag.faction");
+    case "规则":
+      return t("tag.rule");
+    default:
+      return kind || t("tag.generic");
+  }
+}
+
 export function entryKindForTag(tagKind: string): StoryEntryKind | null {
   return TAG_TO_ENTRY[tagKind] ?? null;
 }
@@ -33,7 +62,14 @@ export function entryKindForTag(tagKind: string): StoryEntryKind | null {
 export function filterTagKindLabels(query: string, labels: readonly string[] = STORY_TAG_KIND_LABELS): string[] {
   const q = query.trim();
   if (!q) return [...labels];
-  return labels.filter((label) => label.includes(q));
+  const lower = q.toLowerCase();
+  return labels.filter((label) => {
+    if (label.includes(q) || label.toLowerCase().includes(lower)) return true;
+    const display = tagKindLabel(label);
+    if (display.includes(q) || display.toLowerCase().includes(lower)) return true;
+    const aliases = TAG_KIND_ALIASES[label as StoryTagKind] ?? [];
+    return aliases.some((alias) => alias.startsWith(lower) || lower.startsWith(alias));
+  });
 }
 
 export function listTagCandidates(
@@ -78,7 +114,7 @@ export function listTagCandidates(
     });
   }
 
-  scored.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, "zh"));
+  scored.sort((a, b) => b.score - a.score || compareText(a.name, b.name));
   return scored.map(({ score: _score, ...row }) => row);
 }
 

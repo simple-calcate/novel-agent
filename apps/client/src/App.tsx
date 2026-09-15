@@ -37,8 +37,10 @@ import { useEditorSession } from "./hooks/useEditorSession";
 import { useStructure } from "./hooks/useStructure";
 import { PluginSummary } from "./types";
 import { uniqueNames } from "./plugins/format";
+import { useI18n } from "./i18n";
 
 export function App() {
+  const { t, locale } = useI18n();
   const [sidebarTab, setSidebarTab] = useState<"context" | "structure" | "workflow" | "agent">(
     "structure",
   );
@@ -126,28 +128,53 @@ export function App() {
       ? {
           title:
             prompt.target === "project"
-              ? "重命名作品"
+              ? t("library.renameProject")
               : prompt.target === "book"
-                ? "重命名书"
+                ? t("library.renameBook")
                 : prompt.target === "volume"
-                  ? "重命名卷"
+                  ? t("library.renameVolume")
                   : prompt.target === "scene"
-                    ? "重命名场次"
-                    : "重命名章节",
-          label: "名称",
+                    ? t("library.renameScene")
+                    : t("library.renameChapter"),
+          label: t("common.name"),
           placeholder: prompt.title ?? "",
-          confirm: "保存",
+          confirm: t("common.save"),
         }
       : prompt.target === "project"
-        ? { title: "新作品", label: "作品名称", placeholder: "例如：夜航星图", confirm: "创建" }
+        ? {
+            title: t("library.newProject"),
+            label: t("library.projectName"),
+            placeholder: t("library.projectPlaceholder"),
+            confirm: t("common.create"),
+          }
         : prompt.target === "book"
-          ? { title: "新书", label: "书名", placeholder: "例如：雾港纪事", confirm: "创建" }
+          ? {
+              title: t("library.newBook"),
+              label: t("library.bookName"),
+              placeholder: t("library.bookPlaceholder"),
+              confirm: t("common.create"),
+            }
           : prompt.target === "volume"
-            ? { title: "新卷", label: "卷名", placeholder: "例如：卷一 · 雾与海", confirm: "创建" }
+            ? {
+                title: t("library.newVolume"),
+                label: t("library.volumeName"),
+                placeholder: t("library.volumePlaceholder"),
+                confirm: t("common.create"),
+              }
             : prompt.target === "scene"
-              ? { title: "新场", label: "场次标题", placeholder: "例如：码头夜谈", confirm: "创建" }
-              : { title: "新章节", label: "章节标题", placeholder: "例如：第一章 雾港来客", confirm: "创建" }
-    : { title: "", label: "", placeholder: "", confirm: "创建" };
+              ? {
+                  title: t("library.newScene"),
+                  label: t("library.sceneTitle"),
+                  placeholder: t("library.scenePlaceholder"),
+                  confirm: t("common.create"),
+                }
+              : {
+                  title: t("library.newChapter"),
+                  label: t("library.chapterTitle"),
+                  placeholder: t("library.chapterPlaceholder"),
+                  confirm: t("common.create"),
+                }
+    : { title: "", label: "", placeholder: "", confirm: t("common.create") };
 
   return (
     <div className="app-shell">
@@ -157,13 +184,13 @@ export function App() {
             <PenLine size={20} />
           </div>
           <div>
-            <div className="brand-name">墨枢</div>
-            <div className="brand-sub">Novel Agent</div>
+            <div className="brand-name">{t("meta.brandName")}</div>
+            <div className="brand-sub">{t("meta.brandSub")}</div>
           </div>
         </div>
 
         <div className="project-card">
-          <div className="project-label">当前作品</div>
+          <div className="project-label">{t("library.currentProject")}</div>
           {projects.length > 0 ? (
             <select
               className="project-select"
@@ -180,26 +207,26 @@ export function App() {
               ))}
             </select>
           ) : (
-            <div className="project-title">尚未创建作品</div>
+            <div className="project-title">{t("library.noProject")}</div>
           )}
           <div className="project-meta">
-            <span>本地优先</span>
+            <span>{t("library.localFirst")}</span>
             <span>·</span>
-            <span>{books.length} 本书</span>
+            <span>{t("library.bookCount", { count: books.length })}</span>
           </div>
           <div className="project-actions">
             <button className="text-button" onClick={() => setPrompt({ mode: "create", target: "project" })}>
-              新作品
+              {t("library.newProject")}
             </button>
             <button className="text-button" onClick={() => setPrompt({ mode: "create", target: "book" })}>
-              新书
+              {t("library.newBook")}
             </button>
             <button
               className="text-button"
               onClick={() => setPrompt({ mode: "create", target: "volume" })}
               disabled={!project || books.length === 0}
             >
-              新卷
+              {t("library.newVolume")}
             </button>
             {project && (
               <>
@@ -209,13 +236,13 @@ export function App() {
                     setPrompt({ mode: "rename", target: "project", id: project.id, title: project.title })
                   }
                 >
-                  重命名
+                  {t("common.rename")}
                 </button>
                 <button
                   className="text-button"
                   onClick={() => setPendingDelete({ target: "project", id: project.id, title: project.title })}
                 >
-                  删除
+                  {t("common.delete")}
                 </button>
               </>
             )}
@@ -225,7 +252,7 @@ export function App() {
         <nav className="tree">
           {libraryError && <div className="tree-empty">{libraryError}</div>}
           {books.length === 0 && (
-            <div className="tree-empty">还没有书。点上方「新书」，或点下方「打开示例章节」。</div>
+            <div className="tree-empty">{t("library.emptyTree")}</div>
           )}
           {books.map((book, bookIndex) => {
             const bookVolumes = volumes.filter((volume) => volume.bookId === book.id);
@@ -249,7 +276,7 @@ export function App() {
                   <TreeItemActions
                     disableUp={chapterIndex === 0}
                     disableDown={chapterIndex === list.length - 1}
-                    deleteTitle="删除章节"
+                    deleteTitle={t("library.deleteChapter")}
                     onRename={() =>
                       setPrompt({
                         mode: "rename",
@@ -280,7 +307,7 @@ export function App() {
                   <TreeItemActions
                     disableUp={bookIndex === 0}
                     disableDown={bookIndex === books.length - 1}
-                    deleteTitle="删除书"
+                    deleteTitle={t("library.deleteBook")}
                     onRename={() =>
                       setPrompt({ mode: "rename", target: "book", id: book.id, title: book.title })
                     }
@@ -305,7 +332,7 @@ export function App() {
                         <TreeItemActions
                           disableUp={volumeIndex === 0}
                           disableDown={volumeIndex === bookVolumes.length - 1}
-                          deleteTitle="删除卷"
+                          deleteTitle={t("library.deleteVolume")}
                           onRename={() =>
                             setPrompt({
                               mode: "rename",
@@ -326,7 +353,7 @@ export function App() {
                   );
                 })}
                 {ungrouped.length > 0 && bookVolumes.length > 0 && (
-                  <div className="tree-section ungrouped-label">未分卷</div>
+                  <div className="tree-section ungrouped-label">{t("library.ungrouped")}</div>
                 )}
                 {renderChapters(ungrouped, false)}
               </div>
@@ -338,7 +365,7 @@ export function App() {
             disabled={!project || books.length === 0}
           >
             <Plus size={14} />
-            <span>新章节</span>
+            <span>{t("library.newChapter")}</span>
           </button>
           <button
             className="tree-item add"
@@ -347,17 +374,17 @@ export function App() {
             }}
           >
             <BookOpen size={14} />
-            <span>打开示例章节</span>
+            <span>{t("library.openSample")}</span>
           </button>
         </nav>
 
         <div className="sidebar-footer">
-          <button className="icon-button" title="设置" onClick={() => setSettingsOpen(true)}>
+          <button className="icon-button" title={t("chrome.settings")} onClick={() => setSettingsOpen(true)}>
             <Settings size={16} />
           </button>
           <button
             className={`icon-button ${pluginOpen ? "active" : ""}`}
-            title="插件"
+            title={t("chrome.plugins")}
             onClick={() => {
               setPluginOpen(true);
               void libraryApi.listPlugins().then(setPlugins).catch(() => setPlugins([]));
@@ -365,12 +392,12 @@ export function App() {
           >
             <Layers size={16} />
           </button>
-          <button className="icon-button" title="任务队列">
+          <button className="icon-button" title={t("chrome.queue")}>
             <ListChecks size={16} />
           </button>
           <button
             className={`icon-button ${logPanelOpen ? "active" : ""}`}
-            title="日志"
+            title={t("chrome.logs")}
             onClick={() => setLogPanelOpen(!logPanelOpen)}
           >
             <Terminal size={16} />
@@ -382,10 +409,10 @@ export function App() {
         <header className="topbar">
           <div className="chapter-title">
             <BookOpen size={16} />
-            <span>{activeChapterRecord?.title ?? "未选择章节"}</span>
+            <span>{activeChapterRecord?.title ?? t("library.noChapter")}</span>
             <button
               className={`revision-badge ${historyOpen ? "active" : ""}`}
-              title="查看修订历史"
+              title={t("chrome.history")}
               disabled={!activeChapter}
               onClick={() => {
                 void persistChapter().then(() => setHistoryOpen(true));
@@ -402,11 +429,11 @@ export function App() {
               onClick={() => enqueue("continuity.check")}
             >
               <CheckCircle2 size={14} />
-              检查
+              {t("chrome.check")}
             </button>
             <button className="action-button primary" onClick={handleGenerate}>
               <Sparkles size={14} />
-              续写
+              {t("chrome.continue")}
             </button>
           </div>
         </header>
@@ -414,16 +441,16 @@ export function App() {
         <div className="editor-area">
           {!activeChapter && (
             <div className="workspace-empty">
-              <p>从左侧创建作品、书和章节，即可开始写作。</p>
+              <p>{t("chrome.emptyWorkspace")}</p>
               <div className="workspace-empty-actions">
                 <button className="btn primary" onClick={() => void handleOpenSample(false)}>
-                  打开示例章节
+                  {t("library.openSample")}
                 </button>
                 <button className="btn" onClick={() => setPrompt({ mode: "create", target: "book" })}>
-                  创建书籍
+                  {t("chrome.createBook")}
                 </button>
                 <button className="btn" onClick={() => setPrompt({ mode: "create", target: "project" })}>
-                  仅创建作品
+                  {t("chrome.createProjectOnly")}
                 </button>
               </div>
             </div>
@@ -453,9 +480,9 @@ export function App() {
                   onPov={(scene, povEntryId) => void setScenePov(scene.id, povEntryId)}
                 />
               )}
-              <ErrorBoundary label="编辑器">
+              <ErrorBoundary label={t("chrome.editorLabel")}>
                 <Editor
-                  key={`${activeChapter}:${editorNonce}`}
+                  key={`${activeChapter}:${editorNonce}:${locale}`}
                   initialText={chapterText}
                   initialBlocks={chapterBlocks}
                   projectId={project?.id}
@@ -498,61 +525,54 @@ export function App() {
             onClick={() => setSidebarTab("context")}
           >
             <Brain size={14} />
-            上下文
+            {t("chrome.tabContext")}
           </button>
           <button
             className={sidebarTab === "structure" ? "active" : ""}
             onClick={() => setSidebarTab("structure")}
           >
             <BookOpen size={14} />
-            结构
+            {t("chrome.tabStructure")}
           </button>
           <button
             className={sidebarTab === "workflow" ? "active" : ""}
             onClick={() => setSidebarTab("workflow")}
           >
             <ListChecks size={14} />
-            工作流
+            {t("chrome.tabWorkflow")}
           </button>
           <button
             className={sidebarTab === "agent" ? "active" : ""}
             onClick={() => setSidebarTab("agent")}
           >
             <MessageSquare size={14} />
-            Agent
+            {t("chrome.tabAgent")}
           </button>
         </div>
 
         {sidebarTab === "context" && (
           <div className="panel-content">
-            <h3>这一段怎么写</h3>
+            <h3>{t("context.heading")}</h3>
             <div className="context-card">
               <div className="context-card-title">
                 <CircleDot size={12} />
-                1. 先写思考
+                {t("context.step1Title")}
               </div>
-              <p>
-                空行按 Tab。淡紫色块是给自己看的：这段要干什么、现在还不能揭什么。用 @
-                点人物、伏笔——这是写作标签，先不必对上设定库。读者看不到。
-              </p>
+              <p>{t("context.step1Body")}</p>
             </div>
             <div className="context-card">
               <div className="context-card-title">
                 <CircleDot size={12} />
-                2. 再写正文
+                {t("context.step2Title")}
               </div>
-              <p>
-                再按 Tab，写读者看到的小说。角色心里想什么写这里，不要写进思考。
-              </p>
+              <p>{t("context.step2Body")}</p>
             </div>
             <div className="context-card">
               <div className="context-card-title">
                 <CircleDot size={12} />
-                3. 一小段一小段
+                {t("context.step3Title")}
               </div>
-              <p>
-                想一下 → 写几句 → 再想一下。章首先写完大纲再一口气写全章，以后 AI 学不会你在光标处怎么续。
-              </p>
+              <p>{t("context.step3Body")}</p>
             </div>
           </div>
         )}
@@ -583,16 +603,20 @@ export function App() {
 
         {sidebarTab === "agent" && (
           <div className="panel-content">
-            <h3>Agent 会话</h3>
+            <h3>{t("agent.heading")}</h3>
             <div className="agent-message">
-              <strong>系统</strong>
+              <strong>{t("agent.system")}</strong>
               <p>
                 {project
-                  ? `当前作品「${project.title}」，上下文固定到 Revision ${revision}。`
-                  : "创建作品后即可把 Agent 会话钉在该书的修订历史上。"}
+                  ? t("agent.withProject", { title: project.title, revision })
+                  : t("agent.withoutProject")}
               </p>
               {preferences.length > 0 && (
-                <p>已记住 {preferences.filter((item) => item.status !== "disabled").length} 条写作偏好，下次续写会写进提示。</p>
+                <p>
+                  {t("agent.remembered", {
+                    count: preferences.filter((item) => item.status !== "disabled").length,
+                  })}
+                </p>
               )}
             </div>
             <PreferencePanel rules={preferences} onToggle={(rule, disabled) => void togglePreference(rule, disabled)} />
@@ -650,21 +674,21 @@ export function App() {
         open={pendingDelete !== null}
         title={
           pendingDelete?.target === "project"
-            ? "删除作品"
+            ? t("library.deleteProject")
             : pendingDelete?.target === "book"
-              ? "删除书"
+              ? t("library.deleteBook")
               : pendingDelete?.target === "volume"
-                ? "删除卷"
+                ? t("library.deleteVolume")
                 : pendingDelete?.target === "scene"
-                  ? "删除场次"
-                  : "删除章节"
+                  ? t("library.deleteScene")
+                  : t("library.deleteChapter")
         }
         body={
           pendingDelete?.target === "volume"
-            ? `确定删除「${pendingDelete.title}」？卷下的章节会留在书里，只是不再分卷。`
+            ? t("library.confirmDeleteVolume", { title: pendingDelete.title })
             : pendingDelete?.target === "scene"
-              ? `确定删除场次「${pendingDelete.title}」？正文不会被删。`
-              : `确定删除「${pendingDelete?.title ?? ""}」？此操作不可撤销。`
+              ? t("library.confirmDeleteScene", { title: pendingDelete.title })
+              : t("library.confirmDelete", { title: pendingDelete?.title ?? "" })
         }
         onClose={() => setPendingDelete(null)}
         onConfirm={handleDelete}

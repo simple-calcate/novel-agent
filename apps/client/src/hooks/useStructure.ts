@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { libraryApi } from "../api";
+import { t } from "../i18n";
 import { logger } from "../logger";
 import { Project, StoryEntry, StoryEntryKind } from "../types";
 
@@ -33,7 +34,7 @@ export function useStructure(project: Project | null) {
   const create = useCallback(
     async (kind: StoryEntryKind, title: string, summary: string) => {
       if (!project) {
-        setError("请先选择作品");
+        setError(t("library.pickProject"));
         return;
       }
       setBusy(true);

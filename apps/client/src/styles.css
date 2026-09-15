@@ -34,6 +34,14 @@ body {
   overflow: hidden;
 }
 
+html[lang="en"] body {
+  font-family: system-ui, "Segoe UI", "Inter", "Noto Sans SC", sans-serif;
+}
+
+html[lang="en"] .novel-editor {
+  font-family: "Iowan Old Style", "Palatino Linotype", "Source Han Serif SC", serif;
+}
+
 /* ============ Layout ============ */
 .app-shell {
   display: grid;

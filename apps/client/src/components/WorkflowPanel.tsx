@@ -7,11 +7,18 @@ import {
   type WorkflowDefinition,
 } from "@novel-agent/workflow-builder";
 import { libraryApi } from "../api";
-import { formatPluginResult, splitNames } from "../plugins/format";
-import { actionLabel } from "../workflow/labels";
+import { formatPluginResult, pluginDisplayName, splitNames } from "../plugins/format";
+import {
+  actionLabel,
+  jobStatusLabel,
+  operationLabel,
+  triggerLabel,
+  workflowTemplateName,
+} from "../workflow/labels";
+import { joinList, t, useI18n } from "../i18n";
 
 interface Props {
-  jobs: Array<{ id: string; label: string; status: string }>;
+  jobs: Array<{ id: string; operation: string; status: string }>;
   queueReady: boolean;
   chapterText: string;
   characterNames: string[];
@@ -20,16 +27,6 @@ interface Props {
 
 const templates = bundledWorkflowTemplates();
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: "排队中",
-  blocked: "阻塞",
-  running: "执行中",
-  succeeded: "完成",
-  failed: "失败",
-  cancelled: "已取消",
-  deadLetter: "死信",
-};
-
 export function WorkflowPanel({
   jobs,
   queueReady,
@@ -37,6 +34,7 @@ export function WorkflowPanel({
   characterNames,
   onRun,
 }: Props) {
+  const { t: tx } = useI18n();
   const [pending, setPending] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -63,9 +61,9 @@ export function WorkflowPanel({
       const result = await libraryApi.flushOutboxJournal();
       setPending(0);
       const location = result.path ? ` → ${result.path}` : "";
-      setMessage(`${result.written} 条已写出${location}。${result.note}`);
+      setMessage(tx("workflow.flushed", { count: result.written, location, note: result.note }));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "写出失败");
+      setMessage(error instanceof Error ? error.message : tx("workflow.flushFail"));
     } finally {
       setBusy(false);
     }
@@ -80,7 +78,7 @@ export function WorkflowPanel({
         if (action.type === "runPluginOperation") {
           notes.push(await runPluginAction(action, chapterText, characterNames));
         } else {
-          onRun(actionToToolId(action), template.name);
+          onRun(actionToToolId(action), workflowTemplateName(template.id, template.name));
         }
       }
       if (notes.length > 0) {
@@ -96,21 +94,18 @@ export function WorkflowPanel({
   return (
     <div className="panel-content">
       <div className="panel-heading">
-        <h3>工作流</h3>
+        <h3>{tx("workflow.heading")}</h3>
       </div>
-      <p className="panel-muted">
-        模板来自 MIT 包 <code>@novel-agent/workflow-builder</code>
-        。可视化编辑器还没有。点播放：队列类动作会入队；「点名当前章」立刻对人名点名。
-      </p>
+      <p className="panel-muted">{tx("workflow.lead")}</p>
 
       <div className="outbox-journal">
         <div className="outbox-journal-copy">
-          <strong>待同步 {pending} 条</strong>
-          <p>本机把变更写成 JSONL，不是设备间同步。</p>
+          <strong>{tx("workflow.pending", { count: pending })}</strong>
+          <p>{tx("workflow.journalHint")}</p>
         </div>
         <button className="mini-button" onClick={() => void flushJournal()} disabled={busy}>
           <FileDown size={12} />
-          {busy ? "写出中" : "写出 journal"}
+          {busy ? tx("workflow.flushing") : tx("workflow.flush")}
         </button>
       </div>
       {message && <pre className="plugin-result workflow-run-note">{message}</pre>}
@@ -122,7 +117,7 @@ export function WorkflowPanel({
               <Workflow size={14} />
             </div>
             <div className="workflow-body">
-              <div className="workflow-name">{template.name}</div>
+              <div className="workflow-name">{workflowTemplateName(template.id, template.name)}</div>
               <div className="workflow-trigger">{triggerLabel(template.trigger)}</div>
               <div className="workflow-actions">
                 {template.actions.map((action, index) => (
@@ -134,7 +129,7 @@ export function WorkflowPanel({
               className="mini-button"
               disabled={busy}
               onClick={() => void play(template)}
-              title="立即运行模板中的动作"
+              title={tx("workflow.play")}
             >
               <Play size={12} />
             </button>
@@ -142,37 +137,20 @@ export function WorkflowPanel({
         ))}
       </div>
 
-      <h3 className="jobs-heading">任务队列</h3>
+      <h3 className="jobs-heading">{tx("workflow.jobs")}</h3>
       <div className="job-list">
-        {!queueReady && <div className="empty-state">队列后端未连接</div>}
-        {queueReady && jobs.length === 0 && <div className="empty-state">暂无任务</div>}
+        {!queueReady && <div className="empty-state">{tx("workflow.queueOffline")}</div>}
+        {queueReady && jobs.length === 0 && <div className="empty-state">{tx("workflow.noJobs")}</div>}
         {jobs.map((job) => (
           <div key={job.id} className="job-item">
             <span className={`job-status ${job.status === "succeeded" ? "done" : ""} ${job.status}`} />
-            <span className="job-label">{job.label}</span>
-            <span className="job-state">{STATUS_LABELS[job.status] ?? job.status}</span>
+            <span className="job-label">{operationLabel(job.operation)}</span>
+            <span className="job-state">{jobStatusLabel(job.status)}</span>
           </div>
         ))}
       </div>
     </div>
   );
-}
-
-function triggerLabel(trigger: string): string {
-  switch (trigger) {
-    case "editor.idle":
-      return "停笔后";
-    case "chapter.created":
-      return "新章节";
-    case "paragraph.created":
-      return "新段落";
-    case "document.saved":
-      return "保存后";
-    case "manual":
-      return "手动";
-    default:
-      return trigger;
-  }
 }
 
 async function runPluginAction(
@@ -182,11 +160,11 @@ async function runPluginAction(
 ): Promise<string> {
   if (action.pluginId === "hello-names") {
     if (!chapterText.trim()) {
-      throw new Error("先打开一章，或点「打开示例章节」。");
+      throw new Error(t("plugin.needChapterThrow"));
     }
-    const names = splitNames(characterNames.join("、"));
+    const names = splitNames(joinList(characterNames));
     if (names.length === 0) {
-      throw new Error("先在结构里加人物，或打开示例章节（会预置林默）。");
+      throw new Error(t("plugin.needCharacters"));
     }
     const output = await libraryApi.runPluginOperation(action.pluginId, action.operation, {
       selection: chapterText,
@@ -196,7 +174,7 @@ async function runPluginAction(
     return formatPluginResult(
       {
         id: action.pluginId,
-        name: "人名点名",
+        name: pluginDisplayName({ id: action.pluginId, name: t("plugin.helloNames") }),
         version: "0.1.0",
         runtime: "wasm",
         operations: [action.operation],
@@ -212,7 +190,7 @@ async function runPluginAction(
   return formatPluginResult(
     {
       id: action.pluginId,
-      name: action.pluginId,
+      name: pluginDisplayName({ id: action.pluginId, name: action.pluginId }),
       version: "0.1.0",
       runtime: "builtin",
       operations: [action.operation],

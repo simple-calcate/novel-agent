@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { ContextHint, StoryEntry } from "../types";
 
 const STOPWORDS = new Set([
@@ -99,7 +100,7 @@ export function matchStoryEntries(
       id: entry.id,
       kind,
       title: entry.title,
-      summary: entry.summary || `${entry.title} · 预先设定`,
+      summary: entry.summary || t("match.presetSummary", { title: entry.title }),
       sourceLabel: entry.kind,
       matchReason: hit.reason,
       confidence: hit.score,

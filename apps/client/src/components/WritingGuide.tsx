@@ -1,4 +1,5 @@
-import { SLOT_PROMPTS, WriterMode } from "../editor/guide";
+import { slotPrompts, WriterMode } from "../editor/guide";
+import { useI18n } from "../i18n";
 
 interface Props {
   mode: WriterMode;
@@ -9,6 +10,8 @@ interface Props {
 
 /** 写在编辑器里的协议：告诉作者此刻该写什么。 */
 export function WritingGuide({ mode, title, body, onInsertSlot }: Props) {
+  useI18n();
+  const slots = slotPrompts();
   return (
     <div className={`writing-guide mode-${mode}`} data-testid="writing-guide">
       <div className="writing-guide-copy">
@@ -17,7 +20,7 @@ export function WritingGuide({ mode, title, body, onInsertSlot }: Props) {
       </div>
       {mode === "thinking" && (
         <div className="writing-guide-slots">
-          {SLOT_PROMPTS.map((slot) => (
+          {slots.map((slot) => (
             <button
               key={slot.insert}
               type="button"

@@ -1,6 +1,7 @@
 import { Pin, X } from "lucide-react";
 import { ContextHint } from "../types";
 import { BookMarked, Flame, User } from "lucide-react";
+import { useI18n } from "../i18n";
 
 interface Props {
   hints: ContextHint[];
@@ -9,16 +10,6 @@ interface Props {
   onPin: (id: string) => void;
   onIgnore: (id: string) => void;
 }
-
-const kindLabels: Record<ContextHint["kind"], string> = {
-  characterState: "人物",
-  worldRule: "设定",
-  timelineConstraint: "设定",
-  openForeshadowing: "伏笔",
-  plotHook: "伏笔",
-  preference: "设定",
-  continuityRisk: "设定",
-};
 
 const kindIcons: Record<ContextHint["kind"], typeof BookMarked> = {
   characterState: User,
@@ -31,6 +22,16 @@ const kindIcons: Record<ContextHint["kind"], typeof BookMarked> = {
 };
 
 export function ContextRail({ hints, pinnedIds, ignoredIds, onPin, onIgnore }: Props) {
+  const { t } = useI18n();
+  const kindLabels: Record<ContextHint["kind"], string> = {
+    characterState: t("rail.character"),
+    worldRule: t("rail.setting"),
+    timelineConstraint: t("rail.setting"),
+    openForeshadowing: t("rail.foreshadow"),
+    plotHook: t("rail.foreshadow"),
+    preference: t("rail.setting"),
+    continuityRisk: t("rail.setting"),
+  };
   const visible = hints
     .filter((hint) => !ignoredIds.includes(hint.id))
     .slice()
@@ -52,12 +53,12 @@ export function ContextRail({ hints, pinnedIds, ignoredIds, onPin, onIgnore }: P
               <span className="hint-kind">{kindLabels[hint.kind]}</span>
               <button
                 className={`hint-action ${pinned ? "active" : ""}`}
-                title={pinned ? "取消钉住" : "钉住"}
+                title={pinned ? t("rail.unpin") : t("rail.pin")}
                 onClick={() => onPin(hint.id)}
               >
                 <Pin size={12} />
               </button>
-              <button className="hint-action" title="忽略" onClick={() => onIgnore(hint.id)}>
+              <button className="hint-action" title={t("rail.ignore")} onClick={() => onIgnore(hint.id)}>
                 <X size={12} />
               </button>
             </div>

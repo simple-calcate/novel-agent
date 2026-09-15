@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { libraryApi } from "../api";
+import { t } from "../i18n";
 import { Book, Chapter, LibrarySnapshot, Project, Scene, Volume } from "../types";
 import { logger } from "../logger";
 import { installSampleChapter, type InstalledSample } from "../editor/sampleChapter";
@@ -101,9 +102,9 @@ export function useLibrary() {
           return;
         }
         if (prompt.target === "volume") {
-          if (!project) throw new Error("请先创建作品");
+          if (!project) throw new Error(t("library.needProject"));
           const bookId = activeBookId ?? books[0]?.id;
-          if (!bookId) throw new Error("请先创建一本书");
+          if (!bookId) throw new Error(t("library.needBook"));
           const volume = await libraryApi.createVolume(project.id, bookId, title);
           await refreshLibrary(project.id);
           setActiveBookId(bookId);
@@ -111,18 +112,18 @@ export function useLibrary() {
           return;
         }
         if (prompt.target === "scene") {
-          if (!project) throw new Error("请先创建作品");
-          if (!activeChapter) throw new Error("请先打开一章");
+          if (!project) throw new Error(t("library.needProject"));
+          if (!activeChapter) throw new Error(t("library.needChapter"));
           await libraryApi.createScene(project.id, activeChapter, title);
           await refreshLibrary(project.id);
           return;
         }
         if (!project) {
-          throw new Error("请先创建作品或书籍");
+          throw new Error(t("library.needProjectOrBook"));
         }
         const bookId = activeBookId ?? books[0]?.id;
         if (!bookId) {
-          throw new Error("请先创建一本书");
+          throw new Error(t("library.needBook"));
         }
         const volumeId =
           activeVolumeId && volumes.some((volume) => volume.id === activeVolumeId && volume.bookId === bookId)
@@ -136,7 +137,7 @@ export function useLibrary() {
         return;
       }
       if (!project && prompt.target !== "project") {
-        throw new Error("未选择作品");
+        throw new Error(t("library.noActiveProject"));
       }
       if (prompt.target === "project" && prompt.id) {
         applyLibrary(await libraryApi.renameProject(prompt.id, title));

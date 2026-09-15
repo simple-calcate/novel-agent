@@ -1,5 +1,6 @@
 import type { MouseEvent } from "react";
 import { Pencil, Trash2, ChevronUp, ChevronDown } from "lucide-react";
+import { useI18n } from "../i18n";
 
 interface Props {
   disableUp?: boolean;
@@ -14,12 +15,13 @@ interface Props {
 export function TreeItemActions({
   disableUp,
   disableDown,
-  deleteTitle = "删除",
+  deleteTitle,
   onRename,
   onDelete,
   onMoveUp,
   onMoveDown,
 }: Props) {
+  const { t } = useI18n();
   const stop = (event: MouseEvent, action: () => void) => {
     event.preventDefault();
     event.stopPropagation();
@@ -28,16 +30,25 @@ export function TreeItemActions({
 
   return (
     <span className="tree-actions" onClick={(event) => event.stopPropagation()}>
-      <button type="button" title="上移" disabled={disableUp} onClick={(event) => stop(event, onMoveUp)}>
+      <button type="button" title={t("common.moveUp")} disabled={disableUp} onClick={(event) => stop(event, onMoveUp)}>
         <ChevronUp size={12} />
       </button>
-      <button type="button" title="下移" disabled={disableDown} onClick={(event) => stop(event, onMoveDown)}>
+      <button
+        type="button"
+        title={t("common.moveDown")}
+        disabled={disableDown}
+        onClick={(event) => stop(event, onMoveDown)}
+      >
         <ChevronDown size={12} />
       </button>
-      <button type="button" title="重命名" onClick={(event) => stop(event, onRename)}>
+      <button type="button" title={t("common.rename")} onClick={(event) => stop(event, onRename)}>
         <Pencil size={12} />
       </button>
-      <button type="button" title={deleteTitle} onClick={(event) => stop(event, onDelete)}>
+      <button
+        type="button"
+        title={deleteTitle ?? t("common.delete")}
+        onClick={(event) => stop(event, onDelete)}
+      >
         <Trash2 size={12} />
       </button>
     </span>
@@ -57,10 +68,11 @@ export function ConfirmDialog({
   open,
   title,
   body,
-  confirmLabel = "删除",
+  confirmLabel,
   onClose,
   onConfirm,
 }: ConfirmProps) {
+  const { t } = useI18n();
   if (!open) return null;
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -73,7 +85,7 @@ export function ConfirmDialog({
         </div>
         <div className="modal-footer">
           <button type="button" className="btn" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -84,7 +96,7 @@ export function ConfirmDialog({
                 .catch(() => undefined);
             }}
           >
-            {confirmLabel}
+            {confirmLabel ?? t("common.delete")}
           </button>
         </div>
       </div>
