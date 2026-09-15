@@ -2,7 +2,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Sparkles,
   X,
@@ -40,9 +40,11 @@ import {
   type WriterMode,
 } from "../editor/guide";
 import { StoryCatalogContext } from "../editor/StoryCatalog";
-import { filterTagKindLabels } from "../structure/tagCandidates";
+import { filterTagKindLabels, STORY_TAG_KIND_LABELS, tagKindLabel } from "../structure/tagCandidates";
 import type { ContentBlock, StoryEntry } from "../types";
 import { logger } from "../logger";
+import { t, useI18n } from "../i18n";
+import type { MessageKey } from "../i18n";
 
 declare global {
   interface Window {
@@ -76,56 +78,35 @@ interface MentionMenuState {
   query: string;
 }
 
-const MENTION_ITEMS: Array<{
-  kind: "tag";
-  icon: React.ReactNode;
-  label: string;
-  desc: string;
-  attrs: Record<string, string>;
-}> = [
-  {
-    kind: "tag",
-    icon: <User size={13} />,
-    label: "人物",
-    desc: "点名角色。写作标签，以后再拆成工具",
-    attrs: { kind: "tag", tagKind: "人物", id: "", label: "", note: "" },
-  },
-  {
-    kind: "tag",
-    icon: <Flame size={13} />,
-    label: "伏笔",
-    desc: "点一条伏笔。先当标签，不必对上正史库",
-    attrs: { kind: "tag", tagKind: "伏笔", id: "", label: "", note: "" },
-  },
-  {
-    kind: "tag",
-    icon: <MapPin size={13} />,
-    label: "地点",
-    desc: "点一个地点",
-    attrs: { kind: "tag", tagKind: "地点", id: "", label: "", note: "" },
-  },
-  {
-    kind: "tag",
-    icon: <Package size={13} />,
-    label: "道具",
-    desc: "点一件物件",
-    attrs: { kind: "tag", tagKind: "道具", id: "", label: "", note: "" },
-  },
-  {
-    kind: "tag",
-    icon: <Users size={13} />,
-    label: "势力",
-    desc: "点一个组织或势力",
-    attrs: { kind: "tag", tagKind: "势力", id: "", label: "", note: "" },
-  },
-  {
-    kind: "tag",
-    icon: <Scale size={13} />,
-    label: "规则",
-    desc: "点一条世界规则",
-    attrs: { kind: "tag", tagKind: "规则", id: "", label: "", note: "" },
-  },
-];
+const MENTION_ICONS: Record<(typeof STORY_TAG_KIND_LABELS)[number], ReactNode> = {
+  人物: <User size={13} />,
+  伏笔: <Flame size={13} />,
+  地点: <MapPin size={13} />,
+  道具: <Package size={13} />,
+  势力: <Users size={13} />,
+  规则: <Scale size={13} />,
+};
+
+const MENTION_DESC: Record<(typeof STORY_TAG_KIND_LABELS)[number], MessageKey> = {
+  人物: "editor.mentionCharacter",
+  伏笔: "editor.mentionForeshadow",
+  地点: "editor.mentionPlace",
+  道具: "editor.mentionItem",
+  势力: "editor.mentionFaction",
+  规则: "editor.mentionRule",
+};
+
+function mentionCatalog() {
+  return STORY_TAG_KIND_LABELS.map((kind) => ({
+    kindId: kind,
+    icon: MENTION_ICONS[kind],
+    label: tagKindLabel(kind),
+    desc: t(MENTION_DESC[kind]),
+    attrs: { kind: "tag", tagKind: kind, id: "", label: "", note: "" },
+  }));
+}
+
+type MentionItem = ReturnType<typeof mentionCatalog>[number];
 
 export function Editor({
   onTextChange,
@@ -140,6 +121,7 @@ export function Editor({
   onBlocksChange,
   storyEntries = [],
 }: EditorProps) {
+  const { t } = useI18n();
   const [wordCount, setWordCount] = useState(0);
   const [thinkingCount, setThinkingCount] = useState(0);
   const [writerMode, setWriterMode] = useState<WriterMode>("body");
@@ -224,8 +206,8 @@ export function Editor({
   mentionRef.current = mention;
   const mentionIndexRef = useRef(mentionIndex);
   mentionIndexRef.current = mentionIndex;
-  const mentionItemsRef = useRef<typeof MENTION_ITEMS>([]);
-  const insertMentionRef = useRef<(item: (typeof MENTION_ITEMS)[number]) => void>(() => {});
+  const mentionItemsRef = useRef<MentionItem[]>([]);
+  const insertMentionRef = useRef<(item: MentionItem) => void>(() => {});
 
   /** 挂起的重计算：卸载时同步冲刷，避免切章节丢失最后一段草稿 */
   const pendingHeavy = useRef<(() => void) | null>(null);
@@ -258,7 +240,7 @@ export function Editor({
         placeholder: ({ node }) =>
           node.type.name === "thinkingBlock"
             ? ""
-            : "写给读者的正文。空行按 Tab 切到思考",
+            : t("editor.placeholder"),
         includeChildren: true,
         showOnlyCurrent: false,
       }),
@@ -394,7 +376,7 @@ export function Editor({
   );
 
   const insertMention = useCallback(
-    (item: (typeof MENTION_ITEMS)[number]) => {
+    (item: MentionItem) => {
       if (!editor || !mention) return;
       editor
         .chain()
@@ -494,7 +476,7 @@ export function Editor({
 
   const copy = guideCopy({ mode: writerMode, missingThinkingBeats: missingThinking });
   const mentionItems = mention
-    ? MENTION_ITEMS.filter((item) => filterTagKindLabels(mention.query).includes(item.label))
+    ? mentionCatalog().filter((item) => filterTagKindLabels(mention.query).includes(item.kindId))
     : [];
   mentionItemsRef.current = mentionItems;
 
@@ -503,31 +485,31 @@ export function Editor({
     <div className={`editor-wrapper ${flashing ? "mode-flash" : ""}`}>
       <div className="editor-toolbar">
         <div className="editor-stats">
-          <span className="stat">{wordCount} 字</span>
+          <span className="stat">{t("editor.wordCount", { count: wordCount })}</span>
           {thinkingCount > 0 && (
             <span className="stat think">
               <Brain size={12} />
-              {thinkingCount} 段思考
+              {t("editor.thinkingCount", { count: thinkingCount })}
             </span>
           )}
           <span className={`stat status ${isTyping ? "typing" : ""}`}>
-            {isTyping ? "输入中..." : "已停笔"}
+            {isTyping ? t("editor.typing") : t("editor.idle")}
           </span>
         </div>
         <div className="editor-actions">
           <div className="export-group">
-            <button className="tool-btn" title="导出本章（正文+思考）" disabled={wordCount === 0}>
+            <button className="tool-btn" title={t("editor.exportTitle")} disabled={wordCount === 0}>
               <Download size={14} />
-              导出
+              {t("editor.export")}
             </button>
             <div className="export-menu">
-              <button onClick={() => handleExport("jsonl")}>JSONL · 协议字段</button>
-              <button onClick={() => handleExport("sharegpt")}>ShareGPT · 含系统短指令</button>
-              <button onClick={() => handleExport("alpaca")}>Alpaca · instruction/input/output</button>
-              <button onClick={() => handleExport("r1")}>R1 风格 · &lt;think&gt; 标签</button>
+              <button onClick={() => handleExport("jsonl")}>{t("editor.exportJsonl")}</button>
+              <button onClick={() => handleExport("sharegpt")}>{t("editor.exportSharegpt")}</button>
+              <button onClick={() => handleExport("alpaca")}>{t("editor.exportAlpaca")}</button>
+              <button onClick={() => handleExport("r1")}>{t("editor.exportR1")}</button>
             </div>
           </div>
-          <button className="tool-btn" title="AI 续写">
+          <button className="tool-btn" title={t("editor.continueTitle")}>
             <Sparkles size={14} />
           </button>
         </div>
@@ -542,7 +524,7 @@ export function Editor({
         <div className="export-notice" role="status">
           {exportNotice}
           <button type="button" className="export-notice-dismiss" onClick={() => setExportNotice(null)}>
-            知道了
+            {t("editor.dismiss")}
           </button>
         </div>
       )}
@@ -556,7 +538,7 @@ export function Editor({
           >
             {mentionItems.map((item, index) => (
               <button
-                key={item.label}
+                key={item.kindId}
                 className={`mention-item${index === mentionIndex ? " active" : ""}`}
                 onClick={() => insertMention(item)}
               >
@@ -650,6 +632,7 @@ export function AIPreview({
   onReject: () => void;
   onRevise: () => void;
 }) {
+  const { t } = useI18n();
   if (!text) return null;
 
   return (
@@ -657,16 +640,16 @@ export function AIPreview({
       <div className="ai-preview-header">
         <div className="ai-badge">
           <Sparkles size={12} />
-          <span>AI 续写</span>
+          <span>{t("preview.title")}</span>
         </div>
         <div className="ai-actions">
-          <button className="ai-btn accept" onClick={onAccept} title="接受">
+          <button className="ai-btn accept" onClick={onAccept} title={t("preview.accept")}>
             <Check size={14} />
           </button>
-          <button className="ai-btn revise" onClick={onRevise} title="重新生成">
+          <button className="ai-btn revise" onClick={onRevise} title={t("preview.revise")}>
             <RotateCcw size={14} />
           </button>
-          <button className="ai-btn reject" onClick={onReject} title="拒绝">
+          <button className="ai-btn reject" onClick={onReject} title={t("preview.reject")}>
             <X size={14} />
           </button>
         </div>
@@ -675,7 +658,7 @@ export function AIPreview({
         <p>{text}</p>
       </div>
       <div className="ai-preview-footer">
-        <span className="hint">按 Tab 接受 · Esc 拒绝</span>
+        <span className="hint">{t("preview.hint")}</span>
       </div>
     </div>
   );

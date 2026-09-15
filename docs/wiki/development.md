@@ -45,7 +45,7 @@ CI（`.github/workflows/ci.yml`）只在面向 `main` 的 pull request / push �
 | 段落匹配规则 | `crates/context-hints` **和** `apps/client/src/structure/match.ts`，加上共享 fixtures |
 | 插件清单 / 工作流定义 | MIT 包 `packages/plugin-sdk`、`packages/workflow-builder`、`packages/plugin-compile` |
 | 模型密钥 | `SecretVault`，不要写进 `save_setting` |
-| 界面文案 / 树交互 | `apps/client/src/App.tsx` 与 `components/`，不改仓储 |
+| 界面文案 / 树交互 | `apps/client/src/i18n/catalogs/` 与 `t()`，再改 `App.tsx` / `components/`；不要在 JSX 里新写可见字符串 |
 
 前端作品库路径只通过 `apps/client/src/api.ts` 的 `libraryApi`。不要在作品树 / 结构 / 历史面板里直接 `invoke`。编辑器会话（心跳、模式切换）仍可 `invoke` 对应命令。
 
@@ -66,6 +66,7 @@ CI（`.github/workflows/ci.yml`）只在面向 `main` 的 pull request / push �
 | `components/HistoryPanel.tsx` | 修订列表、与上一版对比、恢复 |
 | `editor/textDiff.ts` | 浏览器预览的行级对比（桌面走 Rust `similar`） |
 | `structure/match.ts` | 浏览器侧匹配器 |
+| `i18n/` | 界面语言、文案目录、`t()`；设置里切换，键 `moshu.locale` |
 
 ## 改接口检查表
 
@@ -73,8 +74,8 @@ CI（`.github/workflows/ci.yml`）只在面向 `main` 的 pull request / push �
 
 1. domain 字段 → serde camelCase、SQLite 迁移、TS `types.ts`、`packages/shared-types/examples.json`
 2. command 名或字段 → `libraryApi`（若前端要调）、宿主 command 测试、interfaces **§5 表格**（与 `generate_handler!` 对齐）
-3. 工具 id → 工作流模板、`OPERATION_LABELS`、interfaces 工具表
-4. 产品能看见的行为 → [product.md](product.md)；新词 → [glossary.md](glossary.md)；本页落点表 / 前端模块表
+3. 工具 id → 工作流模板、`operationLabel()`、interfaces 工具表
+4. 产品能看见的行为 → [product.md](product.md)；新词 → [glossary.md](glossary.md)；本页落点表 / 前端模块表。用户可见新字符串进 `apps/client/src/i18n/catalogs/`（中英一起改），测试会核对键对齐。
 5. `cargo test --workspace` 与前端 test / typecheck
 
 ## 文档

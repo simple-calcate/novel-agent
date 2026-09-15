@@ -33,6 +33,7 @@ describe("tag candidates", () => {
   it("filters @ kind labels by the query after @", () => {
     expect(filterTagKindLabels("人")).toEqual(["人物"]);
     expect(filterTagKindLabels("")).toEqual(["人物", "伏笔", "地点", "道具", "势力", "规则"]);
+    expect(filterTagKindLabels("char")).toEqual(["人物"]);
   });
 
   it("only offers characters for @人物, including alias hits", () => {

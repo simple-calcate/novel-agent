@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { X } from "lucide-react";
+import { useI18n } from "../i18n";
 
 interface Props {
   open: boolean;
@@ -17,11 +18,12 @@ export function CreateDialog({
   title,
   label,
   placeholder,
-  confirmLabel = "创建",
+  confirmLabel,
   initialValue = "",
   onClose,
   onSubmit,
 }: Props) {
+  const { t } = useI18n();
   const [value, setValue] = useState(initialValue);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +42,7 @@ export function CreateDialog({
     event.preventDefault();
     const trimmed = value.trim();
     if (!trimmed) {
-      setError("名称不能为空");
+      setError(t("common.emptyName"));
       return;
     }
     setBusy(true);
@@ -80,10 +82,10 @@ export function CreateDialog({
         </div>
         <div className="modal-footer">
           <button type="button" className="btn" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </button>
           <button type="submit" className="btn primary" disabled={busy}>
-            {busy ? "请稍候…" : confirmLabel}
+            {busy ? t("common.wait") : (confirmLabel ?? t("common.create"))}
           </button>
         </div>
       </form>

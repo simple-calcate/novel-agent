@@ -1,14 +1,9 @@
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { StoryEntry, StoryEntryKind } from "../types";
+import { joinList, useI18n } from "../i18n";
 
 const KIND_ORDER: StoryEntryKind[] = ["character", "setting", "foreshadow"];
-
-const KIND_LABELS: Record<StoryEntryKind, string> = {
-  character: "人物",
-  setting: "设定",
-  foreshadow: "伏笔",
-};
 
 interface Props {
   disabled: boolean;
@@ -20,9 +15,15 @@ interface Props {
 }
 
 export function StructurePanel({ disabled, busy, error, entries, onCreate, onDelete }: Props) {
+  const { t } = useI18n();
   const [kind, setKind] = useState<StoryEntryKind>("character");
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
+  const kindLabels: Record<StoryEntryKind, string> = {
+    character: t("rail.character"),
+    setting: t("rail.setting"),
+    foreshadow: t("rail.foreshadow"),
+  };
 
   const submit = () => {
     if (!title.trim()) return;
@@ -33,29 +34,25 @@ export function StructurePanel({ disabled, busy, error, entries, onCreate, onDel
 
   return (
     <div className="panel-content">
-      <h3>结构{entries.length > 0 ? `（${entries.length}）` : ""}</h3>
-      <p className="canon-lead">
-        预先写好人物、设定和伏笔。写作时按名称、别名和设定关键词匹配当前段落；本地没命中时再用这段里的词去说明里检索。
-      </p>
+      <h3>{entries.length > 0 ? t("structure.headingCount", { count: entries.length }) : t("structure.heading")}</h3>
+      <p className="canon-lead">{t("structure.lead")}</p>
       {error && <div className="tree-empty">{error}</div>}
 
-      {entries.length === 0 && (
-        <div className="empty-state">还没有结构。先添加人物、设定或伏笔。</div>
-      )}
+      {entries.length === 0 && <div className="empty-state">{t("structure.empty")}</div>}
       {KIND_ORDER.map((group) => {
         const items = entries.filter((entry) => entry.kind === group);
         if (items.length === 0) return null;
         return (
           <section key={group} className="structure-group">
-            <h4 className="structure-group-title">{KIND_LABELS[group]}</h4>
+            <h4 className="structure-group-title">{kindLabels[group]}</h4>
             {items.map((entry) => (
               <div key={entry.id} className="context-card canon-card">
                 <div className="context-card-title">
                   {entry.title}
                   {entry.aliases?.length > 0 && (
-                    <span className="canon-kind">{entry.aliases.join("、")}</span>
+                    <span className="canon-kind">{joinList(entry.aliases)}</span>
                   )}
-                  <button className="icon-button" title="删除" onClick={() => onDelete(entry)}>
+                  <button className="icon-button" title={t("structure.delete")} onClick={() => onDelete(entry)}>
                     <X size={12} />
                   </button>
                 </div>
@@ -75,7 +72,7 @@ export function StructurePanel({ disabled, busy, error, entries, onCreate, onDel
               onClick={() => setKind(item)}
               type="button"
             >
-              {KIND_LABELS[item]}
+              {kindLabels[item]}
             </button>
           ))}
         </div>
@@ -83,10 +80,10 @@ export function StructurePanel({ disabled, busy, error, entries, onCreate, onDel
           className="structure-input"
           placeholder={
             kind === "character"
-              ? "人名，可写别名：林晚、雾儿"
+              ? t("structure.characterPlaceholder")
               : kind === "foreshadow"
-                ? "伏笔名称，例如：雾中灯塔"
-                : "设定名称，例如：雾港"
+                ? t("structure.foreshadowPlaceholder")
+                : t("structure.settingPlaceholder")
           }
           value={title}
           onChange={(event) => setTitle(event.target.value)}
@@ -94,7 +91,7 @@ export function StructurePanel({ disabled, busy, error, entries, onCreate, onDel
         />
         <textarea
           className="structure-input"
-          placeholder="补充说明（可选）"
+          placeholder={t("structure.summaryPlaceholder")}
           rows={3}
           value={summary}
           onChange={(event) => setSummary(event.target.value)}
@@ -102,7 +99,7 @@ export function StructurePanel({ disabled, busy, error, entries, onCreate, onDel
         />
         <button className="mini-button" type="button" disabled={disabled || busy || !title.trim()} onClick={submit}>
           <Plus size={12} />
-          添加
+          {t("common.add")}
         </button>
       </div>
     </div>

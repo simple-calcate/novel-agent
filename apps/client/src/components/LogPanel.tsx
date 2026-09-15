@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { X, Trash2, Download } from "lucide-react";
 import { logger } from "../logger";
+import { useI18n } from "../i18n";
 
 interface LogEntry {
   timestamp: string;
@@ -10,6 +11,7 @@ interface LogEntry {
 }
 
 export function LogPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useI18n();
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
   useEffect(() => {
@@ -44,22 +46,22 @@ export function LogPanel({ open, onClose }: { open: boolean; onClose: () => void
     <div className="log-panel-overlay" onClick={onClose}>
       <div className="log-panel" onClick={(e) => e.stopPropagation()}>
         <div className="log-panel-header">
-          <h3>应用日志</h3>
+          <h3>{t("logs.title")}</h3>
           <div className="log-panel-actions">
-            <button className="mini-button" onClick={exportLogs} title="导出日志">
+            <button className="mini-button" onClick={exportLogs} title={t("logs.export")}>
               <Download size={12} />
             </button>
-            <button className="mini-button" onClick={clearLogs} title="清空日志">
+            <button className="mini-button" onClick={clearLogs} title={t("logs.clear")}>
               <Trash2 size={12} />
             </button>
-            <button className="icon-button" onClick={onClose}>
+            <button className="icon-button" onClick={onClose} title={t("common.close")}>
               <X size={14} />
             </button>
           </div>
         </div>
         <div className="log-panel-content">
           {logs.length === 0 ? (
-            <div className="log-empty">暂无日志</div>
+            <div className="log-empty">{t("logs.empty")}</div>
           ) : (
             logs.map((entry, i) => (
               <div key={i} className={`log-entry log-${entry.level}`}>

@@ -10,8 +10,9 @@ import { Brain, ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { THINKING_STARTER } from "./guide";
 import { useStoryCatalog } from "./StoryCatalog";
-import { listTagCandidates } from "../structure/tagCandidates";
+import { listTagCandidates, tagKindLabel } from "../structure/tagCandidates";
 import { FloatingMenu } from "../components/FloatingMenu";
+import { useI18n } from "../i18n";
 
 /**
  * 思考块：作者决策层，读者看不到。协议见 docs/writing-protocol.md
@@ -131,9 +132,10 @@ export const ThinkingBlock = Node.create({
 });
 
 function ThinkingBlockView({ node, updateAttributes }: ReactNodeViewProps) {
+  const { t } = useI18n();
   const collapsed = node.attrs.collapsed === true;
   const isEmpty = node.content.size === 0;
-  const firstLine = (node.textContent || "思考…").split("\n")[0];
+  const firstLine = (node.textContent || t("editor.thinkingEllipsis")).split("\n")[0];
   const summary = firstLine.length > 40 ? `${firstLine.slice(0, 40)}…` : firstLine;
 
   return (
@@ -142,7 +144,7 @@ function ThinkingBlockView({ node, updateAttributes }: ReactNodeViewProps) {
         className="thinking-toggle"
         contentEditable={false}
         onClick={() => updateAttributes({ collapsed: !collapsed })}
-        title={collapsed ? "展开思考" : "折叠思考"}
+        title={collapsed ? t("editor.expandThinking") : t("editor.collapseThinking")}
       >
         {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
       </button>
@@ -152,13 +154,13 @@ function ThinkingBlockView({ node, updateAttributes }: ReactNodeViewProps) {
       {collapsed ? (
         <span className="thinking-summary" contentEditable={false}>
           {summary}
-          <span className="thinking-summary-hint">· 思考已折叠</span>
+          <span className="thinking-summary-hint">{t("editor.thinkingCollapsed")}</span>
         </span>
       ) : (
         <span className="thinking-content-wrap">
           {isEmpty && (
             <span className="thinking-placeholder" contentEditable={false}>
-              意图：这一拍要完成什么（读者看不到）
+              {t("editor.thinkingPlaceholder")}
             </span>
           )}
           <NodeViewContent className="thinking-content" />
@@ -325,9 +327,11 @@ function focusAfterChip(editor: Editor, getPos: () => number | undefined, nodeSi
 }
 
 function MarkupChipView({ node, updateAttributes, getPos, editor, selected }: ReactNodeViewProps) {
-  const tagKind = String(node.attrs.tagKind || "标签");
+  const { t } = useI18n();
+  const tagKind = String(node.attrs.tagKind || "");
+  const kindLabel = tagKindLabel(tagKind);
   const [value, setValue] = useState(String(node.attrs.label || ""));
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(() => !String(node.attrs.label || ""));
   const [active, setActive] = useState(0);
   const [caret, setCaret] = useState<{ top: number; left: number; bottom: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -398,16 +402,16 @@ function MarkupChipView({ node, updateAttributes, getPos, editor, selected }: Re
       contentEditable={false}
       onClick={() => inputRef.current?.focus()}
     >
-      <span className="markup-chip-kind">@{tagKind}</span>
-      <span className="markup-chip-colon">：</span>
+      <span className="markup-chip-kind">@{kindLabel}</span>
+      <span className="markup-chip-colon">{t("common.colon")}</span>
       <input
         ref={inputRef}
         className="markup-chip-input"
         value={value}
         size={Math.max(2, value.length + 1)}
-        placeholder="名字"
+        placeholder={t("tag.namePlaceholder")}
         spellCheck={false}
-        aria-label={`${tagKind}名称`}
+        aria-label={t("tag.nameAria", { kind: kindLabel })}
         onMouseDown={(event) => event.stopPropagation()}
         onFocus={() => {
           if (blurTimer.current) clearTimeout(blurTimer.current);
@@ -500,7 +504,7 @@ function MarkupChipView({ node, updateAttributes, getPos, editor, selected }: Re
               <span className="mention-meta">
                 <span className="mention-label">{item.name}</span>
                 <span className="mention-desc">
-                  {item.matchedAlias ? `别名 ${item.matchedAlias}` : item.summary}
+                  {item.matchedAlias ? t("tag.alias", { alias: item.matchedAlias }) : item.summary}
                 </span>
               </span>
             </button>

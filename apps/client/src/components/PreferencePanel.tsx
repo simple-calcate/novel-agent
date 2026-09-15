@@ -1,4 +1,5 @@
 import { PreferenceRule } from "../types";
+import { useI18n } from "../i18n";
 
 interface Props {
   rules: PreferenceRule[];
@@ -6,22 +7,29 @@ interface Props {
 }
 
 export function PreferencePanel({ rules, onToggle }: Props) {
+  const { t } = useI18n();
   if (rules.length === 0) {
-    return <p className="panel-muted">拒绝一次续写后，偏好会出现在这里。下次续写会写进提示。</p>;
+    return <p className="panel-muted">{t("preference.empty")}</p>;
   }
   return (
     <ul className="preference-list">
       {rules.map((rule) => (
         <li key={rule.id} className={rule.status === "disabled" ? "disabled" : ""}>
           <div>
-            <strong>{rule.status === "confirmed" ? "已确认" : rule.status === "disabled" ? "已停用" : "候选"}</strong>
+            <strong>
+              {rule.status === "confirmed"
+                ? t("preference.confirmed")
+                : rule.status === "disabled"
+                  ? t("preference.disabled")
+                  : t("preference.candidate")}
+            </strong>
             <p>{rule.rule}</p>
           </div>
           <button
             className="text-button"
             onClick={() => onToggle(rule, rule.status !== "disabled")}
           >
-            {rule.status === "disabled" ? "启用" : "停用"}
+            {rule.status === "disabled" ? t("preference.enable") : t("preference.disable")}
           </button>
         </li>
       ))}

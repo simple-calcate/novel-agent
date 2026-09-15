@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { X, Key, Cpu, Globe, Server } from "lucide-react";
+import { X, Key, Cpu, Globe, Server, Languages } from "lucide-react";
 
 import { ModelConfig } from "../types";
+import { useI18n, type Locale } from "../i18n";
 
 export type { ModelConfig };
 
@@ -12,35 +13,31 @@ interface Props {
   onSave: (config: ModelConfig) => void;
 }
 
-const providerPresets: Record<string, { label: string; baseUrl: string; models: string[] }> = {
+const providerPresets: Record<string, { baseUrl: string; models: string[] }> = {
   openai: {
-    label: "OpenAI",
     baseUrl: "https://api.openai.com/v1",
     models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"],
   },
   anthropic: {
-    label: "Anthropic",
     baseUrl: "https://api.anthropic.com/v1",
     models: ["claude-opus-5", "claude-sonnet-5", "claude-fable-5"],
   },
   deepseek: {
-    label: "DeepSeek",
     baseUrl: "https://api.deepseek.com/v1",
     models: ["deepseek-v4-pro", "deepseek-v4-flash"],
   },
   ollama: {
-    label: "Ollama (本地)",
     baseUrl: "http://localhost:11434",
     models: ["qwen3:8b", "llama4:8b", "mistral-nemo:12b"],
   },
   custom: {
-    label: "OpenAI 兼容接口",
     baseUrl: "",
     models: [],
   },
 };
 
 export function SettingsModal({ open, onClose, initialConfig, onSave }: Props) {
+  const { t, locale, setLocale, options } = useI18n();
   const [provider, setProvider] = useState<ModelConfig["provider"]>(initialConfig?.provider ?? "openai");
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState(initialConfig?.baseUrl ?? providerPresets.openai.baseUrl);
@@ -58,38 +55,64 @@ export function SettingsModal({ open, onClose, initialConfig, onSave }: Props) {
   if (!open) return null;
 
   const preset = providerPresets[provider];
+  const providerLabel = (key: string) => {
+    if (key === "ollama") return t("settings.ollama");
+    if (key === "custom") return t("settings.custom");
+    if (key === "openai") return "OpenAI";
+    if (key === "anthropic") return "Anthropic";
+    if (key === "deepseek") return "DeepSeek";
+    return key;
+  };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>模型设置</h2>
-          <button className="icon-button" onClick={onClose}>
+          <h2>{t("settings.title")}</h2>
+          <button className="icon-button" onClick={onClose} title={t("common.close")}>
             <X size={16} />
           </button>
         </div>
 
         <div className="modal-body">
-          <p className="panel-muted">
-            正文只存在本机。API Key 进密钥链，不进作品库。没配模型也能继续写。以后若有付费同步，到期不会锁已有稿件。
-          </p>
+          <label className="field">
+            <span className="field-label">
+              <Languages size={14} />
+              {t("locale.label")}
+            </span>
+            <div className="provider-grid locale-grid">
+              {options.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={`provider-option ${locale === option.id ? "selected" : ""}`}
+                  onClick={() => setLocale(option.id as Locale)}
+                >
+                  {option.nativeLabel}
+                </button>
+              ))}
+            </div>
+            <p className="panel-muted">{t("locale.hint")}</p>
+          </label>
+
+          <p className="panel-muted">{t("settings.lead")}</p>
           <label className="field">
             <span className="field-label">
               <Server size={14} />
-              模型提供方
+              {t("settings.provider")}
             </span>
             <div className="provider-grid">
-              {Object.entries(providerPresets).map(([key, preset]) => (
+              {Object.entries(providerPresets).map(([key, item]) => (
                 <button
                   key={key}
-                  className={`provider-option ${provider === key ? "active" : ""}`}
+                  className={`provider-option ${provider === key ? "selected" : ""}`}
                   onClick={() => {
                     setProvider(key as ModelConfig["provider"]);
-                    setBaseUrl(preset.baseUrl);
-                    setModel(preset.models[0] || "");
+                    setBaseUrl(item.baseUrl);
+                    setModel(item.models[0] || "");
                   }}
                 >
-                  {preset.label}
+                  {providerLabel(key)}
                 </button>
               ))}
             </div>
@@ -98,16 +121,16 @@ export function SettingsModal({ open, onClose, initialConfig, onSave }: Props) {
           <label className="field">
             <span className="field-label">
               <Key size={14} />
-              API Key
+              {t("settings.apiKey")}
             </span>
             <input
               type="password"
               className="text-input"
               placeholder={
                 initialConfig?.apiKeySet
-                  ? "已保存在系统密钥链，留空则保持不变"
+                  ? t("settings.apiKeySaved")
                   : provider === "ollama"
-                    ? "本地模型无需 Key"
+                    ? t("settings.apiKeyLocal")
                     : "sk-..."
               }
               value={apiKey}
@@ -118,7 +141,7 @@ export function SettingsModal({ open, onClose, initialConfig, onSave }: Props) {
           <label className="field">
             <span className="field-label">
               <Globe size={14} />
-              Base URL
+              {t("settings.baseUrl")}
             </span>
             <input
               type="text"
@@ -132,7 +155,7 @@ export function SettingsModal({ open, onClose, initialConfig, onSave }: Props) {
           <label className="field">
             <span className="field-label">
               <Cpu size={14} />
-              模型
+              {t("settings.model")}
             </span>
             {preset.models.length > 0 ? (
               <select
@@ -160,7 +183,7 @@ export function SettingsModal({ open, onClose, initialConfig, onSave }: Props) {
 
         <div className="modal-footer">
           <button className="action-button ghost" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </button>
           <button
             className="action-button primary"
@@ -175,7 +198,7 @@ export function SettingsModal({ open, onClose, initialConfig, onSave }: Props) {
               onClose();
             }}
           >
-            保存
+            {t("common.save")}
           </button>
         </div>
       </div>

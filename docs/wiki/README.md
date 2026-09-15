@@ -39,6 +39,7 @@
 | [0010](../architecture/adr/0010-secret-vault.md) | API Key 不进 SQLite |
 | [0011](../architecture/adr/0011-writing-protocol.md) | 思考 / 正文分层；拍为导出原子 |
 | [0012](../architecture/adr/0012-host-proprietary-plugin-mit.md) | 宿主专有，插件接口 MIT |
+| [0013](../architecture/adr/0013-ui-locale.md) | 界面语言与写作协议分开；文案在 `apps/client/src/i18n` |
 
 同步阶段见 [sync-and-cloud.md](../sync-and-cloud.md)（阶段 1：本机 SQLite + 可选 JSONL journal）。分层禁区见 [layers.md](../architecture/layers.md)。
 

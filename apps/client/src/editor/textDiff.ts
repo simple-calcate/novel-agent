@@ -1,3 +1,4 @@
+import { formatDiffSummary } from "../i18n";
 import { DiffChangeTag, DiffLine, DiffSpan, RevisionDiff } from "../types";
 
 export interface TextDiffResult {
@@ -89,10 +90,7 @@ function splitLines(text: string): string[] {
 }
 
 function formatSummary(inserted: number, deleted: number, identical: boolean): string {
-  if (identical || (inserted === 0 && deleted === 0)) return "无改动";
-  if (deleted === 0) return `+${inserted} 字`;
-  if (inserted === 0) return `-${deleted} 字`;
-  return `+${inserted} 字，-${deleted} 字`;
+  return formatDiffSummary(inserted, deleted, identical);
 }
 
 interface LineOp {

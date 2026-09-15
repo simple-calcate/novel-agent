@@ -1,16 +1,23 @@
 /** 作者在编辑器里看到的写作协议。导出分级另见 protocol.ts。 */
 
+import { t } from "../i18n";
+
 export type WriterMode = "body" | "thinking";
 
 export const THINKING_STARTER = "意图：";
 
-export const SLOT_PROMPTS: Array<{ insert: string; label: string; hint: string }> = [
-  { insert: "意图：", label: "这段要干什么", hint: "只写一件事" },
-  { insert: "约束：", label: "现在还不能写", hint: "别剧透、谁还不知道" },
-  { insert: "手法：", label: "怎么写", hint: "先写景、压钩子、短句…" },
-  { insert: "兑现：", label: "正文里必须出现", hint: "物件、动作、一句话" },
-  { insert: "禁止：", label: "这段别写", hint: "OOC、说明文、重复" },
-];
+/** 槽位写入正文的协议前缀，不随界面语言改变。 */
+export const SLOT_INSERTS = ["意图：", "约束：", "手法：", "兑现：", "禁止："] as const;
+
+export function slotPrompts(): Array<{ insert: string; label: string; hint: string }> {
+  return [
+    { insert: "意图：", label: t("guide.slotIntent"), hint: t("guide.slotIntentHint") },
+    { insert: "约束：", label: t("guide.slotConstraint"), hint: t("guide.slotConstraintHint") },
+    { insert: "手法：", label: t("guide.slotTechnique"), hint: t("guide.slotTechniqueHint") },
+    { insert: "兑现：", label: t("guide.slotMustShow"), hint: t("guide.slotMustShowHint") },
+    { insert: "禁止：", label: t("guide.slotMustNot"), hint: t("guide.slotMustNotHint") },
+  ];
+}
 
 export function writerModeFromParent(parentType: string): WriterMode {
   return parentType === "thinkingBlock" ? "thinking" : "body";
@@ -22,19 +29,19 @@ export function guideCopy(opts: {
 }): { title: string; body: string } {
   if (opts.mode === "thinking") {
     return {
-      title: "思考 · 读者看不到",
-      body: "写一句这段要干什么。用 @ 点人物、伏笔——这是写作标签，先不必对上设定库。写完空行按 Tab 回去写正文。",
+      title: t("guide.thinkingTitle"),
+      body: t("guide.thinkingBody"),
     };
   }
   if (opts.missingThinkingBeats > 0) {
     return {
-      title: "正文 · 读者会看到",
-      body: `有 ${opts.missingThinkingBeats} 段正文前面没有思考，导出时带不走。空行按 Tab，先写「这段要干什么」。`,
+      title: t("guide.bodyTitle"),
+      body: t("guide.bodyMissing", { count: opts.missingThinkingBeats }),
     };
   }
   return {
-    title: "正文 · 读者会看到",
-    body: "写小说。下一段有讲究时，空行按 Tab 先写思考，再回来写。",
+    title: t("guide.bodyTitle"),
+    body: t("guide.bodyReady"),
   };
 }
 
@@ -46,13 +53,13 @@ export function countMissingThinking(
 
 export function authorExportSummary(kept: number, missingThinking: number): string {
   if (kept === 0 && missingThinking === 0) {
-    return "这一章还没有可以带走的段落。请先写思考，再写正文。";
+    return t("guide.exportEmpty");
   }
   if (kept === 0) {
-    return `有 ${missingThinking} 段正文，但前面都没有思考，所以没有导出。空行按 Tab，补一句这段要干什么。`;
+    return t("guide.exportNoneKept", { missing: missingThinking });
   }
   if (missingThinking === 0) {
-    return `已导出 ${kept} 段完整的「思考 + 正文」。`;
+    return t("guide.exportAll", { kept });
   }
-  return `已导出 ${kept} 段。另有 ${missingThinking} 段只有正文、没有思考，没有导出。`;
+  return t("guide.exportPartial", { kept, missing: missingThinking });
 }

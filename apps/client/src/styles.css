@@ -34,6 +34,19 @@ body {
   overflow: hidden;
 }
 
+html[lang="en"] body {
+  font-family: system-ui, "Segoe UI", "Inter", "Noto Sans SC", sans-serif;
+}
+
+html[lang="en"] .project-label {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+html[lang="en"] .novel-editor {
+  font-family: "Iowan Old Style", "Palatino Linotype", "Source Han Serif SC", serif;
+}
+
 /* ============ Layout ============ */
 .app-shell {
   display: grid;
@@ -1861,6 +1874,12 @@ body {
 .provider-option.selected {
   background: var(--accent-dim);
   border-color: var(--accent);
+}
+
+.locale-grid .provider-option {
+  min-height: 44px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .provider-option .name {

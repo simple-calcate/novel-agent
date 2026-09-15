@@ -3,6 +3,7 @@ import { History, RotateCcw, X } from "lucide-react";
 import { libraryApi } from "../api";
 import { DiffLine, RevisionDiff, RevisionSummary } from "../types";
 import { logger } from "../logger";
+import { collatorLocale, formatDiffSummary, useI18n, type Locale } from "../i18n";
 
 interface HistoryPanelProps {
   open: boolean;
@@ -21,6 +22,7 @@ export function HistoryPanel({
   onClose,
   onRestore,
 }: HistoryPanelProps) {
+  const { t, locale } = useI18n();
   const [revisions, setRevisions] = useState<RevisionSummary[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [base, setBase] = useState<number>(0);
@@ -111,14 +113,19 @@ export function HistoryPanel({
           <div>
             <h3>
               <History size={14} />
-              修订历史
+              {t("history.title")}
             </h3>
             <p className="history-subtitle">
-              {chapterTitle ?? "未选择章节"}
-              {selected !== null ? ` · 对比 R${base} → R${selected}` : ""}
+              {selected !== null
+                ? t("history.compare", {
+                    title: chapterTitle ?? t("library.noChapter"),
+                    base,
+                    selected,
+                  })
+                : (chapterTitle ?? t("library.noChapter"))}
             </p>
           </div>
-          <button className="icon-button" onClick={onClose} title="关闭">
+          <button className="icon-button" onClick={onClose} title={t("common.close")}>
             <X size={14} />
           </button>
         </div>
@@ -127,9 +134,9 @@ export function HistoryPanel({
 
         <div className="history-body">
           <aside className="history-list">
-            {loading && <div className="history-empty">读取修订…</div>}
+            {loading && <div className="history-empty">{t("history.loading")}</div>}
             {!loading && revisions.length === 0 && (
-              <div className="history-empty">还没有保存过的版本。停笔后会自动写入历史。</div>
+              <div className="history-empty">{t("history.empty")}</div>
             )}
             {revisions.map((item, index) => (
               <button
@@ -145,23 +152,27 @@ export function HistoryPanel({
               >
                 <span className="history-rev">R{item.revision}</span>
                 <span className="history-meta">
-                  {formatTime(item.createdAt)} · {item.charCount} 字
+                  {formatTime(item.createdAt, locale)} · {t("history.chars", { count: item.charCount })}
                 </span>
-                <span className="history-preview">{item.preview || "（空）"}</span>
+                <span className="history-preview">{item.preview || t("history.emptyPreview")}</span>
               </button>
             ))}
           </aside>
 
           <section className="history-diff">
             <div className="history-diff-toolbar">
-              <span>{diff?.summary ?? "选择一个版本查看对比"}</span>
+              <span>
+                {diff
+                  ? formatDiffSummary(diff.insertedChars, diff.deletedChars, diff.lines.length === 0)
+                  : t("history.pickVersion")}
+              </span>
               <button
                 className="btn"
                 disabled={selected === null || selected === currentRevision || restoring}
                 onClick={() => void handleRestore()}
               >
                 <RotateCcw size={12} />
-                {restoring ? "恢复中…" : "恢复此版本"}
+                {restoring ? t("history.restoring") : t("history.restore")}
               </button>
             </div>
             <div className="history-diff-scroll">
@@ -169,7 +180,7 @@ export function HistoryPanel({
                 diff.lines.map((line, index) => <DiffRow key={index} line={line} />)
               ) : (
                 <div className="history-empty">
-                  {selectedRecord ? "这两版正文相同。" : "保存过至少一版后即可对比。"}
+                  {selectedRecord ? t("history.identical") : t("history.needSave")}
                 </div>
               )}
             </div>
@@ -197,10 +208,10 @@ function DiffRow({ line }: { line: DiffLine }) {
   );
 }
 
-function formatTime(value: string): string {
+function formatTime(value: string, locale: Locale): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("zh-CN", {
+  return date.toLocaleString(collatorLocale(locale), {
     month: "numeric",
     day: "numeric",
     hour: "2-digit",

@@ -3,10 +3,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { CommandResult, JobView, Project } from "../types";
 import { logger } from "../logger";
-import { operationLabel } from "../workflow/labels";
 
 export function useQueue(project: Project | null) {
-  const [jobs, setJobs] = useState<Array<{ id: string; label: string; status: string }>>([]);
+  const [jobs, setJobs] = useState<Array<{ id: string; operation: string; status: string }>>([]);
   const [queueReady, setQueueReady] = useState(false);
   const jobsRef = useRef(jobs);
   jobsRef.current = jobs;
@@ -19,7 +18,7 @@ export function useQueue(project: Project | null) {
         setJobs(
           result.data.map((job) => ({
             id: job.id,
-            label: operationLabel(job.operation),
+            operation: job.operation,
             status: job.status,
           })),
         );

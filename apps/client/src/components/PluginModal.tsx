@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Play, X } from "lucide-react";
 import { PluginSummary } from "../types";
 import { libraryApi } from "../api";
-import { formatPluginResult, pluginIsRunnable, splitNames } from "../plugins/format";
+import { formatPluginResult, pluginDisplayName, pluginIsRunnable, splitNames } from "../plugins/format";
+import { joinList, useI18n } from "../i18n";
 
 interface Props {
   open: boolean;
@@ -13,7 +14,8 @@ interface Props {
 }
 
 export function PluginModal({ open, plugins, chapterText, characterNames, onClose }: Props) {
-  const defaultNames = useMemo(() => characterNames.join("、"), [characterNames]);
+  const { t, locale } = useI18n();
+  const defaultNames = useMemo(() => joinList(characterNames), [characterNames, locale]);
   const [nameInput, setNameInput] = useState(defaultNames);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
@@ -33,16 +35,16 @@ export function PluginModal({ open, plugins, chapterText, characterNames, onClos
   async function run(plugin: PluginSummary) {
     const operation = plugin.operations[0];
     if (!operation) {
-      setError("这个插件没有可运行的操作");
+      setError(t("plugin.noOperation"));
       return;
     }
     if (plugin.id === "hello-names") {
       if (!chapterText.trim()) {
-        setError("当前没有打开的章节正文。打开一章或点「打开示例章节」再运行。");
+        setError(t("plugin.noChapter"));
         return;
       }
       if (names.length === 0) {
-        setError("请填写要统计的人名，用顿号或逗号分开。");
+        setError(t("plugin.needNames"));
         return;
       }
     }
@@ -65,28 +67,22 @@ export function PluginModal({ open, plugins, chapterText, characterNames, onClos
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
-          <h2>已打包插件</h2>
-          <button className="icon-button" onClick={onClose} title="关闭">
+          <h2>{t("plugin.title")}</h2>
+          <button className="icon-button" onClick={onClose} title={t("common.close")}>
             <X size={16} />
           </button>
         </div>
         <div className="modal-body">
-          <p className="panel-muted">
-            「人名点名」会对当前正文统计人名（桌面走 wasmi，浏览器预览走 SDK）。标了占位的打包项点运行只会收到回执，不是真检查或续写。
-            第三方用 MIT 的 <code>@novel-agent/plugin-sdk</code> 写清单，用{" "}
-            <code>@novel-agent/plugin-compile</code> 编成 WASM。宿主本身不是开源软件。
-          </p>
+          <p className="panel-muted">{t("plugin.lead")}</p>
           <label className="plugin-names">
-            <span>要统计的人名</span>
+            <span>{t("plugin.names")}</span>
             <input
               value={nameInput}
               onChange={(event) => setNameInput(event.target.value)}
-              placeholder={defaultNames || "林默、林晚"}
+              placeholder={defaultNames || t("plugin.namesPlaceholder")}
             />
           </label>
-          {!chapterText.trim() && (
-            <p className="panel-muted">当前没有打开的章节正文。打开一章或点「打开示例章节」再运行。</p>
-          )}
+          {!chapterText.trim() && <p className="panel-muted">{t("plugin.noChapter")}</p>}
           <ul className="plugin-list">
             {plugins.map((plugin) => {
               const runnable = pluginIsRunnable(plugin);
@@ -96,24 +92,24 @@ export function PluginModal({ open, plugins, chapterText, characterNames, onClos
                   <div className="plugin-row">
                     <div>
                       <strong>
-                        {plugin.name}
+                        {pluginDisplayName(plugin)}
                         <span className={`plugin-badge ${runnable ? "wasm" : "builtin"}`}>
-                          {runnable ? "可运行" : "占位"}
+                          {runnable ? t("plugin.runnable") : t("plugin.placeholder")}
                         </span>
                       </strong>
                       <span>
                         {plugin.id} · {plugin.version} · {plugin.runtime}
                       </span>
-                      <em>{plugin.operations.join("、") || "无操作"}</em>
+                      <em>{joinList(plugin.operations) || t("plugin.noOps")}</em>
                     </div>
                     <button
                       className="mini-button"
                       disabled={busyId !== null || plugin.operations.length === 0}
                       onClick={() => void run(plugin)}
-                      title={runnable ? "对当前正文运行" : "查看占位回执"}
+                      title={runnable ? t("plugin.runOnChapter") : t("plugin.viewReceipt")}
                     >
                       <Play size={12} />
-                      {busy ? "运行中" : "运行"}
+                      {busy ? t("common.running") : t("common.run")}
                     </button>
                   </div>
                 </li>
