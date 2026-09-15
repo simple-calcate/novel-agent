@@ -1,6 +1,6 @@
 # 架构：现在怎么切
 
-分层总图和禁区见 [layers.md](../architecture/layers.md)。契约签名见 [interfaces.md](../interfaces.md)。这里只补当前实现里容易走错的几条。
+分层总图和禁区见 [layers.md](../architecture/layers.md)。契约签名见 [interfaces.md](../interfaces.md)。改代码时按阶段看树和切片：[智能体](agents.md)。这里只补当前实现里容易走错的几条。
 
 ## 调用链
 
@@ -22,17 +22,21 @@ UI  ──libraryApi──► Tauri command（只译 JSON）
 | 路径 | 职责 |
 |---|---|
 | `apps/client` | React UI；浏览器预览走内存 `libraryApi` |
-| `apps/client/src-tauri` | Tauri 宿主，JSON 翻译 |
+| `apps/client/src-tauri` | Tauri 宿主：`lib.rs` 装配 + `generate_handler!`；command 按领域在 `src/commands/` |
 | `crates/kernel` | 注册表、预算、工具分发、事件总线；无 SQLite / HTTP |
 | `crates/extensions` | 内置扩展 + `Workspace` |
-| `crates/domain` | 实体与事件，无 IO |
+| `crates/domain` | 实体与事件，无 IO。作品层级在 `content.rs`，`StoryEntry` 与正史类型在 `story.rs` |
 | `crates/storage` | 迁移、单写者、仓储模块 |
-| `crates/context-hints` | 段落 ↔ 结构条目匹配 |
+| `crates/context-hints` | 段落 ↔ 结构条目匹配（预选条） |
+| `crates/context-engine` | ACP 风格上下文装配（`context.assemble`），**不是**预选条 |
 | `crates/feedback-memory` | 拒绝续写后的偏好规则 |
 | `crates/story-model` | 启发式正史 / 连续性（非 UI 主路径） |
 | `crates/automation` | 信号、规则、队列状态机 |
 | `crates/plugin-host` | 清单、权限、桌面 wasmi 沙箱（Android 走内置） |
 | `packages/` | 事件 schema、插件 SDK、plugin-compile、工作流模板（MIT）；匹配 fixtures 与 shared-types 仍属宿主 |
+| `plugins/` | 打包清单；`hello-names` 带 `wasmBase64`，其余多为占位 |
+
+宿主 `commands/`：`library`（树 / 章 / 修订）、`editor`（心跳 / 浮带 / 续写 / 装配）、`settings`（模型 / 偏好）、`plugins`、`queue`、`sync`（outbox journal）、`canon`（正史 API **和** 结构条目命令）。结构与正史不要混用一张表。文件级切片见 [智能体](agents.md)。
 
 ## 仓储切分
 

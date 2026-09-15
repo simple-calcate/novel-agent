@@ -12,6 +12,7 @@
 | **结构 / StoryEntry** | 作者预先写的人物、设定、伏笔。存在 `story_entries`。这是写作主路径。 |
 | **预选条 / ContextRail** | 编辑器上方按当前段落排出的结构卡片。无命中则隐藏。可钉住或忽略。 |
 | **浮带 / context hints** | 与预选条同一条产品线；工具 id 是 `context.hints`。 |
+| **上下文装配 / context.assemble** | 给续写拼上下文包（`crates/context-engine`）。**不是**编辑器上方预选条。 |
 | **正史 / Canon** | 启发式抽取的实体与事实候选，走 `canon_*` 表和审核 API。库内仍在，**界面不用**。 |
 | **Workspace** | `novel-extensions` 里的应用层，宿主只应通过它做作品库 / 设置 / 续写编排。 |
 | **StorageHandle** | 单写者仓储入口。持锁时禁止 `dispatch`。 |

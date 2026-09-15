@@ -1,12 +1,13 @@
 # 文档
 
-**当前入口：[wiki 手册](wiki/README.md)**（产品、架构、开发、术语、未做）。
+**当前入口：[wiki 手册](wiki/README.md)**（智能体阶段、产品、架构、开发、术语、未做）。改代码的智能体从 [wiki/agents.md](wiki/agents.md) 按阶段走。
 
 下面是契约与设计记录。改接口或切层时对照，不要只改 wiki 里的散文。
 
 | 路径 | 用途 |
 |---|---|
 | [wiki/](wiki/README.md) | 现在怎么用、怎么改、还缺什么 |
+| [wiki/agents.md](wiki/agents.md) | 智能体：仓库树、五个阶段、切片 → 文件 |
 | [wiki/trust.md](wiki/trust.md) | 作者保证：稿子在哪、停订能否写 |
 | [wiki/plugins.md](wiki/plugins.md) | 写插件 |
 | [wiki/licensing.md](wiki/licensing.md) | 宿主专有 / SDK MIT |
