@@ -2,14 +2,22 @@ import type { ContentBlock, StoryEntryKind } from "../types";
 import { libraryApi } from "../api";
 import raw from "./examples/fog-harbor.json";
 
+export interface SampleStoryEntry {
+  kind: StoryEntryKind;
+  title: string;
+  summary: string;
+}
+
 export interface SampleChapterFile {
   projectTitle: string;
   bookTitle: string;
   bookSynopsis: string;
   chapterTitle: string;
+  story: SampleStoryEntry[];
   blocks: ContentBlock[];
 }
 
+/** 打包进客户端的示例。正文和结构都在 JSON 里，这里只负责装进作品库。 */
 export const sampleChapter = raw as SampleChapterFile;
 
 export function sampleBodyText(blocks: ContentBlock[] = sampleChapter.blocks): string {
@@ -25,25 +33,6 @@ export interface InstalledSample {
   chapterId: string;
   created: boolean;
 }
-
-/** 示例预先设计的结构。思考里的 `@人物` 仍然不是入库；这些条是作者会自己加的那一类。 */
-export const SAMPLE_STORY: Array<{ kind: StoryEntryKind; title: string; summary: string }> = [
-  {
-    kind: "character",
-    title: "林默",
-    summary: "雾港来客的主角。站在窗前看雾，手里攥着旧怀表。只写他所见。",
-  },
-  {
-    kind: "setting",
-    title: "雾港码头",
-    summary: "石阶、铁索和潮声。雾先于潮声漫进港口，灯笼的光到不了这边。",
-  },
-  {
-    kind: "foreshadow",
-    title: "怀表来历",
-    summary: "表盖内侧刻着两个字，笔画浅得像被潮气咬过。来历本章不解释。",
-  },
-];
 
 /** 把《雾港来客》装进作品库。已有同名章节则只打开，不覆盖作者改过的字。 */
 export async function installSampleChapter(): Promise<InstalledSample> {
@@ -76,14 +65,14 @@ export async function installSampleChapter(): Promise<InstalledSample> {
     created = true;
   }
 
-  await ensureSampleStory(project.id);
+  await ensureSampleStory(project.id, sample.story);
 
   return { projectId: project.id, bookId: book.id, chapterId: chapter.id, created };
 }
 
-async function ensureSampleStory(projectId: string): Promise<void> {
+async function ensureSampleStory(projectId: string, story: SampleStoryEntry[]): Promise<void> {
   const existing = await libraryApi.listStoryEntries(projectId);
-  for (const item of SAMPLE_STORY) {
+  for (const item of story) {
     if (existing.some((entry) => entry.kind === item.kind && entry.title === item.title)) {
       continue;
     }

@@ -9,6 +9,14 @@ import {
 import { installSampleChapter, sampleBodyText, sampleChapter } from "./sampleChapter";
 
 describe("fog-harbor sample chapter", () => {
+  it("keeps story entries in the sample json, not in installer code", () => {
+    expect(sampleChapter.story.map((entry) => `${entry.kind}:${entry.title}`)).toEqual([
+      "character:林默",
+      "setting:雾港码头",
+      "foreshadow:怀表来历",
+    ]);
+  });
+
   it("exports three complete beats from chapter start", () => {
     const examples = buildTrainingExamples(sampleChapter.blocks, true, sampleChapter.chapterTitle);
     expect(examples).toHaveLength(3);
