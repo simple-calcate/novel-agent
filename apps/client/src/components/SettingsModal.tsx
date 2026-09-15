@@ -80,12 +80,12 @@ export function SettingsModal({ open, onClose, initialConfig, onSave }: Props) {
               <Languages size={14} />
               {t("locale.label")}
             </span>
-            <div className="provider-grid">
+            <div className="provider-grid locale-grid">
               {options.map((option) => (
                 <button
                   key={option.id}
                   type="button"
-                  className={`provider-option ${locale === option.id ? "active" : ""}`}
+                  className={`provider-option ${locale === option.id ? "selected" : ""}`}
                   onClick={() => setLocale(option.id as Locale)}
                 >
                   {option.nativeLabel}
@@ -105,7 +105,7 @@ export function SettingsModal({ open, onClose, initialConfig, onSave }: Props) {
               {Object.entries(providerPresets).map(([key, item]) => (
                 <button
                   key={key}
-                  className={`provider-option ${provider === key ? "active" : ""}`}
+                  className={`provider-option ${provider === key ? "selected" : ""}`}
                   onClick={() => {
                     setProvider(key as ModelConfig["provider"]);
                     setBaseUrl(item.baseUrl);

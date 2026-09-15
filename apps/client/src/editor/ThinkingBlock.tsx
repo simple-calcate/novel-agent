@@ -331,7 +331,7 @@ function MarkupChipView({ node, updateAttributes, getPos, editor, selected }: Re
   const tagKind = String(node.attrs.tagKind || "");
   const kindLabel = tagKindLabel(tagKind);
   const [value, setValue] = useState(String(node.attrs.label || ""));
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(() => !String(node.attrs.label || ""));
   const [active, setActive] = useState(0);
   const [caret, setCaret] = useState<{ top: number; left: number; bottom: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
