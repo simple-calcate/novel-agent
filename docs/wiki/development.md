@@ -65,7 +65,7 @@ CI（`.github/workflows/ci.yml`）只在面向 `main` 的 pull request / push �
 | `components/WorkflowPanel.tsx` | 工作流模板、队列、outbox journal |
 | `components/HistoryPanel.tsx` | 修订列表、与上一版对比、恢复 |
 | `editor/textDiff.ts` | 浏览器预览的行级对比（桌面走 Rust `similar`） |
-| `editor/sampleChapter.ts` | 把 `editor/examples/*.json` 装进作品库；林默等人写在 JSON 的 `story` 里 |
+| `editor/sampleChapter.ts` | 把 `editor/examples/*.json` 装进作品库；林默等人写在 JSON 的 `story` 里。只在新建示例章时写入结构，已有章节再打开不会复活作者删掉的条目 |
 | `structure/match.ts` | 浏览器侧匹配器 |
 
 ## 改接口检查表

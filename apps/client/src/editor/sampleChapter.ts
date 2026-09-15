@@ -34,7 +34,7 @@ export interface InstalledSample {
   created: boolean;
 }
 
-/** 把《雾港来客》装进作品库。已有同名章节则只打开，不覆盖作者改过的字。 */
+/** 把《雾港来客》装进作品库。已有同名章节则只打开，不覆盖作者改过的字，也不把删掉的结构再种回来。 */
 export async function installSampleChapter(): Promise<InstalledSample> {
   const sample = sampleChapter;
   let snapshot = await libraryApi.loadLibrary();
@@ -53,21 +53,30 @@ export async function installSampleChapter(): Promise<InstalledSample> {
   let chapter = snapshot.chapters.find(
     (item) => item.bookId === book.id && item.title === sample.chapterTitle,
   );
-  let created = false;
+  let chapterCreated = false;
   if (!chapter) {
     chapter = await libraryApi.createChapter(project.id, book.id, sample.chapterTitle);
-    created = true;
+    chapterCreated = true;
   }
 
   const body = await libraryApi.loadChapter(chapter.id);
+  let wroteBody = false;
   if (body.blocks.length === 0 && body.text.trim() === "") {
     await libraryApi.saveChapter(chapter.id, sampleBodyText(sample.blocks), sample.blocks);
-    created = true;
+    wroteBody = true;
   }
 
-  await ensureSampleStory(project.id, sample.story);
+  // 结构只在新建示例章时写入。作者删掉林默后再点打开，不应复活。
+  if (chapterCreated) {
+    await ensureSampleStory(project.id, sample.story);
+  }
 
-  return { projectId: project.id, bookId: book.id, chapterId: chapter.id, created };
+  return {
+    projectId: project.id,
+    bookId: book.id,
+    chapterId: chapter.id,
+    created: chapterCreated || wroteBody,
+  };
 }
 
 async function ensureSampleStory(projectId: string, story: SampleStoryEntry[]): Promise<void> {

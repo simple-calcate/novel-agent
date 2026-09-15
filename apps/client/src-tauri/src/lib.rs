@@ -1,11 +1,10 @@
 //! Tauri 命令层： AppState 与应用装配。
 //! 具体命令按领域拆在 `commands/`，共享管道在 `common.rs`。
 
-mod common;
 pub mod commands;
+mod common;
 
 // 扁平再导出：invoke_handler 与 command_tests 均按旧路径引用
-pub use common::CommandResult;
 pub use commands::canon::*;
 pub use commands::editor::*;
 pub use commands::library::*;
@@ -13,6 +12,7 @@ pub use commands::plugins::*;
 pub use commands::queue::*;
 pub use commands::settings::*;
 pub use commands::sync::*;
+pub use common::CommandResult;
 
 use novel_automation::TypingSession;
 use novel_extensions::{BuiltinsExtension, SecretVault};

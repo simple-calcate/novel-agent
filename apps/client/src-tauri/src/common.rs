@@ -1,7 +1,9 @@
 //! 命令层共享管道：统一返回结构、workspace 访问、ID 解析与队列事件通知。
 
 use crate::AppState;
-use novel_domain::{BookId, ChapterId, FactId, FactStatus, ProjectId, SceneId, StoryEntryKind, VolumeId};
+use novel_domain::{
+    BookId, ChapterId, FactId, FactStatus, ProjectId, SceneId, StoryEntryKind, VolumeId,
+};
 use novel_extensions::Workspace;
 use serde::Serialize;
 use serde_json::json;
