@@ -49,6 +49,59 @@ fn designed_story_entries_are_independent_of_canon_extract() {
 }
 
 #[test]
+fn updates_story_entry_title_aliases_and_summary() {
+    let repository = Repository::open_in_memory().unwrap();
+    let project = repository.create_project("夜航星图").unwrap();
+    let entry = repository
+        .create_story_entry(
+            &project.id,
+            StoryEntryKind::Character,
+            "林晚",
+            "雾港来的刀客",
+        )
+        .unwrap();
+    repository
+        .create_story_entry(&project.id, StoryEntryKind::Character, "沈雾", "码头更夫")
+        .unwrap();
+
+    let updated = repository
+        .update_story_entry(
+            &project.id,
+            &entry.id,
+            StoryEntryKind::Character,
+            "林晚、雾儿",
+            "雾港来的刀客，不爱回头",
+        )
+        .unwrap();
+    assert_eq!(updated.title, "林晚");
+    assert_eq!(updated.aliases, vec!["雾儿".to_string()]);
+    assert_eq!(updated.summary, "雾港来的刀客，不爱回头");
+
+    let listed = repository.list_story_entries(&project.id).unwrap();
+    let lin = listed.iter().find(|item| item.id == entry.id).unwrap();
+    assert_eq!(lin.aliases, vec!["雾儿".to_string()]);
+    assert_eq!(lin.summary, "雾港来的刀客，不爱回头");
+
+    let clash = repository.update_story_entry(
+        &project.id,
+        &entry.id,
+        StoryEntryKind::Character,
+        "沈雾",
+        "撞名",
+    );
+    assert!(clash.is_err());
+
+    let missing = repository.update_story_entry(
+        &project.id,
+        "missing",
+        StoryEntryKind::Character,
+        "林晚",
+        "",
+    );
+    assert!(missing.is_err());
+}
+
+#[test]
 fn rebuild_search_index_includes_story_entries() {
     let repository = Repository::open_in_memory().unwrap();
     let project = repository.create_project("夜航星图").unwrap();

@@ -87,6 +87,32 @@ pub fn list_story_entries(
 }
 
 #[tauri::command]
+pub fn update_story_entry(
+    state: State<'_, crate::AppState>,
+    project_id: String,
+    id: String,
+    kind: String,
+    title: String,
+    summary: String,
+) -> CommandResult<StoryEntry> {
+    let project_id = match parse_project_id(&project_id) {
+        Ok(id) => id,
+        Err(err) => return CommandResult::error(err),
+    };
+    let kind = match parse_story_kind(&kind) {
+        Ok(kind) => kind,
+        Err(err) => return CommandResult::error(err),
+    };
+    CommandResult::from_result(workspace(&state).update_story_entry(
+        &project_id,
+        &id,
+        kind,
+        &title,
+        &summary,
+    ))
+}
+
+#[tauri::command]
 pub fn delete_story_entry(
     state: State<'_, crate::AppState>,
     project_id: String,

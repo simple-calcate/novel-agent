@@ -1001,6 +1001,31 @@ impl<'a> Workspace<'a> {
             .execute(|repository| repository.list_story_entries(project_id))?)
     }
 
+    pub fn update_story_entry(
+        &self,
+        project_id: &ProjectId,
+        id: &str,
+        kind: StoryEntryKind,
+        title: &str,
+        summary: &str,
+    ) -> Result<StoryEntry, WorkspaceError> {
+        let entry = self.handle()?.execute(|repository| {
+            repository.update_story_entry(project_id, id, kind, title, summary)
+        })?;
+        self.dispatch_user(
+            "story.entry.updated",
+            project_id.clone(),
+            None,
+            None,
+            json!({
+                "id": entry.id,
+                "kind": serde_json::to_value(kind).unwrap_or(Value::Null),
+                "title": entry.title
+            }),
+        );
+        Ok(entry)
+    }
+
     pub fn delete_story_entry(
         &self,
         project_id: &ProjectId,

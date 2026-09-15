@@ -8,6 +8,7 @@ interface Props {
   ignoredIds: string[];
   onPin: (id: string) => void;
   onIgnore: (id: string) => void;
+  onOpen?: (id: string) => void;
 }
 
 const kindLabels: Record<ContextHint["kind"], string> = {
@@ -30,7 +31,7 @@ const kindIcons: Record<ContextHint["kind"], typeof BookMarked> = {
   continuityRisk: BookMarked,
 };
 
-export function ContextRail({ hints, pinnedIds, ignoredIds, onPin, onIgnore }: Props) {
+export function ContextRail({ hints, pinnedIds, ignoredIds, onPin, onIgnore, onOpen }: Props) {
   const visible = hints
     .filter((hint) => !ignoredIds.includes(hint.id))
     .slice()
@@ -45,7 +46,9 @@ export function ContextRail({ hints, pinnedIds, ignoredIds, onPin, onIgnore }: P
         return (
           <article
             key={hint.id}
-            className={`hint-card kind-${hint.kind} ${pinned ? "pinned" : ""}`}
+            className={`hint-card kind-${hint.kind} ${pinned ? "pinned" : ""} ${onOpen ? "openable" : ""}`}
+            title={onOpen ? "在结构里查看" : undefined}
+            onClick={() => onOpen?.(hint.id)}
           >
             <div className="hint-header">
               <Icon size={13} />
@@ -53,11 +56,21 @@ export function ContextRail({ hints, pinnedIds, ignoredIds, onPin, onIgnore }: P
               <button
                 className={`hint-action ${pinned ? "active" : ""}`}
                 title={pinned ? "取消钉住" : "钉住"}
-                onClick={() => onPin(hint.id)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onPin(hint.id);
+                }}
               >
                 <Pin size={12} />
               </button>
-              <button className="hint-action" title="忽略" onClick={() => onIgnore(hint.id)}>
+              <button
+                className="hint-action"
+                title="忽略"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onIgnore(hint.id);
+                }}
+              >
                 <X size={12} />
               </button>
             </div>

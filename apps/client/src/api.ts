@@ -581,6 +581,37 @@ export const libraryApi = {
       .sort((left, right) => kindOrder(left.kind) - kindOrder(right.kind) || left.title.localeCompare(right.title, "zh"));
   },
 
+  async updateStoryEntry(
+    projectId: string,
+    id: string,
+    kind: StoryEntryKind,
+    title: string,
+    summary = "",
+  ): Promise<StoryEntry> {
+    if (isTauriRuntime()) {
+      return command<StoryEntry>("update_story_entry", { projectId, id, kind, title, summary });
+    }
+    const parsed = splitTitleAndAliases(title);
+    if (!parsed.title) throw new Error("请填写名称");
+    const existing = memory.story.find((item) => item.id === id && item.projectId === projectId);
+    if (!existing || existing.kind !== kind) throw new Error("结构条目不存在");
+    if (
+      memory.story.some(
+        (item) =>
+          item.projectId === projectId &&
+          item.kind === kind &&
+          item.title === parsed.title &&
+          item.id !== id,
+      )
+    ) {
+      throw new Error("该结构已存在");
+    }
+    existing.title = parsed.title;
+    existing.summary = summary.trim();
+    existing.aliases = parsed.aliases;
+    return existing;
+  },
+
   async deleteStoryEntry(projectId: string, id: string, kind: StoryEntryKind): Promise<void> {
     if (isTauriRuntime()) {
       await command("delete_story_entry", { projectId, id, kind });

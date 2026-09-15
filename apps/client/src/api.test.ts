@@ -112,6 +112,20 @@ describe("memory library", () => {
     const withAlias = await libraryApi.createStoryEntry(project.id, "character", "沈雾、雾儿", "");
     expect(withAlias.title).toBe("沈雾");
     expect(withAlias.aliases).toEqual(["雾儿"]);
+    const renamed = await libraryApi.updateStoryEntry(
+      project.id,
+      withAlias.id,
+      withAlias.kind,
+      "沈雾、阿雾",
+      "码头更夫",
+    );
+    expect(renamed.title).toBe("沈雾");
+    expect(renamed.aliases).toEqual(["阿雾"]);
+    expect(renamed.summary).toBe("码头更夫");
+    const other = await libraryApi.createStoryEntry(project.id, "character", "阿晚", "");
+    await expect(
+      libraryApi.updateStoryEntry(project.id, other.id, other.kind, "沈雾", ""),
+    ).rejects.toThrow();
     await expect(
       libraryApi.createStoryEntry(project.id, "foreshadow", "雾中灯塔", "重复"),
     ).rejects.toThrow();

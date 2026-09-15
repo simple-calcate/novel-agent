@@ -9,8 +9,9 @@ use crate::{
     list_story_entries, load_chapter, load_library, load_model_config, move_book,
     pending_outbox_count, propose_canon, rename_book, rename_chapter, rename_project,
     restore_chapter_revision, review_canon_fact, run_plugin_operation, run_queue_step,
-    save_chapter, save_model_config, AppState, EditorTickInput, HintRequest, ModelConfigInput,
-    NewBookInput, NewChapterInput, NewProjectInput, NewSceneInput, NewVolumeInput, RunPluginInput,
+    save_chapter, save_model_config, update_story_entry, AppState, EditorTickInput, HintRequest,
+    ModelConfigInput, NewBookInput, NewChapterInput, NewProjectInput, NewSceneInput,
+    NewVolumeInput, RunPluginInput,
 };
 use novel_domain::{
     Actor, BlockKind, ContentBlock, DomainEvent, EventId, EventSource, Platform, Revision,
@@ -589,6 +590,42 @@ async fn designed_story_entry_matches_nearby_paragraph() {
     assert!(
         keyword_titles.iter().any(|title| title == "林晚"),
         "{keyword_titles:?}"
+    );
+
+    let id = created.data.unwrap().id;
+    let updated = update_story_entry(
+        state(),
+        project_id.clone(),
+        id,
+        "character".into(),
+        "林晚、雾儿".into(),
+        "雾港来的刀客，不爱回头".into(),
+    );
+    assert!(updated.ok, "{updated:?}");
+    let by_alias = context_hints(
+        state(),
+        HintRequest {
+            project_id,
+            chapter_id: "c1".into(),
+            revision: 1,
+            nearby_text: "雾儿没有回头".into(),
+            lookback_text: String::new(),
+            generation: 4,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(by_alias.ok, "{by_alias:?}");
+    let alias_payload = by_alias.data.unwrap();
+    let alias_hint = alias_payload
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|hint| hint.get("title").and_then(|value| value.as_str()) == Some("林晚"))
+        .unwrap();
+    assert_eq!(
+        alias_hint.get("summary").and_then(|value| value.as_str()),
+        Some("雾港来的刀客，不爱回头")
     );
 }
 
