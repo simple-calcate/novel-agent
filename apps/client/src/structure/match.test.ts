@@ -37,15 +37,21 @@ describe("structure matching", () => {
 
   it("matches alias, keyword, title core and lookback", () => {
     expect(matchStoryEntries("雾儿没有回头", "", [linWan], 1)[0]?.title).toBe("林晚");
-    expect(matchStoryEntries("那个刀客转过身", "", [linWan], 1)[0]?.matchReason).toContain("刀客");
+    expect(matchStoryEntries("雾儿没有回头", "", [linWan], 1)[0]?.matchReason).toBe("alias:雾儿");
+    expect(matchStoryEntries("那个刀客转过身", "", [linWan], 1)[0]?.matchReason).toBe(
+      "keyword:刀客",
+    );
     expect(matchStoryEntries("那座灯塔夜里忽然亮了", "", [lighthouse], 1)[0]?.title).toBe(
       "雾中灯塔",
     );
-    expect(matchStoryEntries("旧王玺还在匣中", "", [lighthouse], 1)[0]?.matchReason).toContain(
-      "旧王玺",
+    expect(matchStoryEntries("旧王玺还在匣中", "", [lighthouse], 1)[0]?.matchReason).toBe(
+      "keyword:旧王玺",
     );
-    expect(matchStoryEntries("她没有回头", "林晚走进雾港", [linWan], 1)[0]?.matchReason).toContain(
-      "上一段",
+    expect(matchStoryEntries("她没有回头", "林晚走进雾港", [linWan], 1)[0]?.matchReason).toBe(
+      "lookback:林晚",
+    );
+    expect(matchStoryEntries("她没有回头", "雾儿走进雾港", [linWan], 1)[0]?.matchReason).toBe(
+      "lookbackAlias:雾儿",
     );
   });
 
@@ -65,8 +71,7 @@ describe("structure matching", () => {
     const hints = matchStoryEntries("雾季快到了", "", [keeper], 1);
     expect(hints).toHaveLength(1);
     expect(hints[0]?.title).toBe("灯塔守夜人");
-    expect(hints[0]?.matchReason).toContain("检索到");
-    expect(hints[0]?.matchReason).toContain("雾季");
+    expect(hints[0]?.matchReason).toBe("retrieve:雾季");
   });
 
   it("shares ranking cases with the rust matcher", () => {

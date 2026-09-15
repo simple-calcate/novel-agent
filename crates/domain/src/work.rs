@@ -63,6 +63,7 @@ pub struct ContextHint {
     pub title: String,
     pub summary: String,
     pub source_label: String,
+    /// Wire form `title:林晚`. The UI formats this with the interface locale.
     pub match_reason: String,
     pub confidence: f32,
     pub score: f32,

@@ -273,11 +273,7 @@ fn matches_alias_in_current_paragraph() {
     let hints = rank_one("雾儿没有回头", "", lin_wan());
     assert_eq!(hints.len(), 1);
     assert_eq!(hints[0].title, "林晚");
-    assert!(
-        hints[0].match_reason.contains("雾儿"),
-        "{}",
-        hints[0].match_reason
-    );
+    assert_eq!(hints[0].match_reason, "alias:雾儿");
 }
 
 #[test]
@@ -285,11 +281,7 @@ fn matches_summary_keyword() {
     let hints = rank_one("那个刀客转过身", "", lin_wan());
     assert_eq!(hints.len(), 1);
     assert_eq!(hints[0].title, "林晚");
-    assert!(
-        hints[0].match_reason.contains("刀客"),
-        "{}",
-        hints[0].match_reason
-    );
+    assert_eq!(hints[0].match_reason, "keyword:刀客");
 }
 
 #[test]
@@ -303,22 +295,21 @@ fn matches_title_core_for_long_name() {
 fn matches_summary_object() {
     let hints = rank_one("旧王玺还在匣中", "", lighthouse());
     assert_eq!(hints.len(), 1);
-    assert!(
-        hints[0].match_reason.contains("旧王玺"),
-        "{}",
-        hints[0].match_reason
-    );
+    assert_eq!(hints[0].match_reason, "keyword:旧王玺");
 }
 
 #[test]
 fn previous_paragraph_keeps_character() {
     let hints = rank_one("她没有回头", "林晚走进雾港", lin_wan());
     assert_eq!(hints.len(), 1);
-    assert!(
-        hints[0].match_reason.contains("上一段"),
-        "{}",
-        hints[0].match_reason
-    );
+    assert_eq!(hints[0].match_reason, "lookback:林晚");
+}
+
+#[test]
+fn previous_paragraph_keeps_character_by_alias() {
+    let hints = rank_one("她没有回头", "雾儿走进雾港", lin_wan());
+    assert_eq!(hints.len(), 1);
+    assert_eq!(hints[0].match_reason, "lookbackAlias:雾儿");
 }
 
 #[test]
@@ -340,16 +331,7 @@ fn lexical_retrieval_matches_summary_term_missing_from_local_keywords() {
     let hints = rank_one("雾季快到了", "", entry);
     assert_eq!(hints.len(), 1);
     assert_eq!(hints[0].title, "灯塔守夜人");
-    assert!(
-        hints[0].match_reason.contains("检索到"),
-        "{}",
-        hints[0].match_reason
-    );
-    assert!(
-        hints[0].match_reason.contains("雾季"),
-        "{}",
-        hints[0].match_reason
-    );
+    assert_eq!(hints[0].match_reason, "retrieve:雾季");
 }
 
 fn fixture_entries(project_id: &ProjectId) -> Vec<StoryEntry> {

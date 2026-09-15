@@ -152,7 +152,7 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 | `rename_scene` / `delete_scene` / `move_scene` / `set_scene_pov` | `projectId`, `sceneId`（改名加 `title`，移动加 `delta`，POV 加 `povEntryId`） | `LibrarySnapshot` |
 | `rename_chapter` / `delete_chapter` / `move_chapter` | `projectId`, `chapterId`（同上） | `LibrarySnapshot` |
 | `editor_tick` | `{ projectId, chapterId, revision, charsSinceCommit, composing, focused }` | `{ shouldEmitIdle, revision }` |
-| `context_hints` | `projectId`, `chapterId`, `revision`, `nearbyText`, `lookbackText?`, `generation` | `ContextHint[]`（多信号匹配预先结构） |
+| `context_hints` | `projectId`, `chapterId`, `revision`, `nearbyText`, `lookbackText?`, `generation` | `ContextHint[]`（多信号匹配预先结构；`matchReason` 为 `title:林晚` 这种 code，UI 再格式化） |
 | `save_model_config` | provider / baseUrl / model / apiKey? | `{ saved }`；密钥进 `SecretVault`，留空保持原值 |
 | `load_model_config` | — | `{ provider, baseUrl, model, apiKey: "", apiKeySet }` |
 | `generate_continuation` | 章、修订、prompt、config | `ContentPatch`；config 可不带密钥 |

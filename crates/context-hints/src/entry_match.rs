@@ -6,6 +6,7 @@ use novel_domain::StoryEntry;
 #[derive(Debug, Clone, PartialEq)]
 pub struct EntryMatch {
     pub score: f32,
+    /// Wire form `title:林晚`. The UI formats this; do not put prose here.
     pub reason: String,
 }
 
@@ -115,7 +116,7 @@ pub fn match_story_entry(current: &str, lookback: &str, entry: &StoryEntry) -> O
             &mut extra,
             EntryMatch {
                 score: 0.98 * position_boost(&current_l, index),
-                reason: format!("出现名称「{title}」"),
+                reason: encode_reason("title", title),
             },
         );
     }
@@ -126,7 +127,7 @@ pub fn match_story_entry(current: &str, lookback: &str, entry: &StoryEntry) -> O
                 &mut extra,
                 EntryMatch {
                     score: 0.90 * position_boost(&current_l, index),
-                    reason: format!("出现别名「{alias}」"),
+                    reason: encode_reason("alias", alias),
                 },
             );
         }
@@ -138,7 +139,7 @@ pub fn match_story_entry(current: &str, lookback: &str, entry: &StoryEntry) -> O
                 &mut extra,
                 EntryMatch {
                     score: 0.72 * position_boost(&current_l, index),
-                    reason: format!("提到「{core}」"),
+                    reason: encode_reason("core", &core),
                 },
             );
         }
@@ -150,7 +151,7 @@ pub fn match_story_entry(current: &str, lookback: &str, entry: &StoryEntry) -> O
             keyword_hits += 1;
             let candidate = EntryMatch {
                 score: 0.58 * position_boost(&current_l, index),
-                reason: format!("设定里提到「{keyword}」"),
+                reason: encode_reason("keyword", &keyword),
             };
             if keyword_best
                 .as_ref()
@@ -170,14 +171,14 @@ pub fn match_story_entry(current: &str, lookback: &str, entry: &StoryEntry) -> O
         if let Some(index) = find_term(&lookback_l, title) {
             return Some(EntryMatch {
                 score: 0.60 * position_boost(&lookback_l, index),
-                reason: format!("上一段出现「{title}」"),
+                reason: encode_reason("lookback", title),
             });
         }
         for alias in &aliases {
             if find_term(&lookback_l, alias).is_some() {
                 return Some(EntryMatch {
                     score: 0.56,
-                    reason: format!("上一段出现别名「{alias}」"),
+                    reason: encode_reason("lookbackAlias", alias),
                 });
             }
         }
@@ -213,8 +214,12 @@ pub fn retrieve_story_entry(current: &str, entry: &StoryEntry) -> Option<EntryMa
     let term = matched[0].as_str();
     Some(EntryMatch {
         score: 0.40,
-        reason: format!("检索到「{term}」"),
+        reason: encode_reason("retrieve", term),
     })
+}
+
+fn encode_reason(code: &str, term: &str) -> String {
+    format!("{code}:{term}")
 }
 
 fn query_tokens(text: &str) -> Vec<String> {

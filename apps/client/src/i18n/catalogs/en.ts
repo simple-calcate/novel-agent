@@ -332,5 +332,14 @@ export const en: Messages = {
   },
   match: {
     presetSummary: "{title} · preset",
+    reason: {
+      title: "Name “{term}” appears",
+      alias: "Alias “{term}” appears",
+      core: "Mentions “{term}”",
+      keyword: "Notes mention “{term}”",
+      lookback: "Previous paragraph had “{term}”",
+      lookbackAlias: "Previous paragraph had alias “{term}”",
+      retrieve: "Retrieved “{term}”",
+    },
   },
 };

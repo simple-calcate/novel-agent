@@ -133,11 +133,7 @@ impl HintEngine {
                 StoryEntryKind::Setting => (HintKind::WorldRule, "设定"),
                 StoryEntryKind::Foreshadow => (HintKind::OpenForeshadowing, "伏笔"),
             };
-            let summary = if entry.summary.is_empty() {
-                format!("{} · 预先设定", entry.title)
-            } else {
-                entry.summary.clone()
-            };
+            let summary = entry.summary.clone();
             let mut card = hint(
                 kind,
                 &entry.title,

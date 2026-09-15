@@ -2,6 +2,7 @@ import { Pin, X } from "lucide-react";
 import { ContextHint } from "../types";
 import { BookMarked, Flame, User } from "lucide-react";
 import { useI18n } from "../i18n";
+import { formatMatchReason } from "../structure/matchReason";
 
 interface Props {
   hints: ContextHint[];
@@ -63,8 +64,14 @@ export function ContextRail({ hints, pinnedIds, ignoredIds, onPin, onIgnore }: P
               </button>
             </div>
             <h4>{hint.title}</h4>
-            <p>{hint.summary}</p>
-            {hint.matchReason && <span className="hint-source">{hint.matchReason}</span>}
+            <p>
+              {hint.summary.trim()
+                ? hint.summary
+                : t("match.presetSummary", { title: hint.title })}
+            </p>
+            {hint.matchReason && (
+              <span className="hint-source">{formatMatchReason(hint.matchReason)}</span>
+            )}
           </article>
         );
       })}

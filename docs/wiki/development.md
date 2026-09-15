@@ -42,7 +42,7 @@ CI（`.github/workflows/ci.yml`）只在面向 `main` 的 pull request / push �
 | 章节修订历史 / 对比 | `domain/diff.rs`（`similar`）→ `storage` `list_revisions` / `diff_revisions` → Workspace / IPC → `HistoryPanel`；浏览器预览另写 `editor/textDiff.ts` |
 | Agent / 队列可调用 | `Tool` + `register_tool`；工作流模板与 `OPERATION_LABELS` |
 | 只换实现 | `Kernel::builder().extension(...)` 或覆盖同名工具 |
-| 段落匹配规则 | `crates/context-hints` **和** `apps/client/src/structure/match.ts`，加上共享 fixtures |
+| 段落匹配规则 | `crates/context-hints` **和** `apps/client/src/structure/match.ts`，加上共享 fixtures。命中原因发 `code:词`，UI 在 `matchReason.ts` 里 `t()` |
 | 插件清单 / 工作流定义 | MIT 包 `packages/plugin-sdk`、`packages/workflow-builder`、`packages/plugin-compile` |
 | 模型密钥 | `SecretVault`，不要写进 `save_setting` |
 | 界面文案 / 树交互 | `apps/client/src/i18n/catalogs/` 与 `t()`，再改 `App.tsx` / `components/`；不要在 JSX 里新写可见字符串 |

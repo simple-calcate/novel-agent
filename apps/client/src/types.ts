@@ -89,6 +89,7 @@ export interface ContextHint {
   title: string;
   summary: string;
   sourceLabel: string;
+  /** Wire form `title:林晚`. The rail formats this with the UI locale. */
   matchReason: string;
   confidence: number;
   score: number;

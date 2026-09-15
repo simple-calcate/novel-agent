@@ -1,5 +1,5 @@
-import { t } from "../i18n";
 import { ContextHint, StoryEntry } from "../types";
+import { encodeMatchReason } from "./matchReason";
 
 const STOPWORDS = new Set([
   "然后",
@@ -100,7 +100,7 @@ export function matchStoryEntries(
       id: entry.id,
       kind,
       title: entry.title,
-      summary: entry.summary || t("match.presetSummary", { title: entry.title }),
+      summary: entry.summary,
       sourceLabel: entry.kind,
       matchReason: hit.reason,
       confidence: hit.score,
@@ -141,18 +141,27 @@ function matchEntry(
 
   const titleAt = findTerm(currentL, title);
   if (titleAt != null) {
-    hits.push({ score: 0.98 * positionBoost(currentL, titleAt), reason: `出现名称「${title}」` });
+    hits.push({
+      score: 0.98 * positionBoost(currentL, titleAt),
+      reason: encodeMatchReason("title", title),
+    });
   }
   for (const alias of aliases) {
     const at = findTerm(currentL, alias);
     if (at != null) {
-      hits.push({ score: 0.9 * positionBoost(currentL, at), reason: `出现别名「${alias}」` });
+      hits.push({
+        score: 0.9 * positionBoost(currentL, at),
+        reason: encodeMatchReason("alias", alias),
+      });
     }
   }
   for (const core of titleCores(title)) {
     const at = findTerm(currentL, core);
     if (at != null) {
-      hits.push({ score: 0.72 * positionBoost(currentL, at), reason: `提到「${core}」` });
+      hits.push({
+        score: 0.72 * positionBoost(currentL, at),
+        reason: encodeMatchReason("core", core),
+      });
     }
   }
   const keywordHits: { score: number; reason: string }[] = [];
@@ -161,7 +170,7 @@ function matchEntry(
     if (at != null) {
       keywordHits.push({
         score: 0.58 * positionBoost(currentL, at),
-        reason: `设定里提到「${keyword}」`,
+        reason: encodeMatchReason("keyword", keyword),
       });
     }
   }
@@ -176,11 +185,11 @@ function matchEntry(
 
   if (hits.length === 0) {
     if (findTerm(lookbackL, title) != null) {
-      return { score: 0.6, reason: `上一段出现「${title}」` };
+      return { score: 0.6, reason: encodeMatchReason("lookback", title) };
     }
     for (const alias of aliases) {
       if (findTerm(lookbackL, alias) != null) {
-        return { score: 0.56, reason: `上一段出现别名「${alias}」` };
+        return { score: 0.56, reason: encodeMatchReason("lookbackAlias", alias) };
       }
     }
     return retrieveEntry(current, entry);
@@ -200,7 +209,7 @@ function retrieveEntry(
   if (matched.length === 0) return null;
   matched.sort((left, right) => [...right].length - [...left].length);
   const term = matched[0];
-  return { score: 0.4, reason: `检索到「${term}」` };
+  return { score: 0.4, reason: encodeMatchReason("retrieve", term) };
 }
 
 function queryTokens(text: string): string[] {

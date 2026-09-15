@@ -21,5 +21,5 @@
 | **SecretVault** | API Key 存放处（密钥链或 0600 文件），不进 SQLite。 |
 | **偏好 / PreferenceRule** | 拒绝续写后记下的规则，下次续写进 system prompt。可在 Agent 页停用。 |
 | **浏览器预览** | Vite 前端，内存库，无 Tauri。 |
-| **界面语言 / locale** | 只改 UI 文案。存在本机 `localStorage`。写作协议标签与思考槽位前缀仍是中文。见 [ADR 0013](../architecture/adr/0013-ui-locale.md)。 |
+| **界面语言 / locale** | 只改 UI 文案。存在本机 `localStorage`。写作协议标签与思考槽位前缀仍是中文。预选条命中原因是 `code:词`，由 UI 翻译。见 [ADR 0013](../architecture/adr/0013-ui-locale.md)。 |
 | **IPC 命令表** | [interfaces.md](../interfaces.md) §5。必须与 `generate_handler!` 一致，由 `ipc_contract` 测试锁定。 |

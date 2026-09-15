@@ -323,5 +323,14 @@ export const zhCN = {
   },
   match: {
     presetSummary: "{title} · 预先设定",
+    reason: {
+      title: "出现名称「{term}」",
+      alias: "出现别名「{term}」",
+      core: "提到「{term}」",
+      keyword: "设定里提到「{term}」",
+      lookback: "上一段出现「{term}」",
+      lookbackAlias: "上一段出现别名「{term}」",
+      retrieve: "检索到「{term}」",
+    },
   },
 };
