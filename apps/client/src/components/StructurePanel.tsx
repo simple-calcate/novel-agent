@@ -55,7 +55,13 @@ export function StructurePanel({ disabled, busy, error, entries, onCreate, onDel
                   {entry.aliases?.length > 0 && (
                     <span className="canon-kind">{entry.aliases.join("、")}</span>
                   )}
-                  <button className="icon-button" title="删除" onClick={() => onDelete(entry)}>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    title={`删除「${entry.title}」`}
+                    aria-label={`删除${KIND_LABELS[group]}「${entry.title}」`}
+                    onClick={() => onDelete(entry)}
+                  >
                     <X size={12} />
                   </button>
                 </div>
