@@ -4,7 +4,7 @@
 
 文档放在仓库 `docs/wiki/` 里，跟代码一起审、一起发，而不是 GitHub Wiki。改产品行为时先改代码，再改 [产品](product.md)；新词改 [术语](glossary.md)；落点改 [开发](development.md) 与 [智能体](agents.md)。签名改 [interfaces.md](../interfaces.md)，由 `ipc_contract` 与 `generate_handler!` 对齐。避免 ADR 与界面各说各话。
 
-仓库根目录 [AGENTS.md](../../AGENTS.md) 只留开工卡片；改代码的智能体按 [智能体](agents.md) 的五个阶段走，不要把本手册一次读完。
+仓库根目录 [AGENTS.md](../../AGENTS.md) 只留开工卡片；改代码的智能体按 [智能体](agents.md) 的五个阶段走，不要把本手册一次读完。进 `crates/`、`apps/client/`、`packages/`、`plugins/` 时，那个目录里还有一份更短的 `AGENTS.md`，只写本地结构。
 
 | 页 | 读它为了 |
 |---|---|

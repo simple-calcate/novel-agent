@@ -1,6 +1,6 @@
 # 给改本仓库的智能体
 
-先读 [docs/wiki/agents.md](docs/wiki/agents.md)，**按五个阶段走**，不要把 wiki 一次读完。每阶段回看那一页的仓库树，再只打开本阶段列出的文件。
+先读 [docs/wiki/agents.md](docs/wiki/agents.md)，**按五个阶段走**，不要把 wiki 一次读完。每阶段回看那一页的仓库树，再只打开本阶段列出的文件。进某个目录改代码时，先看**该目录的 `AGENTS.md`**（crates / apps/client / packages / plugins），再回 wiki 切片。
 
 - 实现以代码为准。签名：[docs/interfaces.md](docs/interfaces.md)。禁区：[docs/architecture/layers.md](docs/architecture/layers.md)。
 - **结构**（`story_entries`）是写作主路径；**正史**（canon 抽取）库内仍在，界面不用。不要把抽取接到预选条。

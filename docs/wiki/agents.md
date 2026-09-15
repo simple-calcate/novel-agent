@@ -2,14 +2,14 @@
 
 给**改本仓库的智能体**。作者看 [产品](product.md)；写插件看 [写插件](plugins.md)。契约签名以 [interfaces.md](../interfaces.md) 为准，分层禁区以 [layers.md](../architecture/layers.md) 为准。实现以代码为准。
 
-不要把整本 wiki 一次读完。按下面五个阶段走：每阶段先回看仓库树，再只打开本阶段列出的文件。
+不要把整本 wiki 一次读完。按下面五个阶段走：每阶段先回看仓库树，再只打开本阶段列出的文件。进具体目录时先读该目录的 `AGENTS.md`。
 
 ## 开工前记住
 
 - **结构**（`story_entries`，人物 / 设定 / 伏笔）是写作主路径。**正史**（canon 抽取、`canon_*` 表）库内仍在，界面不用。不要把抽取接到预选条。
 - 用户点一下就能做 → `Workspace` → Tauri command → `libraryApi` → hook / 面板。不要先做成 Tool 再让 UI 调工具名。
 - Agent / 队列 / 上下文浮带走 `kernel.call_tool`。作品库、结构、设置**不走**工具表。
-- 前端作品库路径只通过 `apps/client/src/api.ts`。不要在树 / 结构 / 历史面板里直接 `invoke`。
+- 前端作品库路径只通过 `apps/client/src/api.ts`。不要在树 / 结构 / 历史面板里直接 `invoke`。队列和块模式切换是现存例外，见下文「双端与 invoke 例外」。
 - 浏览器预览（`pnpm --filter @novel-agent/client dev`）是**内存**；桌面（`pnpm tauri dev`）才是 SQLite + 密钥库。
 - 产品阶段 1：本机 SQLite。同步传输、冲突 UI、Android APK、LLM 重排、正史抽取 UI、插件商店都还没做，不要当成本任务，除非任务明确要求。见 [未做](backlog.md) 与 [sync-and-cloud.md](../sync-and-cloud.md)。
 
@@ -41,6 +41,7 @@
     match-fixtures/            宿主：匹配黄金用例（Rust + TS 共用）
     shared-types/              宿主：IPC 形状样例（两边反序列化）
   plugins/                     打包清单；hello-names 带 wasmBase64
+  AGENTS.md                    开工卡片；各目录还有更短的一份
   docs/wiki/                   现在怎么用、怎么改、还缺什么
   docs/interfaces.md           稳定契约
   docs/architecture/           分层禁区 + ADR
@@ -56,6 +57,24 @@ UI  ──libraryApi──► Tauri command（只译 JSON）
 ```
 
 `StorageHandle` 同线程嵌套 `with` 返回 `Reentrancy`。禁止在持锁时 `kernel.dispatch`。Workspace 必须先写完再派事件。
+
+路径 → 编译包名（测试用 `-p` / `pnpm --filter`）：
+
+| 路径 | 包名 |
+|---|---|
+| `crates/domain` | `novel-domain` |
+| `crates/kernel` | `novel-kernel` |
+| `crates/extensions` | `novel-extensions` |
+| `crates/storage` | `novel-storage` |
+| `crates/automation` | `novel-automation` |
+| `crates/story-model` | `novel-story-model` |
+| `crates/context-engine` | `novel-context-engine` |
+| `crates/context-hints` | `novel-context-hints` |
+| `crates/feedback-memory` | `novel-feedback-memory` |
+| `crates/plugin-host` | `novel-plugin-host` |
+| `apps/client/src-tauri` | `novel-agent-client`（lib `novel_agent_lib`） |
+| `apps/client` | `@novel-agent/client` |
+| `packages/plugin-sdk` 等 | `@novel-agent/<目录名>` |
 
 ## 五个阶段
 
@@ -108,7 +127,7 @@ Agent / 队列可调用的能力：实现 `Tool`，在扩展里注册；改工�
 | 你改了 | 至少跑 |
 |---|---|
 | 领域类型 / 命令表 / examples.json | `cargo test -p novel-domain --test ipc_contract`；前端 `types.contract.test.ts` |
-| 仓储 / 迁移 | `cargo test -p novel-storage` |
+| 仓储 / 迁移 | `cargo test -p novel-storage`（含 `migration_test`、`queue_state_test`） |
 | Workspace / 续写编排 | `cargo test -p novel-extensions` |
 | 宿主 command | `cargo test -p novel-agent-client`（`command_tests`） |
 | 匹配信号 | `cargo test -p novel-context-hints` **和** `pnpm --filter @novel-agent/client test`；先改 `packages/match-fixtures/cases.json` |
@@ -129,6 +148,7 @@ Agent / 队列可调用的能力：实现 `Tool`，在扩展里注册；改工�
 | 命令 / 仓储签名 | [interfaces.md](../interfaces.md)，不要只改 wiki |
 | 新词 | [术语](glossary.md) |
 | 本页树、切片、测试落点 | **本页** 和 [开发](development.md) |
+| 新 crate / 新包 | 该目录加短 `AGENTS.md`，并改本页树与 `crates/AGENTS.md`（或 `packages/AGENTS.md`） |
 | 还没做 | [未做](backlog.md)，不要写进产品页假装已有 |
 
 手册、ADR、README 打架时：产品行为以 [产品](product.md) 和 0009 为准；「为什么」以 ADR 为准；签名以 interfaces 为准。
@@ -210,6 +230,8 @@ JSON 字段 camelCase。改字段时同步迁移、`types.ts`、`examples.json`�
 
 ## 前端从哪进
 
+路径相对 `apps/client/src/`。
+
 | 路径 | 职责 |
 |---|---|
 | `src/api.ts` | `libraryApi` + `isTauriRuntime()`；内存实现与桌面分流 |
@@ -227,8 +249,90 @@ JSON 字段 camelCase。改字段时同步迁移、`types.ts`、`examples.json`�
 | `components/PluginModal.tsx` | 打包插件 |
 | `components/SettingsModal.tsx` | 模型与密钥 |
 | `editor/examples/fog-harbor.json` | 示例章正文 + `story` |
+| `editor/protocol.ts` / `ModeSwitch.ts` / `ThinkingBlock.tsx` / `blocks.ts` | 思考/正文切换与块模型 |
+| `editor/guide.ts` / `WritingGuide.tsx` / `StoryCatalog.tsx` | 右侧「这一段怎么写」、`@` 目录 |
+| `structure/tagCandidates.ts` | `@` 补全候选，从结构库来，**不是**入库 |
+| `components/Editor.tsx` | 正文编辑器；切模式时 `invoke("emit_block_mode_changed")` |
+| `components/CreateDialog.tsx` | 新建书/卷/章 |
+| `components/WritingGuide.tsx` | 三步口令 |
+| `components/LogPanel.tsx` / `logger.ts` | 开发者日志 |
+| `App.tsx` | 壳：左树、中编辑器、右侧栏 tab |
 | `structure/match.ts` | 浏览器侧匹配器 |
 | `canon/extract.ts` | 仅内存 `proposeCanon` 测试，不是产品路径 |
+| `workflow/labels.ts` | `OPERATION_LABELS`；改工具 id 时要动 |
+
+## 双端与 invoke 例外
+
+`apps/client/src/api.ts` 里 **每个** `libraryApi` 方法都是：
+
+```
+if (isTauriRuntime()) { invoke 对应 command }
+else { 改内存 memory }
+```
+
+只改其中一支，浏览器预览或桌面必有一边是假的。`api.test.ts` 跑的是内存支。
+
+例外（不走 `libraryApi`，或 IPC 有但 UI 没调）：
+
+| 谁 | 命令 | 说明 |
+|---|---|---|
+| `hooks/useQueue.ts` | `list_jobs` / `run_queue_step` / `enqueue_job` | 直接 `invoke`；听宿主事件 `queue:changed` 再 drain。浏览器预览队列是空的 |
+| `components/Editor.tsx` | `emit_block_mode_changed` | 思考/正文切换 |
+| IPC 有、前端目前没调 | `editor_tick`、`commit_annotation`、`emit_domain_event`、`build_context_package` | 宿主 `command_tests` 有覆盖。不要删 command；要接到 UI 时再走检查表 |
+| 预选条钉住/忽略 | 无 IPC | 本机 `localStorage` 键 `moshu.hintPrefs.${projectId}` |
+
+`common.rs` 的 `notify_queue_changed` 发 `queue:changed`。不要改成前端轮询。
+
+## SQLite 表 → 仓储
+
+迁移必须按序号加进 `crates/storage/src/migrations.rs` 的 `MIGRATIONS`。**表在不等于产品在。**
+
+| 表 | 仓储 | 产品用不用 |
+|---|---|---|
+| `projects` / `books` / `volumes` / `chapters` / `scenes` | `repository/library.rs` | 用。`scenes.pov_entity_id` 列对应领域 `povEntryId`（指向结构条目，不是正史实体） |
+| `revisions` / `operation_log` / `content_blocks*` | `revisions.rs` | 用 |
+| `story_entries`（`0008` + 别名 `0009`） | `structure.rs` | **写作主路径** |
+| `canon_entities` / `canon_facts` / `plot_threads` 等 | `canon.rs` | API 在，界面不用 |
+| `jobs` / `workflows` / `workflow_fired` | `queue.rs` / `automation.rs` | 队列用 |
+| `outbox` | `outbox.rs` | 同事务入队；journal 可写出 |
+| `preference_rules` / `correction_records`（`0010`） | `feedback.rs` | 用 |
+| `app_settings` | `Repository::save_setting` | 当前作品 id 等。**不要存 API Key** |
+| `annotations` / `domain_events` / `plugins` / `agent_sessions` / `context_blocks` | 建表了，UI 几乎不碰 | 不要当新功能落点 |
+
+`crates/storage/src/export.rs` 能拼 TXT/Markdown，**没有**对应按钮/command。不要假装导出已经接上。
+
+## 扩展文件 → 工具 id
+
+`crates/extensions/src/lib.rs` 的 `BuiltinsExtension` 注册顺序：providers → core_tools → blocks → workflow → queue → hints → context assembly → plugin-host。同名后注册覆盖前者。
+
+| 文件 | 工具 / 职责 |
+|---|---|
+| `providers.rs` | Echo、OpenAI 兼容；未知 provider 当自定义兼容端点 |
+| `core_tools.rs` | `document.save`、`index.rebuild`、`continuity.check`、`backup.create`、`agent.continuation`、`agent.run` |
+| `blocks.rs` | `block.save` / `block.edit` / `training.export`（内核工具，**不是** Tauri 命令） |
+| `workflow.rs` | 订阅领域事件，匹配规则 |
+| `queue.rs` | `queue.tick` |
+| `hints.rs` | `context.hints` → `HintEngine::rank_entries`（结构条目） |
+| `context.rs` | `context.assemble` |
+| `plugins.rs` | `plugin.install` / `plugin.operation` |
+| `workspace.rs` | 应用门面，不是 Tool |
+| `secrets.rs` | `SecretVault`；keyring service `com.moshu.novel-agent`，失败则 `secrets/` 0600 |
+| `util.rs` | `with_repository`：扩展里访问 SQLite 的唯一入口 |
+
+内核自己：`crates/kernel/src/{lib,agent,budget,events,provider,services,tool}.rs`。不要在这里加 SQLite。
+
+## 打包插件
+
+`crates/plugin-host/src/discover.rs` `include_str!` 了 `plugins/` 下四份清单。改清单要保持被编译进二进制。
+
+| id | 软件里 | 实现 |
+|---|---|---|
+| `hello-names` | 可运行「人名点名」 | 桌面 wasmi（`wasmBase64`）；浏览器预览走 SDK `countNames` |
+| `continuity-checker` / `summary-extractor` / `continuation-writer` | 占位 | 点运行只有中文回执，不要接成真检查/续写 |
+
+Guest ABI、编译脚手架见 [写插件](plugins.md)。改 AssemblyScript 后必须 `compile:hello-names` 重写 `plugins/hello-names/plugin.json`。
+
+匹配黄金用例：`packages/match-fixtures/cases.json`。Rust 在 `crates/context-hints/tests/hints_test.rs` `include_str!`，TS 在 `match.test.ts` import。改规则先改这份 JSON。
 
 ## 产品阶段（别超前做）
 
@@ -250,3 +354,6 @@ JSON 字段 camelCase。改字段时同步迁移、`types.ts`、`examples.json`�
 - 改了 `generate_handler!` 却忘了 interfaces §5（或反过来）。
 - 打开示例章时把结构写死在 TS 常量里。改 `fog-harbor.json` 的 `story`。
 - 另开一份 GitHub Wiki。手册就在 `docs/wiki/`，跟代码一起改。
+- 看见 `canon.rs` / `pov_entity_id` / `context.assemble` 就接到预选条。字段名像正史，产品不是。
+- 把 `training.export` 或 `export.rs` 当成已经有的「导出」按钮。
+- 删掉 UI 暂时没调的 IPC（`editor_tick` 等）。命令表仍要与 `generate_handler!` 一致。

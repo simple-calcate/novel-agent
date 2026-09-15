@@ -91,7 +91,7 @@ CI（`.github/workflows/ci.yml`）只在面向 `main` 的 pull request / push �
 
 ## 文档
 
-- 仓库树、切片、测试落点变了 → 改 [agents.md](agents.md) 和本页落点表 / 前端模块表。根目录 [AGENTS.md](../../AGENTS.md) 只留开工卡片，不要把切片表复制进去。
+- 仓库树、切片、测试落点变了 → 改 [agents.md](agents.md) 和本页落点表 / 前端模块表。根目录 [AGENTS.md](../../AGENTS.md) 只留开工卡片；各目录的 `AGENTS.md` 只写本地禁区，不要把切片表复制进去。
 - 产品行为变了 → 改 [product.md](product.md)，必要时改 [ADR 0009](../architecture/adr/0009-canon-review-loop.md)
 - 切层方式变了 → 改 [architecture.md](architecture.md)、[layers.md](../architecture/layers.md)、对应 ADR
 - 命令 / 仓储签名变了 → 改 [interfaces.md](../interfaces.md)，不要只改 wiki
