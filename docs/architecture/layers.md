@@ -36,7 +36,7 @@
 | Host | `src-tauri` | 把 JSON 译成领域类型，调 `Workspace` 或内核 | 复制扩展里的业务分支 |
 | UI | `apps/client/src` | 渲染、通过 `libraryApi` 说话 | 直接拼 SQL 或工具名散落各处 |
 
-新增能力时的落点：
+新增能力时的落点（改代码时按阶段的完整顺序见 [wiki/agents.md](../wiki/agents.md)）：
 
 1. **数据形状变了** → `novel-domain` + 迁移 + `docs/interfaces.md` + 前端 `types.ts` + `examples.json`；新词写进 [glossary](../wiki/glossary.md)
 2. **可被 Agent/队列调用** → 实现 `Tool`，在扩展里 `register_tool`

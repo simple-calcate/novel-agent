@@ -1,5 +1,7 @@
 # 开发
 
+改代码的智能体先看 [智能体](agents.md)：仓库树、五个阶段、切片落点。本页只写怎么跑、测什么、改一处能力动哪一层。
+
 ## 运行
 
 ```bash
@@ -23,7 +25,7 @@ pnpm --filter @novel-agent/plugin-sdk test
 
 CI（`.github/workflows/ci.yml`）只在面向 `main` 的 pull request / push 上跑。叠放在功能分支上的 PR 不会触发这套 workflow；合并前仍应在本地跑上面几条。`frontend-check` 会跑 typecheck、build 和前端 test。
 
-`ipc_contract` 会核对 [interfaces.md](../interfaces.md) §5 命令表与 `generate_handler!` 是否一致。漏登记命令会红。
+`ipc_contract` 会核对 [interfaces.md](../interfaces.md) §5 命令表与 `generate_handler!` 是否一致。漏登记命令会红。按切片该跑哪几条见 [智能体](agents.md) 阶段 4，不要用整仓测试代替定向。
 
 ## 浏览器 vs 桌面
 
@@ -51,8 +53,12 @@ CI（`.github/workflows/ci.yml`）只在面向 `main` 的 pull request / push �
 
 ## 前端模块
 
+路径均在 `apps/client/src/`。更完整的切片 → 文件表见 [智能体](agents.md)。
+
 | 文件 | 职责 |
 |---|---|
+| `api.ts` | `libraryApi`；桌面 invoke / 浏览器内存分流 |
+| `types.ts` | 与 domain camelCase 对齐；和 `packages/shared-types/examples.json` 一起防漂移 |
 | `hooks/useLibrary.ts` | 作品树、增删改、当前书/卷/章/场 |
 | `hooks/useStructure.ts` | 预先结构列表 |
 | `hooks/useEditorSession.ts` | 正文、预选、续写、模型配置、偏好、恢复修订后重挂编辑器 |
@@ -64,9 +70,14 @@ CI（`.github/workflows/ci.yml`）只在面向 `main` 的 pull request / push �
 | `components/PluginModal.tsx` | 打包插件列表 |
 | `components/WorkflowPanel.tsx` | 工作流模板、队列、outbox journal |
 | `components/HistoryPanel.tsx` | 修订列表、与上一版对比、恢复 |
+| `components/SettingsModal.tsx` | 模型 provider / 密钥 |
+| `components/LibraryActions.tsx` | 树节点改名删除、确认框 |
 | `editor/textDiff.ts` | 浏览器预览的行级对比（桌面走 Rust `similar`） |
+| `editor/protocol.ts` / `ModeSwitch.ts` | 思考 / 正文切换 |
 | `editor/sampleChapter.ts` | 把 `editor/examples/*.json` 装进作品库；林默等人写在 JSON 的 `story` 里。只在新建示例章时写入结构，已有章节再打开不会复活作者删掉的条目 |
 | `structure/match.ts` | 浏览器侧匹配器 |
+| `canon/extract.ts` | 只给浏览器内存 `proposeCanon` 测试用，不是产品路径 |
+| `workflow/labels.ts` | 队列操作显示名；改工具 id 时要动 |
 
 ## 改接口检查表
 
@@ -75,11 +86,12 @@ CI（`.github/workflows/ci.yml`）只在面向 `main` 的 pull request / push �
 1. domain 字段 → serde camelCase、SQLite 迁移、TS `types.ts`、`packages/shared-types/examples.json`
 2. command 名或字段 → `libraryApi`（若前端要调）、宿主 command 测试、interfaces **§5 表格**（与 `generate_handler!` 对齐）
 3. 工具 id → 工作流模板、`OPERATION_LABELS`、interfaces 工具表
-4. 产品能看见的行为 → [product.md](product.md)；新词 → [glossary.md](glossary.md)；本页落点表 / 前端模块表
+4. 产品能看见的行为 → [product.md](product.md)；新词 → [glossary.md](glossary.md)；本页落点表 / 前端模块表；树和切片 → [agents.md](agents.md)
 5. `cargo test --workspace` 与前端 test / typecheck
 
 ## 文档
 
+- 仓库树、切片、测试落点变了 → 改 [agents.md](agents.md) 和本页落点表 / 前端模块表。根目录 [AGENTS.md](../../AGENTS.md) 只留开工卡片，不要把切片表复制进去。
 - 产品行为变了 → 改 [product.md](product.md)，必要时改 [ADR 0009](../architecture/adr/0009-canon-review-loop.md)
 - 切层方式变了 → 改 [architecture.md](architecture.md)、[layers.md](../architecture/layers.md)、对应 ADR
 - 命令 / 仓储签名变了 → 改 [interfaces.md](../interfaces.md)，不要只改 wiki

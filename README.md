@@ -2,7 +2,7 @@
 
 本地优先、插件化的跨平台网文写作 Agent。
 
-**从这里读：** [docs/wiki/README.md](docs/wiki/README.md)（产品、架构、开发、术语、未做）。契约在 [docs/interfaces.md](docs/interfaces.md)，分层禁区在 [docs/architecture/layers.md](docs/architecture/layers.md)。实现以代码为准。
+**从这里读：** [docs/wiki/README.md](docs/wiki/README.md)。改代码的智能体按 [docs/wiki/agents.md](docs/wiki/agents.md) 的五个阶段走（根目录 [AGENTS.md](AGENTS.md) 是开工卡片）。契约在 [docs/interfaces.md](docs/interfaces.md)，分层禁区在 [docs/architecture/layers.md](docs/architecture/layers.md)。实现以代码为准。
 
 ## 架构
 
@@ -12,22 +12,25 @@
 **各层接口**：[docs/interfaces.md](docs/interfaces.md)
 
 ```
-apps/client/          Tauri 2 + React 桌面/Android 客户端
+apps/client/          Tauri 2 + React 桌面/Android 客户端（宿主 command 在 src-tauri/src/commands/）
 crates/kernel/        最小内核：Provider/Tool/事件总线 + 预算硬约束的 Agent 循环
 crates/extensions/    内置扩展集 + Workspace 应用层（作品库编排、队列入口）
 crates/domain/        领域模型（Project、Chapter、Revision、Event、Job、Story）
 crates/storage/       SQLite 持久化、迁移、单写者仓库
 crates/automation/    信号检测、工作流匹配、持久化操作队列
-crates/story-model/   正史模型、故事图、快照、连续性验证
-crates/context-engine/ ACP 风格上下文压缩与装配
-crates/context-hints/ 实时上下文浮带匹配引擎
+crates/story-model/   正史模型、故事图、快照、连续性验证（非 UI 主路径）
+crates/context-engine/ ACP 风格上下文压缩与装配（不是预选条）
+crates/context-hints/ 实时上下文浮带匹配引擎（段落 ↔ 结构条目）
 crates/feedback-memory/ 人类纠正候选与偏好规则（拒绝续写后写入，下次续写带进提示）
 crates/plugin-host/   插件清单、权限评估、运行时
 packages/event-schema/ 版本化事件 schema
 packages/plugin-sdk/   插件 SDK 与清单 JSON Schema
 packages/plugin-compile/ 把 AssemblyScript guest 编成 WASM
 packages/workflow-builder/ 工作流定义与模板
+packages/match-fixtures/ 预选条匹配黄金用例（Rust / TS 共用）
+packages/shared-types/ IPC 形状样例
 plugins/              内置插件清单
+docs/wiki/            当前怎么用、怎么改；智能体阶段手册在 wiki/agents.md
 docs/architecture/adr/ 架构决策记录
 ```
 

@@ -2,10 +2,13 @@
 
 这是当前代码的入口。ADR 记录「为什么这样切」，[interfaces.md](../interfaces.md) 记录稳定契约；本手册只写**现在怎么用、怎么改、还缺什么**。实现以代码为准。
 
-文档放在仓库 `docs/wiki/` 里，跟代码一起审、一起发，而不是 GitHub Wiki。改产品行为时先改代码，再改 [产品](product.md)；新词改 [术语](glossary.md)；落点改 [开发](development.md)。签名改 [interfaces.md](../interfaces.md)，由 `ipc_contract` 与 `generate_handler!` 对齐。避免 ADR 与界面各说各话。
+文档放在仓库 `docs/wiki/` 里，跟代码一起审、一起发，而不是 GitHub Wiki。改产品行为时先改代码，再改 [产品](product.md)；新词改 [术语](glossary.md)；落点改 [开发](development.md) 与 [智能体](agents.md)。签名改 [interfaces.md](../interfaces.md)，由 `ipc_contract` 与 `generate_handler!` 对齐。避免 ADR 与界面各说各话。
+
+仓库根目录 [AGENTS.md](../../AGENTS.md) 只留开工卡片；改代码的智能体按 [智能体](agents.md) 的五个阶段走，不要把本手册一次读完。
 
 | 页 | 读它为了 |
 |---|---|
+| [智能体](agents.md) | 改代码：仓库树、五个阶段该看什么、切片 → 文件、命令/类型/测试落点 |
 | [产品](product.md) | 作者侧：界面、作品库、预先结构、段落预选、修订历史、续写与偏好、密钥 |
 | [作者保证](trust.md) | 稿子在哪、停订能否打开、插件权限 |
 | [写插件](plugins.md) | `definePlugin` / `defineWorkflow` / `compileGuest`；MIT 接口 |
@@ -17,6 +20,7 @@
 
 ## 先读哪一页
 
+- 改本仓库的智能体 → [智能体](agents.md)（阶段 1 定向，不要通读）
 - 想写小说、对代码没兴趣 → [产品](product.md) 和 [作者保证](trust.md)
 - 想写插件 → [写插件](plugins.md)
 - 要改功能、怕切错层 → [架构](architecture.md) + [layers.md](../architecture/layers.md)

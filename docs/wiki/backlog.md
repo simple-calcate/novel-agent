@@ -1,6 +1,6 @@
 # 未做
 
-按改动面，不是日程。场次、偏好界面、插件列表、libraryApi 收齐、匹配黄金用例、IPC 样例，见手册其它页。下面这些不要当成「再改几个文件就齐了」。
+按改动面，不是日程。场次、偏好界面、插件列表、libraryApi 收齐、匹配黄金用例、IPC 样例，见手册其它页。下面这些不要当成「再改几个文件就齐了」。改代码时对照 [智能体](agents.md) 的「产品阶段」，不要把阶段 2/3 当成本任务。
 
 ## 表在、产品不在（已收口的）
 
@@ -28,4 +28,4 @@
 
 ## 文档漂移注意
 
-旧 ADR / README 若仍写「正史审核闭环」，以 [0009](../architecture/adr/0009-canon-review-loop.md) 和 [产品](product.md) 为准。手册过时就改手册，不要另开一份 GitHub Wiki 各写各的。
+旧 ADR / README 若仍写「正史审核闭环」，以 [0009](../architecture/adr/0009-canon-review-loop.md) 和 [产品](product.md) 为准。手册过时就改手册（含 [agents.md](agents.md) 的树和切片），不要另开一份 GitHub Wiki 各写各的。

@@ -188,5 +188,5 @@ Outbox：作品库 / 修订 / 入队 / 结构写路径在同一事务插入 `out
 1. 改 domain 字段 → serde camelCase、SQLite 迁移、TS `types.ts`、`packages/shared-types/examples.json`
 2. 改 command 名或字段 → `libraryApi`（若前端要调）、`command_tests`、本页 **§5 表格**（必须与 `generate_handler!` 一致）
 3. 改工具 id → 工作流模板、`OPERATION_LABELS`、本页工具表
-4. 产品能看见的行为 → [wiki/product.md](wiki/product.md)；新词 → [wiki/glossary.md](wiki/glossary.md)；落点与前端模块 → [wiki/development.md](wiki/development.md)
+4. 产品能看见的行为 → [wiki/product.md](wiki/product.md)；新词 → [wiki/glossary.md](wiki/glossary.md)；仓库树 / 切片 / 测试落点 → [wiki/agents.md](wiki/agents.md)；落点与前端模块 → [wiki/development.md](wiki/development.md)
 5. `cargo test --workspace`（含 `ipc_contract` 的命令表对齐）与 `pnpm --filter @novel-agent/client test` / `typecheck`
