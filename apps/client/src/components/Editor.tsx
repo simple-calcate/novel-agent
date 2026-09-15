@@ -121,7 +121,9 @@ export function Editor({
   onBlocksChange,
   storyEntries = [],
 }: EditorProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const tRef = useRef(t);
+  tRef.current = t;
   const [wordCount, setWordCount] = useState(0);
   const [thinkingCount, setThinkingCount] = useState(0);
   const [writerMode, setWriterMode] = useState<WriterMode>("body");
@@ -222,7 +224,7 @@ export function Editor({
   };
 
   const reportNearby = useCallback((ed: NonNullable<ReturnType<typeof useEditor>>) => {
-    if (!ed) return;
+    if (!ed || !mounted.current) return;
     const nearby = paragraphWindow(ed);
     const key = `${nearby.current}\n${nearby.previous}`;
     if (lastNearby.current === key) return;
@@ -240,7 +242,7 @@ export function Editor({
         placeholder: ({ node }) =>
           node.type.name === "thinkingBlock"
             ? ""
-            : t("editor.placeholder"),
+            : tRef.current("editor.placeholder"),
         includeChildren: true,
         showOnlyCurrent: false,
       }),
@@ -304,20 +306,20 @@ export function Editor({
       if (heavyTimer.current) clearTimeout(heavyTimer.current);
       const runHeavy = () => {
         pendingHeavy.current = null;
-        if (!mounted.current) return;
         const ed = editor;
         const blocks = editorToBlocks(ed);
         const bodyText = blocks
           .filter((b) => b.kind === "body")
           .map((b) => b.text)
           .join("\n");
+        onTextChangeRef.current(bodyText);
+        onBlocksChangeRef.current?.(blocks);
+        if (!mounted.current) return;
         const thinkBlocks = blocks.filter((b) => b.kind === "thinking");
         const examples = buildTrainingExamples(blocks, true, chapterTitleRef.current);
         setWordCount(bodyText.length);
         setThinkingCount(thinkBlocks.length);
         setMissingThinking(countMissingThinking(examples));
-        onTextChangeRef.current(bodyText);
-        onBlocksChangeRef.current?.(blocks);
         reportNearby(ed);
       };
       pendingHeavy.current = runHeavy;
@@ -421,14 +423,18 @@ export function Editor({
   useEffect(() => {
     mounted.current = true;
     return () => {
-      // 先冲刷挂起的重计算（把草稿交给上层），再标记卸载
-      flushHeavy();
       mounted.current = false;
+      flushHeavy();
       if (idleTimer.current) clearTimeout(idleTimer.current);
       if (flashTimer.current) clearTimeout(flashTimer.current);
       if (nearbyTimer.current) clearTimeout(nearbyTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.view.dispatch(editor.state.tr.setMeta("i18n-locale", locale));
+  }, [editor, locale]);
 
   useEffect(() => {
     if (onInsertText && editor) {

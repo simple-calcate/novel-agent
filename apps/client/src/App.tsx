@@ -40,7 +40,7 @@ import { uniqueNames } from "./plugins/format";
 import { useI18n } from "./i18n";
 
 export function App() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [sidebarTab, setSidebarTab] = useState<"context" | "structure" | "workflow" | "agent">(
     "structure",
   );
@@ -482,7 +482,7 @@ export function App() {
               )}
               <ErrorBoundary label={t("chrome.editorLabel")}>
                 <Editor
-                  key={`${activeChapter}:${editorNonce}:${locale}`}
+                  key={`${activeChapter}:${editorNonce}`}
                   initialText={chapterText}
                   initialBlocks={chapterBlocks}
                   projectId={project?.id}

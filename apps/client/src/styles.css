@@ -61,6 +61,8 @@ html[lang="en"] .novel-editor {
   display: flex;
   flex-direction: column;
   padding: 20px 16px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .brand {
@@ -196,6 +198,7 @@ html[lang="en"] .novel-editor {
 /* Chapter Tree */
 .tree {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -347,6 +350,8 @@ html[lang="en"] .novel-editor {
   gap: 8px;
   padding-top: 16px;
   border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  margin-top: auto;
 }
 
 .icon-button {
@@ -1345,9 +1350,9 @@ html[lang="en"] .novel-editor {
   font-size: 10px;
   color: var(--text-dim);
   margin-top: 8px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  display: block;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 /* ============ Right Panel ============ */
